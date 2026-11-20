@@ -271,3 +271,17 @@ create policy chatmedia_read on storage.objects
 revoke execute on function public.block_user(uuid) from public, anon;
 grant execute on function public.block_user(uuid) to authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+-- ============================================================
+-- 13. Счётчик запросов к ИИ (лимит в час на человека).
+--     Доступ только у сервера (service role), политик нет.
+-- ============================================================
+create table if not exists public.ai_usage (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  kind       text not null check (kind in ('text', 'image')),
+  created_at timestamptz not null default now()
+);
+create index if not exists ai_usage_user_time on public.ai_usage (user_id, kind, created_at desc);
+alter table public.ai_usage enable row level security;
+revoke all on public.ai_usage from anon, authenticated;
