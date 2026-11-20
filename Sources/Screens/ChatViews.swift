@@ -14,6 +14,18 @@ func compressedJPEG(from data: Data, maxSide: CGFloat = 1600, quality: CGFloat =
     return out.jpegData(compressionQuality: quality)
 }
 
+/// Читает файл так, чтобы iCloud успел его скачать (иначе файл «пустой»)
+func readFileCoordinated(_ url: URL) -> Data? {
+    let access = url.startAccessingSecurityScopedResource()
+    defer { if access { url.stopAccessingSecurityScopedResource() } }
+    var coordError: NSError?
+    var result: Data?
+    NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordError) { readURL in
+        result = try? Data(contentsOf: readURL)
+    }
+    return result
+}
+
 let timeFormatter: DateFormatter = {
     let f = DateFormatter()
     f.timeStyle = .short
@@ -152,6 +164,7 @@ struct MediaImage: View {
 }
 
 struct Bubble: View {
+    @ObservedObject private var st = Settings.shared
     let m: Message
     let mine: Bool
     @Environment(\.openURL) private var openURL
@@ -323,10 +336,10 @@ struct ChatView: View {
         busy = true
         error = ""
         Task {
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
             do {
-                let data = try Data(contentsOf: url)
+                guard let data = await Task.detached(operation: { readFileCoordinated(url) }).value else {
+                    throw APIError(message: tr("Не удалось прочитать файл", "Could not read the file", "Datei konnte nicht gelesen werden"))
+                }
                 if data.count > 25 * 1024 * 1024 {
                     throw APIError(message: tr("Файл больше 25 МБ", "File is larger than 25 MB", "Datei ist größer als 25 MB"))
                 }

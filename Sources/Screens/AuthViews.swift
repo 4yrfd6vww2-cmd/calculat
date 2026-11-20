@@ -9,6 +9,7 @@ func friendlyError(_ raw: String) -> String {
     if s.contains("email_taken") { return tr("Эта почта уже привязана к другому аккаунту", "This email is already used", "Diese E-Mail wird bereits verwendet") }
     if s.contains("bad_nick") { return tr("Ник: 3–20 символов, только a–z, цифры и _", "Nick: 3–20 chars, a–z, digits and _", "Nick: 3–20 Zeichen, a–z, Ziffern und _") }
     if s.contains("bad_password") { return tr("Пароль: минимум 6 символов", "Password: at least 6 characters", "Passwort: mindestens 6 Zeichen") }
+    if s.contains("no_profile") { return tr("Профиль не найден", "Profile not found", "Profil nicht gefunden") }
     if s.contains("bad_email") { return tr("Проверь адрес почты", "Check the email address", "E-Mail prüfen") }
     if s.contains("offline") || s.contains("internet") || s.contains("network") || s.contains("connection") {
         return tr("Нет связи с сервером", "No connection to server", "Keine Verbindung zum Server")
@@ -35,6 +36,7 @@ struct AuthFlow: View {
 }
 
 struct AuthHeader: View {
+    @ObservedObject private var st = Settings.shared
     let subtitle: String
     var body: some View {
         VStack(spacing: 6) {

@@ -56,6 +56,7 @@ struct GlassField: View {
     let placeholder: String
     @Binding var text: String
     var secure = false
+    var clearable = false
 
     var body: some View {
         Group {
@@ -72,6 +73,19 @@ struct GlassField: View {
         .frame(height: 52)
         .background(Theme.card)
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke, lineWidth: 1))
+        .overlay(alignment: .trailing) {
+            if clearable && !text.isEmpty {
+                Button {
+                    text = ""
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(Theme.textSecondary)
+                        .padding(.trailing, 14)
+                }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -129,6 +143,7 @@ struct ErrorText: View {
 }
 
 struct Avatar: View {
+    @ObservedObject private var st = Settings.shared
     let nick: String
     let url: String?
     var size: CGFloat = 44

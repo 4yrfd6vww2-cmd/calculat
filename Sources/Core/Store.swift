@@ -80,17 +80,24 @@ final class Store: ObservableObject {
             }
             if let m = me { profiles[m.id] = m }
 
-            if recoveryEmail == nil {
-                let pp: [PrivateProfile] = try await API.shared.select("private_profiles", [
-                    URLQueryItem(name: "user_id", value: "eq.\(myId)"), URLQueryItem(name: "select", value: "*")])
-                recoveryEmail = pp.first?.recoveryEmail
-            }
-
-            try? await API.shared.update("profiles", [URLQueryItem(name: "id", value: "eq.\(myId)")],
-                                         ["last_seen": ISO.now()])
         } catch {
             if !API.shared.isLoggedIn { logout() }
         }
+
+        if recoveryEmail == nil { try? await reloadRecoveryEmail() }
+        try? await API.shared.update("profiles", [URLQueryItem(name: "id", value: "eq.\(myId)")],
+                                     ["last_seen": ISO.now()])
+    }
+
+    func reloadRecoveryEmail() async throws {
+        let pp: [PrivateProfile] = try await API.shared.select("private_profiles", [
+            URLQueryItem(name: "user_id", value: "eq.\(myId)"), URLQueryItem(name: "select", value: "*")])
+        recoveryEmail = pp.first?.recoveryEmail
+    }
+
+    func changeNick(_ nick: String) async throws {
+        _ = try await API.shared.raw("POST", "/functions/v1/account", json: ["action": "change_nick", "nick": nick])
+        await refresh()
     }
 
     private func notifyNew(_ msgs: [Message]) {

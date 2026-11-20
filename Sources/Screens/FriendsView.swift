@@ -56,7 +56,7 @@ struct FriendsView: View {
                 AppBackground()
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        GlassField(placeholder: tr("Найти по нику", "Search by nick", "Nach Nick suchen"), text: $query)
+                        GlassField(placeholder: tr("Найти по нику", "Search by nick", "Nach Nick suchen"), text: $query, clearable: true)
                         ErrorText(text: error)
 
                         if !query.isEmpty {
@@ -129,6 +129,7 @@ struct FriendsView: View {
                     .padding(16)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .neonScreen(tr("Друзья", "Friends", "Freunde"))
             .onChange(of: query) { q in
                 searchTask?.cancel()

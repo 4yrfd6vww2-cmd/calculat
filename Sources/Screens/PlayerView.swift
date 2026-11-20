@@ -40,22 +40,39 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if let d = try? JSONEncoder().encode(tracks) { UserDefaults.standard.set(d, forKey: listKey) }
     }
 
-    func importFiles(_ urls: [URL]) {
-        for url in urls {
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
-            let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
-            let name = UUID().uuidString + "." + ext
-            let dest = folder.appendingPathComponent(name)
-            do {
-                try FileManager.default.copyItem(at: url, to: dest)
-                let title = url.deletingPathExtension().lastPathComponent
-                tracks.append(Track(title: title, file: name))
-            } catch {
-                continue
+    func importFiles(_ urls: [URL], done: @escaping (Int, Int) -> Void) {
+        let dir = folder
+        DispatchQueue.global(qos: .userInitiated).async {
+            var added: [Track] = []
+            var failed = 0
+            for url in urls {
+                let access = url.startAccessingSecurityScopedResource()
+                let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
+                let name = UUID().uuidString + "." + ext
+                let dest = dir.appendingPathComponent(name)
+                var ok = false
+                var coordError: NSError?
+                NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordError) { readURL in
+                    do {
+                        try FileManager.default.copyItem(at: readURL, to: dest)
+                        ok = true
+                    } catch {
+                        ok = false
+                    }
+                }
+                if access { url.stopAccessingSecurityScopedResource() }
+                if ok {
+                    added.append(Track(title: url.deletingPathExtension().lastPathComponent, file: name))
+                } else {
+                    failed += 1
+                }
+            }
+            DispatchQueue.main.async {
+                self.tracks.append(contentsOf: added)
+                self.save()
+                done(added.count, failed)
             }
         }
-        save()
     }
 
     func remove(_ t: Track) {
@@ -132,6 +149,8 @@ struct PlayerView: View {
     @ObservedObject private var st = Settings.shared
     @ObservedObject private var pl = PlayerStore.shared
     @State private var showImport = false
+    @State private var importing = false
+    @State private var importMsg = ""
 
     private func fmt(_ s: Double) -> String {
         let t = Int(s.isFinite ? s : 0)
@@ -143,6 +162,15 @@ struct PlayerView: View {
             ZStack {
                 AppBackground()
                 VStack(spacing: 0) {
+                    if importing || !importMsg.isEmpty {
+                        HStack(spacing: 8) {
+                            if importing { ProgressView() }
+                            Text(importing ? tr("Копирую файлы…", "Copying files…", "Dateien werden kopiert …") : importMsg)
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.textSecondary)
+                        }
+                        .padding(.top, 8)
+                    }
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             if pl.tracks.isEmpty {
@@ -213,8 +241,24 @@ struct PlayerView: View {
                     Button { showImport = true } label: { Image(systemName: "plus") }
                 }
             }
-            .fileImporter(isPresented: $showImport, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
-                if case .success(let urls) = result { pl.importFiles(urls) }
+            .fileImporter(isPresented: $showImport, allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .wav], allowsMultipleSelection: true) { result in
+                switch result {
+                case .success(let urls):
+                    importing = true
+                    importMsg = ""
+                    pl.importFiles(urls) { added, failed in
+                        importing = false
+                        if failed > 0 {
+                            importMsg = tr("Не удалось добавить файлов: \(failed). Если файл в iCloud, дождись его загрузки и повтори.",
+                                           "Could not add files: \(failed). If the file is in iCloud, wait for it to download and retry.",
+                                           "Dateien nicht hinzugefügt: \(failed). Liegt die Datei in iCloud, warte auf den Download und versuche es erneut.")
+                        } else if added > 0 {
+                            importMsg = tr("Добавлено: \(added)", "Added: \(added)", "Hinzugefügt: \(added)")
+                        }
+                    }
+                case .failure(let e):
+                    importMsg = e.localizedDescription
+                }
             }
         }
     }

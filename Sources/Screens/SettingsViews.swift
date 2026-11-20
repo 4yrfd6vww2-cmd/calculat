@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct SettingsRow: View {
+    @ObservedObject private var st = Settings.shared
     let icon: String
     let title: String
     var value: String = ""
@@ -116,10 +117,31 @@ struct ProfileSettings: View {
     @State private var item: PhotosPickerItem?
     @State private var busy = false
     @State private var error = ""
+    @State private var newNick = ""
+    @State private var nickBusy = false
+    @State private var nickMsg = ""
+
+    private func changeNick() {
+        let n = newNick.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !n.isEmpty, n != store.me?.nick else { return }
+        nickBusy = true
+        nickMsg = ""
+        Task {
+            do {
+                try await store.changeNick(n)
+                nickMsg = tr("Ник изменён", "Nick changed", "Nick geändert")
+                newNick = ""
+            } catch {
+                nickMsg = friendlyError((error as? APIError)?.message ?? error.localizedDescription)
+            }
+            nickBusy = false
+        }
+    }
 
     var body: some View {
         ZStack {
             AppBackground()
+            ScrollView {
             VStack(spacing: 16) {
                 Avatar(nick: store.me?.nick ?? "?", url: store.me?.avatarUrl, size: 110)
                     .padding(.top, 30)
@@ -136,9 +158,27 @@ struct ProfileSettings: View {
                         .clipShape(Capsule())
                 }
                 ErrorText(text: error)
-                Spacer()
+
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(tr("Сменить ник", "Change nick", "Nick ändern"))
+                            .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                        GlassField(placeholder: tr("Новый ник (a–z, цифры, _)", "New nick (a–z, digits, _)", "Neuer Nick (a–z, Ziffern, _)"), text: $newNick)
+                        Text(tr("Ник должен быть уникальным: чужие ники занять нельзя. Вход выполняется по новому нику.",
+                                "A nick must be unique: nicks of other people cannot be taken. Sign in with the new nick.",
+                                "Ein Nick muss einmalig sein: fremde Nicks können nicht verwendet werden. Die Anmeldung erfolgt mit dem neuen Nick."))
+                            .font(.system(size: 12)).foregroundColor(Theme.textSecondary)
+                        NeonButton(title: tr("Сохранить ник", "Save nick", "Nick speichern"), busy: nickBusy) { changeNick() }
+                        if !nickMsg.isEmpty {
+                            Text(nickMsg).font(.system(size: 13)).foregroundColor(Theme.accent)
+                        }
+                    }
+                }
+                .padding(.top, 10)
             }
             .padding(.horizontal, 24)
+            .padding(.bottom, 30)
+            }
         }
         .neonScreen(tr("Профиль", "Profile", "Profil"))
         .onChange(of: item) { new in
@@ -204,6 +244,11 @@ struct EmailSettings: View {
             }
         }
         .neonScreen(tr("Почта", "Email", "E-Mail"))
+        .task {
+            do { try await store.reloadRecoveryEmail() } catch {
+                self.error = friendlyError((error as? APIError)?.message ?? error.localizedDescription)
+            }
+        }
     }
 
     private func bind() {

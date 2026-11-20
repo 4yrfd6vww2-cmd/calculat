@@ -51,7 +51,39 @@ struct MainTabs: View {
                 .tabItem { Label(tr("Настройки", "Settings", "Einstellungen"), systemImage: "gearshape.fill") }
         }
         .tint(Theme.accent)
+        .onAppear { applyTabBarStyle() }
+        .onChange(of: st.accentHex) { _ in applyTabBarStyle() }
+        .onChange(of: st.mode) { _ in applyTabBarStyle() }
     }
+}
+
+func applyTabBarStyle() {
+    let a = UITabBarAppearance()
+    a.configureWithOpaqueBackground()
+    a.backgroundColor = UIColor(Theme.bgBottom)
+    let selected = UIColor(Theme.accent)
+    let normal = UIColor(Theme.textSecondary)
+    for l in [a.stackedLayoutAppearance, a.inlineLayoutAppearance, a.compactInlineLayoutAppearance] {
+        l.selected.iconColor = selected
+        l.selected.titleTextAttributes = [.foregroundColor: selected]
+        l.normal.iconColor = normal
+        l.normal.titleTextAttributes = [.foregroundColor: normal]
+    }
+    UITabBar.appearance().standardAppearance = a
+    UITabBar.appearance().scrollEdgeAppearance = a
+    for scene in UIApplication.shared.connectedScenes {
+        if let ws = scene as? UIWindowScene {
+            for w in ws.windows { restyleTabBars(in: w, a) }
+        }
+    }
+}
+
+private func restyleTabBars(in view: UIView, _ a: UITabBarAppearance) {
+    if let tb = view as? UITabBar {
+        tb.standardAppearance = a
+        tb.scrollEdgeAppearance = a
+    }
+    for s in view.subviews { restyleTabBars(in: s, a) }
 }
 
 extension View {
@@ -62,8 +94,5 @@ extension View {
             .toolbarBackground(Theme.bgTop, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(Theme.scheme, for: .navigationBar)
-            .toolbarBackground(Theme.bgBottom, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
-            .toolbarColorScheme(Theme.scheme, for: .tabBar)
     }
 }
