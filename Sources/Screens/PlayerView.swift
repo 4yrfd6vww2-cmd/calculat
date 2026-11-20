@@ -36,6 +36,36 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// Файлы, перетащенные пальцем из другого приложения
+    func importDropped(_ providers: [NSItemProvider], done: @escaping (Int) -> Void) {
+        let dir = folder
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var added: [Track] = []
+        for provider in providers {
+            guard let typeId = provider.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .audio) == true }) else { continue }
+            group.enter()
+            provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, _ in
+                defer { group.leave() }
+                guard let url = url else { return }
+                let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
+                let name = UUID().uuidString + "." + ext
+                do {
+                    try FileManager.default.copyItem(at: url, to: dir.appendingPathComponent(name))
+                    let title = url.deletingPathExtension().lastPathComponent
+                    lock.lock()
+                    added.append(Track(title: title, file: name))
+                    lock.unlock()
+                } catch {}
+            }
+        }
+        group.notify(queue: .main) {
+            self.tracks.append(contentsOf: added)
+            self.save()
+            done(added.count)
+        }
+    }
+
     /// Подхватывает MP3, которые положили в папку приложения (Файлы / компьютер)
     func scanDocuments() {
         let fm = FileManager.default
@@ -170,6 +200,7 @@ struct PlayerView: View {
     @State private var showImport = false
     @State private var importing = false
     @State private var importMsg = ""
+    @State private var dropTargeted = false
 
     private func handleImport(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
@@ -272,6 +303,23 @@ struct PlayerView: View {
             }
             .neonScreen(tr("Плеер", "Player", "Player"))
             .onAppear { pl.scanDocuments() }
+            .onDrop(of: [.audio], isTargeted: $dropTargeted) { providers in
+                importing = true
+                importMsg = ""
+                pl.importDropped(providers) { added in
+                    importing = false
+                    importMsg = added > 0
+                        ? tr("Добавлено: \(added)", "Added: \(added)", "Hinzugefügt: \(added)")
+                        : tr("Не удалось добавить файл", "Could not add the file", "Datei konnte nicht hinzugefügt werden")
+                }
+                return true
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Theme.accent, lineWidth: dropTargeted ? 3 : 0)
+                    .padding(6)
+                    .allowsHitTesting(false)
+            )
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showImport = true } label: { Image(systemName: "plus") }
