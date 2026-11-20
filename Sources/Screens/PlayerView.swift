@@ -152,6 +152,22 @@ struct PlayerView: View {
     @State private var importing = false
     @State private var importMsg = ""
 
+    private func handleImport(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        importing = true
+        importMsg = ""
+        pl.importFiles(urls) { added, failed in
+            importing = false
+            if failed > 0 {
+                importMsg = tr("Не удалось добавить файлов: \(failed)",
+                               "Could not add files: \(failed)",
+                               "Dateien nicht hinzugefügt: \(failed)")
+            } else if added > 0 {
+                importMsg = tr("Добавлено: \(added)", "Added: \(added)", "Hinzugefügt: \(added)")
+            }
+        }
+    }
+
     private func fmt(_ s: Double) -> String {
         let t = Int(s.isFinite ? s : 0)
         return String(format: "%d:%02d", t / 60, t % 60)
@@ -241,25 +257,42 @@ struct PlayerView: View {
                     Button { showImport = true } label: { Image(systemName: "plus") }
                 }
             }
-            .fileImporter(isPresented: $showImport, allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .wav], allowsMultipleSelection: true) { result in
-                switch result {
-                case .success(let urls):
-                    importing = true
-                    importMsg = ""
-                    pl.importFiles(urls) { added, failed in
-                        importing = false
-                        if failed > 0 {
-                            importMsg = tr("Не удалось добавить файлов: \(failed). Если файл в iCloud, дождись его загрузки и повтори.",
-                                           "Could not add files: \(failed). If the file is in iCloud, wait for it to download and retry.",
-                                           "Dateien nicht hinzugefügt: \(failed). Liegt die Datei in iCloud, warte auf den Download und versuche es erneut.")
-                        } else if added > 0 {
-                            importMsg = tr("Добавлено: \(added)", "Added: \(added)", "Hinzugefügt: \(added)")
-                        }
-                    }
-                case .failure(let e):
-                    importMsg = e.localizedDescription
+            .sheet(isPresented: $showImport) {
+                DocPicker(types: [.audio, .mp3, .mpeg4Audio, .wav]) { urls in
+                    showImport = false
+                    handleImport(urls)
                 }
+                .ignoresSafeArea()
             }
+        }
+    }
+}
+
+
+/// Системное окно выбора файлов: сразу отдаёт копии файлов (в т.ч. из iCloud)
+struct DocPicker: UIViewControllerRepresentable {
+    let types: [UTType]
+    let onPick: ([URL]) -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let p = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
+        p.allowsMultipleSelection = true
+        p.delegate = context.coordinator
+        return p
+    }
+
+    func updateUIViewController(_ vc: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick) }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: ([URL]) -> Void
+        init(_ f: @escaping ([URL]) -> Void) { onPick = f }
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            onPick(urls)
+        }
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            onPick([])
         }
     }
 }
