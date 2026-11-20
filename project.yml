@@ -13,6 +13,19 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    info:
+      path: Config/Info.plist
+      properties:
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Audio
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.audio
+              - public.mp3
+              - public.mpeg-4-audio
     settings:
       base:
         PRODUCT_NAME: Neirox

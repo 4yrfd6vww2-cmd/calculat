@@ -11,6 +11,7 @@ final class Store: ObservableObject {
     @Published var messages: [Message] = []
     @Published var recoveryEmail: String?
     @Published var loggedIn: Bool = API.shared.isLoggedIn
+    @Published var selectedTab = 0
 
     private var timer: Timer?
     private var knownMessageIds = Set<Int>()

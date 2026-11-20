@@ -26,6 +26,12 @@ struct RootView: View {
         .task {
             if store.loggedIn { await store.start() }
         }
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            PlayerStore.shared.importFiles([url]) { added, _ in
+                if added > 0 { Store.shared.selectedTab = 2 }
+            }
+        }
     }
 }
 
@@ -38,17 +44,21 @@ struct MainTabs: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $store.selectedTab) {
             ChatsView()
                 .tabItem { Label(tr("Чаты", "Chats", "Chats"), systemImage: "bubble.left.and.bubble.right.fill") }
                 .badge(totalUnread)
+                .tag(0)
             FriendsView()
                 .tabItem { Label(tr("Друзья", "Friends", "Freunde"), systemImage: "person.2.fill") }
                 .badge(store.incoming.count)
+                .tag(1)
             PlayerView()
                 .tabItem { Label(tr("Плеер", "Player", "Player"), systemImage: "music.note") }
+                .tag(2)
             SettingsView()
                 .tabItem { Label(tr("Настройки", "Settings", "Einstellungen"), systemImage: "gearshape.fill") }
+                .tag(3)
         }
         .tint(Theme.accent)
         .onAppear { applyTabBarStyle() }

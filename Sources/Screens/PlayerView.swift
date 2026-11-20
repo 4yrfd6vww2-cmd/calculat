@@ -36,6 +36,25 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// Подхватывает MP3, которые положили в папку приложения (Файлы / компьютер)
+    func scanDocuments() {
+        let fm = FileManager.default
+        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let items = try? fm.contentsOfDirectory(at: docs, includingPropertiesForKeys: nil) else { return }
+        let exts = ["mp3", "m4a", "wav", "aac", "flac", "aiff", "caf", "ogg"]
+        var changed = false
+        for url in items where exts.contains(url.pathExtension.lowercased()) {
+            let name = UUID().uuidString + "." + url.pathExtension
+            let dest = folder.appendingPathComponent(name)
+            do {
+                try fm.moveItem(at: url, to: dest)
+                tracks.append(Track(title: url.deletingPathExtension().lastPathComponent, file: name))
+                changed = true
+            } catch { continue }
+        }
+        if changed { save() }
+    }
+
     private func save() {
         if let d = try? JSONEncoder().encode(tracks) { UserDefaults.standard.set(d, forKey: listKey) }
     }
@@ -252,6 +271,7 @@ struct PlayerView: View {
                 }
             }
             .neonScreen(tr("Плеер", "Player", "Player"))
+            .onAppear { pl.scanDocuments() }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showImport = true } label: { Image(systemName: "plus") }
