@@ -264,3 +264,10 @@ drop policy if exists chatmedia_read on storage.objects;
 create policy chatmedia_read on storage.objects
   for select to authenticated
   using (bucket_id = 'chat-media');
+
+-- ============================================================
+-- 12. Закрываем лишний доступ к служебным функциям
+-- ============================================================
+revoke execute on function public.block_user(uuid) from public, anon;
+grant execute on function public.block_user(uuid) to authenticated;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
