@@ -23,8 +23,8 @@ jobs:
       - name: Build (unsigned)
         run: |
           xcodebuild \
-            -project Calculator.xcodeproj \
-            -scheme Calculator \
+            -project Neirox.xcodeproj \
+            -scheme Neirox \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -37,18 +37,18 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/Calculator.app Payload/
-          zip -qr Calculator.ipa Payload
+          cp -R build/Build/Products/Release-iphoneos/Neirox.app Payload/
+          zip -qr Neirox.ipa Payload
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Calculator-ipa
-          path: Calculator.ipa
+          name: Neirox-ipa
+          path: Neirox.ipa
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Calculator build ${{ github.run_number }}
-          files: Calculator.ipa
+          name: Neirox build ${{ github.run_number }}
+          files: Neirox.ipa
