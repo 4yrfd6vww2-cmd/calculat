@@ -1,0 +1,82 @@
+name: Build Desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build (Electron 22 — последняя версия с поддержкой Windows 7)
+        working-directory: desktop
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund electron@22.3.27
+          npx electron-builder --win portable --x64 --config.extraMetadata.version=0.0.1 --publish never
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win
+          path: desktop/dist/Neirox-Windows.exe
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build app
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund electron@33.2.1
+          npx electron-builder --mac dir --universal --config.extraMetadata.version=0.5.0 --publish never
+          find dist -maxdepth 2 | head -20
+      - name: Sign ad-hoc and make DMG
+        working-directory: desktop
+        run: |
+          APP=$(find dist -maxdepth 2 -name "Neirox.app" | head -1)
+          echo "APP=$APP"
+          codesign --force --deep --sign - "$APP"
+          mkdir -p stage
+          cp -R "$APP" stage/
+          ln -s /Applications stage/Applications
+          hdiutil create -volname "Neirox" -srcfolder stage -ov -format UDZO Neirox-Mac.dmg
+          ls -la Neirox-Mac.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: desktop/Neirox-Mac.dmg
+
+  release:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+      - run: ls -R out
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-${{ github.run_number }}
+          name: Neirox Desktop ${{ github.run_number }} (Windows 0.0.1 Alfa, Mac 0.5.0)
+          files: |
+            out/win/Neirox-Windows.exe
+            out/mac/Neirox-Mac.dmg

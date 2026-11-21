@@ -1,0 +1,28 @@
+{
+  "name": "neirox-desktop",
+  "version": "0.0.1",
+  "description": "neirox — Умный Чат",
+  "main": "main.js",
+  "author": "neirox",
+  "private": true,
+  "devDependencies": {
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.example.neirox.desktop",
+    "productName": "Neirox",
+    "files": ["main.js", "app/**/*"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": {
+      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "artifactName": "Neirox-Windows.${ext}",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": ["dir"],
+      "category": "public.app-category.social-networking",
+      "identity": null,
+      "icon": "build/icon.png"
+    }
+  }
+}
