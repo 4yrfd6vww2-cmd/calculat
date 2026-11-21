@@ -19,6 +19,7 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
+    static let allowedExt: Set<String> = ["mp3", "m4a", "mp4"]
     private let listKey = "neirox.player.tracks"
 
     private var folder: URL {
@@ -43,12 +44,12 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let lock = NSLock()
         var added: [Track] = []
         for provider in providers {
-            guard let typeId = provider.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .audio) == true }) else { continue }
+            guard let typeId = provider.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .audio) == true || UTType($0)?.conforms(to: .movie) == true }) else { continue }
             group.enter()
             provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, _ in
                 defer { group.leave() }
-                guard let url = url, url.pathExtension.lowercased() == "mp3" else { return }
-                let name = UUID().uuidString + ".mp3"
+                guard let url = url, PlayerStore.allowedExt.contains(url.pathExtension.lowercased()) else { return }
+                let name = UUID().uuidString + "." + url.pathExtension.lowercased()
                 do {
                     try FileManager.default.copyItem(at: url, to: dir.appendingPathComponent(name))
                     let title = url.deletingPathExtension().lastPathComponent
@@ -71,8 +72,8 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let items = try? fm.contentsOfDirectory(at: docs, includingPropertiesForKeys: nil) else { return }
         var changed = false
-        for url in items where url.pathExtension.lowercased() == "mp3" {
-            let name = UUID().uuidString + ".mp3"
+        for url in items where PlayerStore.allowedExt.contains(url.pathExtension.lowercased()) {
+            let name = UUID().uuidString + "." + url.pathExtension.lowercased()
             let dest = folder.appendingPathComponent(name)
             do {
                 try fm.moveItem(at: url, to: dest)
@@ -93,7 +94,7 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
             var added: [Track] = []
             var failed = 0
             for url in urls {
-                if url.pathExtension.lowercased() != "mp3" { failed += 1; continue }
+                if !PlayerStore.allowedExt.contains(url.pathExtension.lowercased()) { failed += 1; continue }
                 let access = url.startAccessingSecurityScopedResource()
                 let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
                 let name = UUID().uuidString + "." + ext
@@ -208,9 +209,9 @@ struct PlayerView: View {
         pl.importFiles(urls) { added, failed in
             importing = false
             if failed > 0 {
-                importMsg = tr("Не добавлено файлов: \(failed). Принимаются только MP3.",
-                               "Files not added: \(failed). Only MP3 is accepted.",
-                               "Nicht hinzugefügt: \(failed). Nur MP3 wird akzeptiert.")
+                importMsg = tr("Не добавлено файлов: \(failed). Принимаются MP3, M4A и MP4.",
+                               "Files not added: \(failed). Only MP3, M4A and MP4 are accepted.",
+                               "Nicht hinzugefügt: \(failed). Nur MP3, M4A und MP4 werden akzeptiert.")
             } else if added > 0 {
                 importMsg = tr("Добавлено: \(added)", "Added: \(added)", "Hinzugefügt: \(added)")
             }
@@ -239,9 +240,9 @@ struct PlayerView: View {
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             if pl.tracks.isEmpty {
-                                Text(tr("Добавь MP3-файлы с телефона (принимаются только MP3). Они сохранятся в приложении и не пропадут после перезапуска.",
-                                        "Add MP3 files from your phone. They are stored in the app and stay after restart.",
-                                        "Füge MP3-Dateien vom Handy hinzu. Sie bleiben in der App gespeichert."))
+                                Text(tr("Добавь MP3- или MP4-файлы с телефона. Они сохранятся в приложении и не пропадут после перезапуска.",
+                                        "Add MP3 or MP4 files from your phone. They are stored in the app and stay after restart.",
+                                        "Füge MP3- oder MP4-Dateien vom Handy hinzu. Sie bleiben in der App gespeichert."))
                                     .font(.system(size: 14))
                                     .foregroundColor(Theme.textSecondary)
                                     .multilineTextAlignment(.center)
@@ -325,7 +326,7 @@ struct PlayerView: View {
                 }
             }
             .sheet(isPresented: $showImport) {
-                DocPicker(types: [.mp3]) { urls in
+                DocPicker(types: [.mp3, .mpeg4Audio, .mpeg4Movie]) { urls in
                     showImport = false
                     handleImport(urls)
                 }

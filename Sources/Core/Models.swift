@@ -16,6 +16,20 @@ struct Friendship: Codable, Identifiable, Hashable {
     var createdAt: Date?
 }
 
+struct Attachment: Codable, Hashable {
+    let path: String
+    var name: String
+    var type: String      // image / video / file / voice
+    var mime: String?
+}
+
+struct OutItem {
+    let data: Data
+    let mime: String
+    let name: String
+    let kind: String
+}
+
 struct Message: Codable, Identifiable, Hashable {
     let id: Int
     let sender: String
@@ -27,6 +41,7 @@ struct Message: Codable, Identifiable, Hashable {
     let createdAt: Date
     var readAt: Date?
     var editedAt: Date?
+    var attachments: [Attachment]?
 }
 
 struct HiddenRow: Codable { let messageId: Int }

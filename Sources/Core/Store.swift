@@ -180,6 +180,20 @@ final class Store: ObservableObject {
         await refresh()
     }
 
+    func sendAlbum(_ items: [OutItem], caption: String, to id: String) async throws {
+        var atts: [[String: Any]] = []
+        for it in items {
+            let ext = (it.name as NSString).pathExtension
+            let path = "\(myId)/\(UUID().uuidString)" + (ext.isEmpty ? "" : ".\(ext)")
+            try await API.shared.upload(bucket: "chat-media", path: path, data: it.data, mime: it.mime)
+            atts.append(["path": path, "name": it.name, "type": it.kind, "mime": it.mime, "size": it.data.count])
+        }
+        var row: [String: Any] = ["sender": myId, "receiver": id, "kind": "album", "attachments": atts]
+        if !caption.isEmpty { row["body"] = caption }
+        try await API.shared.insert("messages", row)
+        await refresh()
+    }
+
     func editMessage(_ id: Int, text: String) async throws {
         try await API.shared.update("messages", [URLQueryItem(name: "id", value: "eq.\(id)")],
                                     ["body": text, "edited_at": ISO.now()])
@@ -189,7 +203,9 @@ final class Store: ObservableObject {
     func deleteForAll(_ list: [Message]) async throws {
         for m in list where m.sender == myId {
             try await API.shared.delete("messages", [URLQueryItem(name: "id", value: "eq.\(m.id)")])
-            if let p = m.mediaPath {
+            var paths = (m.attachments ?? []).map { $0.path }
+            if let p = m.mediaPath { paths.append(p) }
+            for p in paths {
                 _ = try? await API.shared.raw("DELETE", "/storage/v1/object/chat-media/\(p)")
             }
         }
@@ -208,6 +224,14 @@ final class Store: ObservableObject {
     func forward(_ m: Message, to id: String) async throws {
         if m.kind == "text" {
             try await sendText(m.body ?? "", to: id)
+        } else if m.kind == "album" {
+            var out: [OutItem] = []
+            for a in m.attachments ?? [] {
+                let url = try await API.shared.signedURL(bucket: "chat-media", path: a.path)
+                let (data, _) = try await URLSession.shared.data(from: url)
+                out.append(OutItem(data: data, mime: a.mime ?? "application/octet-stream", name: a.name, kind: a.type))
+            }
+            try await sendAlbum(out, caption: m.body ?? "", to: id)
         } else if let p = m.mediaPath {
             let url = try await API.shared.signedURL(bucket: "chat-media", path: p)
             let (data, _) = try await URLSession.shared.data(from: url)

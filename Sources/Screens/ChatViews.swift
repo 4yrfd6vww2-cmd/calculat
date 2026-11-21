@@ -57,6 +57,15 @@ struct ChatsView: View {
         switch m.kind {
         case "image": return prefix + tr("📷 Фото", "📷 Photo", "📷 Foto")
         case "file": return prefix + "📎 " + (m.fileName ?? tr("Файл", "File", "Datei"))
+        case "album":
+            let a = m.attachments ?? []
+            var base: String
+            if !a.isEmpty && a.allSatisfy({ $0.type == "voice" }) { base = tr("🎤 Голосовое сообщение", "🎤 Voice message", "🎤 Sprachnachricht") }
+            else if !a.isEmpty && a.allSatisfy({ $0.type == "image" }) { base = tr("📷 Фото", "📷 Photo", "📷 Foto") + (a.count > 1 ? " (\(a.count))" : "") }
+            else if !a.isEmpty && a.allSatisfy({ $0.type == "video" }) { base = tr("🎬 Видео", "🎬 Video", "🎬 Video") + (a.count > 1 ? " (\(a.count))" : "") }
+            else { base = tr("📎 Вложения", "📎 Attachments", "📎 Anhänge") + " (\(a.count))" }
+            if let b = m.body, !b.isEmpty { base += ": " + b }
+            return prefix + base
         default: return prefix + (m.body ?? "")
         }
     }
@@ -199,6 +208,7 @@ struct Bubble: View {
     var selecting: Bool = false
     var onToggle: () -> Void = {}
     var onImage: (String) -> Void = { _ in }
+    var onVideo: (String) -> Void = { _ in }
     var onCopy: () -> Void = {}
     var onEdit: (() -> Void)? = nil
     var onForward: () -> Void = {}
@@ -257,9 +267,12 @@ struct Bubble: View {
                 Text(m.fileName ?? "file").lineLimit(2).multilineTextAlignment(.leading)
             }
             .foregroundColor(mine ? .white : Theme.text)
+        } else if m.kind == "album" {
+            AlbumView(m: m, mine: mine, selecting: selecting, onToggle: onToggle, onImage: onImage, onVideo: onVideo)
         } else {
-            Text(m.body ?? "")
+            Text(linkified(m.body ?? "", mine: mine))
                 .foregroundColor(mine ? .white : Theme.text)
+                .tint(mine ? .white : Theme.accent)
         }
     }
 }
@@ -270,7 +283,11 @@ struct ChatView: View {
     let friend: Profile
 
     @State private var text = ""
-    @State private var photoItem: PhotosPickerItem?
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var pending: [PendingItem] = []
+    @State private var showEmoji = false
+    @State private var videoPath: String?
+    @StateObject private var recorder = VoiceRecorder()
     @State private var showFiles = false
     @State private var showAI = false
     @State private var aiPrompt = ""
@@ -303,7 +320,7 @@ struct ChatView: View {
                             ForEach(thread) { m in
                                 Bubble(m: m, mine: m.sender == store.myId,
                                        selected: selected.contains(m.id), selecting: !selected.isEmpty,
-                                       onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 },
+                                       onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 }, onVideo: { videoPath = $0 },
                                        onCopy: { copyOne(m) },
                                        onEdit: (m.sender == store.myId && m.kind == "text") ? { editing = m; text = m.body ?? "" } : nil,
                                        onForward: { selected = [m.id]; showForward = true },
@@ -330,6 +347,10 @@ struct ChatView: View {
                     .padding(.horizontal, 16).padding(.vertical, 6)
                     .background(Theme.card)
                 }
+                if !pending.isEmpty && editing == nil {
+                    PendingTray(items: pending) { p in pending.removeAll { $0.id == p.id } }
+                }
+                if showEmoji { EmojiPanel { text += $0 } }
                 inputBar
             }
         }
@@ -362,11 +383,20 @@ struct ChatView: View {
             }
             .onTapGesture { fullscreenPath = nil }
         }
+        .fullScreenCover(isPresented: Binding(get: { videoPath != nil }, set: { if !$0 { videoPath = nil } })) {
+            ZStack(alignment: .topTrailing) {
+                if let p = videoPath { VideoFullView(path: p) }
+                Button { videoPath = nil } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 30)).foregroundColor(.white.opacity(0.9)).padding(16)
+                }
+            }
+        }
         .task { await store.markRead(from: friend.id) }
+        .onDisappear { recorder.cancel() }
         .sheet(isPresented: $showFiles) {
             DocPicker(types: [.item]) { urls in
                 showFiles = false
-                for u in urls { sendFile(u) }
+                for u in urls { addFile(u) }
             }
             .ignoresSafeArea()
         }
@@ -385,42 +415,63 @@ struct ChatView: View {
             Button(tr("Создать и отправить", "Create and send", "Erstellen und senden")) { sendAIImage() }
             Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) { aiPrompt = "" }
         }
-        .onChange(of: photoItem) { item in
-            guard let item = item else { return }
+        .onChange(of: photoItems) { items in
+            guard !items.isEmpty else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    sendImage(data)
-                }
-                photoItem = nil
+                for item in items { await addPhoto(item) }
+                photoItems = []
             }
         }
     }
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            if editing == nil {
-                PhotosPicker(selection: $photoItem, matching: .images) {
-                    Image(systemName: "photo").font(.system(size: 20)).foregroundColor(Theme.accent)
+        Group {
+            if recorder.recording {
+                HStack(spacing: 14) {
+                    Image(systemName: "circle.fill").font(.system(size: 12)).foregroundColor(.red)
+                    Text(fmtSecs(Double(recorder.seconds))).foregroundColor(Theme.text).font(.system(size: 17))
+                    Spacer()
+                    Button { recorder.cancel() } label: {
+                        Image(systemName: "trash").font(.system(size: 22)).foregroundColor(Theme.textSecondary)
+                    }
+                    Button { finishRecording() } label: {
+                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                    }
                 }
-                Button { showFiles = true } label: {
-                    Image(systemName: "paperclip").font(.system(size: 20)).foregroundColor(Theme.accent)
-                }
-                Button { showAI = true } label: {
-                    Image(systemName: "sparkles").font(.system(size: 20)).foregroundColor(Theme.accent)
-                }
-            }
-            TextField("", text: $text, prompt: Text(tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
-                .foregroundColor(Theme.text)
-                .padding(.horizontal, 14)
-                .frame(height: 42)
-                .background(Theme.card)
-                .overlay(RoundedRectangle(cornerRadius: 21).stroke(Theme.stroke, lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 21))
-            if busy {
-                ProgressView()
             } else {
-                Button { sendText() } label: {
-                    Image(systemName: editing != nil ? "checkmark.circle.fill" : "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                HStack(spacing: 10) {
+                    if editing == nil {
+                        PhotosPicker(selection: $photoItems, maxSelectionCount: 20, matching: .any(of: [.images, .videos])) {
+                            Image(systemName: "photo").font(.system(size: 20)).foregroundColor(Theme.accent)
+                        }
+                        Button { showFiles = true } label: {
+                            Image(systemName: "paperclip").font(.system(size: 20)).foregroundColor(Theme.accent)
+                        }
+                        Button { showAI = true } label: {
+                            Image(systemName: "sparkles").font(.system(size: 20)).foregroundColor(Theme.accent)
+                        }
+                    }
+                    Button { showEmoji.toggle() } label: {
+                        Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 20)).foregroundColor(Theme.accent)
+                    }
+                    TextField("", text: $text, prompt: Text(tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
+                        .foregroundColor(Theme.text)
+                        .padding(.horizontal, 14)
+                        .frame(height: 42)
+                        .background(Theme.card)
+                        .overlay(RoundedRectangle(cornerRadius: 21).stroke(Theme.stroke, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 21))
+                    if busy {
+                        ProgressView()
+                    } else if editing == nil && pending.isEmpty && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button { startRecording() } label: {
+                            Image(systemName: "mic.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                        }
+                    } else {
+                        Button { sendText() } label: {
+                            Image(systemName: editing != nil ? "checkmark.circle.fill" : "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                        }
+                    }
                 }
             }
         }
@@ -429,12 +480,87 @@ struct ChatView: View {
         .background(Theme.bgBottom.opacity(0.95))
     }
 
+    private func startRecording() {
+        recorder.start { ok in
+            if !ok { error = tr("Нет доступа к микрофону", "No access to the microphone", "Kein Zugriff auf das Mikrofon") }
+        }
+    }
+
+    private func finishRecording() {
+        guard let (url, secs) = recorder.stop() else { return }
+        if secs < 1 {
+            try? FileManager.default.removeItem(at: url)
+            error = tr("Слишком короткое сообщение", "Too short", "Zu kurz")
+            return
+        }
+        busy = true
+        error = ""
+        Task {
+            do {
+                let data = try Data(contentsOf: url)
+                try await store.sendAlbum([OutItem(data: data, mime: "audio/mp4", name: "voice.m4a", kind: "voice")], caption: "", to: friend.id)
+                haptic()
+            } catch { report(error) }
+            try? FileManager.default.removeItem(at: url)
+            busy = false
+        }
+    }
+
+    @MainActor private func addPhoto(_ item: PhotosPickerItem) async {
+        if pending.count >= 20 {
+            error = tr("Не больше 20 вложений в одном сообщении", "Up to 20 attachments per message", "Höchstens 20 Anhänge pro Nachricht")
+            return
+        }
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+        if isVideo {
+            if let mv = try? await item.loadTransferable(type: MovieFile.self) {
+                let th = await videoThumbnail(mv.url)
+                pending.append(PendingItem(kind: "video", name: "video", fileURL: mv.url, thumb: th))
+            }
+        } else if let d = try? await item.loadTransferable(type: Data.self) {
+            let th = UIImage(data: d)?.preparingThumbnail(of: CGSize(width: 160, height: 160))
+            pending.append(PendingItem(kind: "image", name: "photo.jpg", data: d, thumb: th))
+        }
+    }
+
+    private func addFile(_ url: URL) {
+        if pending.count >= 20 {
+            error = tr("Не больше 20 вложений в одном сообщении", "Up to 20 attachments per message", "Höchstens 20 Anhänge pro Nachricht")
+            return
+        }
+        pending.append(PendingItem(kind: "file", name: url.lastPathComponent, fileURL: url))
+    }
+
+    private func sendPending(caption: String) {
+        let list = pending
+        text = ""
+        busy = true
+        error = ""
+        haptic()
+        Task {
+            do {
+                var out: [OutItem] = []
+                for p in list { out.append(try await p.makeOutItem()) }
+                try await store.sendAlbum(out, caption: caption, to: friend.id)
+                pending.removeAll { x in list.contains { $0.id == x.id } }
+            } catch {
+                report(error)
+                if text.isEmpty { text = caption }
+            }
+            busy = false
+        }
+    }
+
     private func report(_ e: Error) {
         error = friendlyError((e as? APIError)?.message ?? e.localizedDescription)
     }
 
     private func sendText() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if editing == nil && !pending.isEmpty && !busy {
+            sendPending(caption: t)
+            return
+        }
         guard !t.isEmpty else { return }
         if let ed = editing {
             error = ""
@@ -455,17 +581,27 @@ struct ChatView: View {
         }
     }
 
+    private func copyText(of m: Message) -> String? {
+        switch m.kind {
+        case "text": return m.body
+        case "file": return m.fileName
+        case "album":
+            if let b = m.body, !b.isEmpty { return b }
+            let names = (m.attachments ?? []).filter { $0.type == "file" }.map { $0.name }
+            return names.isEmpty ? nil : names.joined(separator: "\n")
+        default: return nil
+        }
+    }
+
     private func copyOne(_ m: Message) {
-        guard let t = m.kind == "text" ? m.body : (m.kind == "file" ? m.fileName : nil) else {
+        guard let t = copyText(of: m) else {
             error = tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"); return
         }
         UIPasteboard.general.string = t
     }
 
     private func copySelected() {
-        let parts = selMsgs.sorted { $0.createdAt < $1.createdAt }.compactMap { m -> String? in
-            m.kind == "text" ? m.body : (m.kind == "file" ? m.fileName : nil)
-        }
+        let parts = selMsgs.sorted { $0.createdAt < $1.createdAt }.compactMap { copyText(of: $0) }
         guard !parts.isEmpty else { error = tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"); return }
         UIPasteboard.general.string = parts.joined(separator: "\n")
         selected = []
@@ -523,18 +659,6 @@ struct ChatView: View {
         .presentationDetents([.medium])
     }
 
-    private func sendImage(_ data: Data) {
-        busy = true
-        error = ""
-        Task {
-            do {
-                guard let jpg = compressedJPEG(from: data) else { throw APIError(message: "Bad image") }
-                try await store.sendMedia(data: jpg, mime: "image/jpeg", fileName: "photo.jpg", kind: "image", to: friend.id)
-            } catch { report(error) }
-            busy = false
-        }
-    }
-
     private func handleDrop(_ providers: [NSItemProvider]) {
         for p in providers {
             let ids = p.registeredTypeIdentifiers
@@ -553,37 +677,16 @@ struct ChatView: View {
     }
 
     @MainActor private func sendDropped(_ data: Data, fileName: String, ext: String, isImage: Bool) async {
-        busy = true
-        error = ""
-        do {
-            if data.count > 25 * 1024 * 1024 {
-                throw APIError(message: tr("Файл больше 25 МБ", "File is larger than 25 MB", "Datei ist größer als 25 MB"))
-            }
-            if isImage, let jpg = compressedJPEG(from: data) {
-                try await store.sendMedia(data: jpg, mime: "image/jpeg", fileName: "photo.jpg", kind: "image", to: friend.id)
-            } else {
-                let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream"
-                try await store.sendMedia(data: data, mime: mime, fileName: fileName, kind: "file", to: friend.id)
-            }
-        } catch { report(error) }
-        busy = false
-    }
-
-    private func sendFile(_ url: URL) {
-        busy = true
-        error = ""
-        Task {
-            do {
-                guard let data = await Task.detached(operation: { readFileCoordinated(url) }).value else {
-                    throw APIError(message: tr("Не удалось прочитать файл", "Could not read the file", "Datei konnte nicht gelesen werden"))
-                }
-                if data.count > 25 * 1024 * 1024 {
-                    throw APIError(message: tr("Файл больше 25 МБ", "File is larger than 25 MB", "Datei ist größer als 25 MB"))
-                }
-                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-                try await store.sendMedia(data: data, mime: mime, fileName: url.lastPathComponent, kind: "file", to: friend.id)
-            } catch { report(error) }
-            busy = false
+        if pending.count >= 20 { return }
+        if data.count > 50 * 1024 * 1024 {
+            error = tr("Файл больше 50 МБ", "File is larger than 50 MB", "Datei ist größer als 50 MB")
+            return
+        }
+        if isImage, UIImage(data: data) != nil {
+            let th = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 160, height: 160))
+            pending.append(PendingItem(kind: "image", name: "photo.jpg", data: data, thumb: th))
+        } else {
+            pending.append(PendingItem(kind: "file", name: fileName, data: data))
         }
     }
 
@@ -617,6 +720,7 @@ struct AIChatView: View {
     @State private var images: [UUID: Data] = [:]
     @State private var input = ""
     @State private var imageMode = false
+    @State private var showEmoji = false
     @State private var busy = false
     @State private var error = ""
     @ObservedObject private var inbox = AIInbox.shared
@@ -662,7 +766,11 @@ struct AIChatView: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 6)
 
+                if showEmoji { EmojiPanel { input += $0 } }
                 HStack(spacing: 10) {
+                    Button { showEmoji.toggle() } label: {
+                        Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 20)).foregroundColor(Theme.accent)
+                    }
                     TextField("", text: $input, prompt: Text(imageMode ? tr("Что нарисовать?", "What to draw?", "Was zeichnen?") : tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
                         .foregroundColor(Theme.text)
                         .padding(.horizontal, 14)
@@ -706,7 +814,7 @@ struct AIChatView: View {
                 if let d = images[m.id], let ui = UIImage(data: d) {
                     Image(uiImage: ui).resizable().scaledToFit().frame(maxWidth: 260)
                 } else {
-                    Text(m.text).foregroundColor(mine ? .white : Theme.text)
+                    Text(linkified(m.text, mine: mine)).foregroundColor(mine ? .white : Theme.text).tint(mine ? .white : Theme.accent)
                 }
             }
             .padding(.horizontal, 12)
