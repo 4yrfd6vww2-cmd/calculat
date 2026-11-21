@@ -323,3 +323,8 @@ revoke all on public.app_secrets from anon, authenticated;
 -- alter table public.messages add constraint messages_attachments_check check (attachments is null or (jsonb_typeof(attachments) = 'array' and jsonb_array_length(attachments) between 1 and 20));
 -- grant select (attachments), insert (attachments) on public.messages to authenticated;
 -- update storage.buckets set file_size_limit = 52428800 where id = 'chat-media';
+
+-- 17. Голосовые звонки (0.6.0): сигнальный канал WebRTC через опрос таблицы
+-- call_signals(id, call_id uuid, sender, receiver, type [invite|accept|offer|answer|ice|end|decline], payload jsonb, created_at).
+-- RLS: читать — отправитель/получатель; вставлять — только другу; удалять — обе стороны.
+-- Триггер call_signals_purge_trg удаляет строки старше часа перед каждой вставкой.
