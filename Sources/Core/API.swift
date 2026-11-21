@@ -213,4 +213,16 @@ final class API {
               let img = Data(base64Encoded: b64) else { throw APIError(message: "Empty AI image") }
         return img
     }
+
+    // MARK: Password recovery
+
+    func recoverRequest(nick: String) async throws {
+        _ = try await raw("POST", "/functions/v1/recover", json: ["action": "request", "nick": nick], auth: false)
+    }
+
+    func recoverConfirm(nick: String, code: String, newPassword: String) async throws {
+        _ = try await raw("POST", "/functions/v1/recover",
+                          json: ["action": "confirm", "nick": nick, "code": code, "new_password": newPassword],
+                          auth: false)
+    }
 }

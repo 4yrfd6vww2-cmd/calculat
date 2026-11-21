@@ -9,6 +9,9 @@ func friendlyError(_ raw: String) -> String {
     if s.contains("email_taken") { return tr("Эта почта уже привязана к другому аккаунту", "This email is already used", "Diese E-Mail wird bereits verwendet") }
     if s.contains("bad_nick") { return tr("Ник: 3–20 символов, только a–z, цифры и _", "Nick: 3–20 chars, a–z, digits and _", "Nick: 3–20 Zeichen, a–z, Ziffern und _") }
     if s.contains("bad_password") { return tr("Пароль: минимум 6 символов", "Password: at least 6 characters", "Passwort: mindestens 6 Zeichen") }
+    if s.contains("bad_code") { return tr("Неверный или просроченный код", "Wrong or expired code", "Code falsch oder abgelaufen") }
+    if s.contains("too_many") { return tr("Слишком много попыток, попробуй через час", "Too many attempts, try again in an hour", "Zu viele Versuche, versuche es in einer Stunde erneut") }
+    if s.contains("mail_failed") || s.contains("mail_not_configured") { return tr("Не удалось отправить письмо, попробуй позже", "Could not send the email, try later", "E-Mail konnte nicht gesendet werden") }
     if s.contains("no_profile") { return tr("Профиль не найден", "Profile not found", "Profil nicht gefunden") }
     if s.contains("bad_email") { return tr("Проверь адрес почты", "Check the email address", "E-Mail prüfen") }
     if s.contains("offline") || s.contains("internet") || s.contains("network") || s.contains("connection") {
@@ -156,24 +159,53 @@ struct RegisterView: View {
 struct ForgotView: View {
     @ObservedObject private var st = Settings.shared
     let go: (Int) -> Void
+    @State private var nick = ""
+    @State private var code = ""
+    @State private var password = ""
+    @State private var step = 0
+    @State private var busy = false
+    @State private var error = ""
+    @State private var done = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 Spacer(minLength: 90)
                 AuthHeader(subtitle: tr("Восстановление пароля", "Password recovery", "Passwort zurücksetzen"))
-                GlassCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(tr("Восстановление по почте пока в разработке: для отправки писем нужно подключить почтовый сервис.",
-                                "Recovery by email is still in development: a mail service has to be connected first.",
-                                "Die Wiederherstellung per E-Mail ist noch in Entwicklung: dafür muss zuerst ein Mail-Dienst angebunden werden."))
+                if done {
+                    GlassCard {
+                        Text(tr("Пароль изменён. Теперь можно войти с новым паролем.",
+                                "Password changed. You can sign in with the new password now.",
+                                "Passwort geändert. Du kannst dich jetzt mit dem neuen Passwort anmelden."))
+                            .font(.system(size: 14))
                             .foregroundColor(Theme.text)
-                        Text(tr("Если почта к аккаунту не привязана, пароль восстановить нельзя.",
-                                "If no email is bound to the account, the password cannot be recovered.",
-                                "Ist keine E-Mail verknüpft, kann das Passwort nicht wiederhergestellt werden."))
+                    }
+                } else if step == 0 {
+                    GlassField(placeholder: tr("Ник", "Nick", "Nick"), text: $nick)
+                    GlassCard {
+                        Text(tr("Код придёт на почту, привязанную к аккаунту. Если почта не привязана, пароль восстановить нельзя.",
+                                "The code is sent to the email bound to the account. If none is bound, the password cannot be recovered.",
+                                "Der Code geht an die verknüpfte E-Mail. Ist keine verknüpft, kann das Passwort nicht wiederhergestellt werden."))
+                            .font(.system(size: 13))
                             .foregroundColor(Theme.textSecondary)
                     }
-                    .font(.system(size: 14))
+                    ErrorText(text: error)
+                    NeonButton(title: tr("Отправить код", "Send code", "Code senden"), busy: busy) { sendCode() }
+                } else {
+                    GlassCard {
+                        Text(tr("Если к нику привязана почта, мы отправили на неё 6-значный код. Он действует 15 минут. Проверь и папку «Спам».",
+                                "If an email is bound to this nick, a 6-digit code was sent. It is valid for 15 minutes. Check Spam too.",
+                                "Ist eine E-Mail verknüpft, wurde ein 6-stelliger Code gesendet. Er gilt 15 Minuten. Prüfe auch den Spam-Ordner."))
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    GlassField(placeholder: tr("Код из письма", "Code from email", "Code aus der E-Mail"), text: $code)
+                    GlassField(placeholder: tr("Новый пароль", "New password", "Neues Passwort"), text: $password, secure: true)
+                    ErrorText(text: error)
+                    NeonButton(title: tr("Сменить пароль", "Change password", "Passwort ändern"), busy: busy) { confirm() }
+                    Button(tr("Отправить код ещё раз", "Send code again", "Code erneut senden")) { sendCode() }
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.textSecondary)
                 }
                 Button(tr("Назад ко входу", "Back to sign in", "Zurück zur Anmeldung")) { go(0) }
                     .font(.system(size: 15, weight: .medium))
@@ -181,6 +213,35 @@ struct ForgotView: View {
                     .padding(.top, 8)
             }
             .padding(.horizontal, 28)
+        }
+    }
+
+    private func sendCode() {
+        let n = nick.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !n.isEmpty else { error = tr("Введи ник", "Enter your nick", "Nick eingeben"); return }
+        busy = true; error = ""
+        Task {
+            do {
+                try await API.shared.recoverRequest(nick: n)
+                step = 1
+            } catch {
+                self.error = friendlyError((error as? APIError)?.message ?? error.localizedDescription)
+            }
+            busy = false
+        }
+    }
+
+    private func confirm() {
+        let n = nick.trimmingCharacters(in: .whitespaces).lowercased()
+        busy = true; error = ""
+        Task {
+            do {
+                try await API.shared.recoverConfirm(nick: n, code: code.trimmingCharacters(in: .whitespaces), newPassword: password)
+                done = true
+            } catch {
+                self.error = friendlyError((error as? APIError)?.message ?? error.localizedDescription)
+            }
+            busy = false
         }
     }
 }

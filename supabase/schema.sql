@@ -285,3 +285,21 @@ create table if not exists public.ai_usage (
 create index if not exists ai_usage_user_time on public.ai_usage (user_id, kind, created_at desc);
 alter table public.ai_usage enable row level security;
 revoke all on public.ai_usage from anon, authenticated;
+
+-- 14. Password recovery (Edge Function `recover`; mail sent through Google Apps Script web app)
+create table if not exists public.password_resets (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  code_hash text not null,
+  expires_at timestamptz not null,
+  attempts int not null default 0,
+  used boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists password_resets_user_idx on public.password_resets(user_id, created_at desc);
+alter table public.password_resets enable row level security;
+-- server-only key/value (mail_url, mail_token); values are inserted manually, never committed
+create table if not exists public.app_secrets (name text primary key, value text not null);
+alter table public.app_secrets enable row level security;
+revoke all on public.password_resets from anon, authenticated;
+revoke all on public.app_secrets from anon, authenticated;
