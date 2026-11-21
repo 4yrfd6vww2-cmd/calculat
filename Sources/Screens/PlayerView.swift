@@ -47,9 +47,8 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
             group.enter()
             provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, _ in
                 defer { group.leave() }
-                guard let url = url else { return }
-                let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
-                let name = UUID().uuidString + "." + ext
+                guard let url = url, url.pathExtension.lowercased() == "mp3" else { return }
+                let name = UUID().uuidString + ".mp3"
                 do {
                     try FileManager.default.copyItem(at: url, to: dir.appendingPathComponent(name))
                     let title = url.deletingPathExtension().lastPathComponent
@@ -71,10 +70,9 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let fm = FileManager.default
         let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let items = try? fm.contentsOfDirectory(at: docs, includingPropertiesForKeys: nil) else { return }
-        let exts = ["mp3", "m4a", "wav", "aac", "flac", "aiff", "caf", "ogg"]
         var changed = false
-        for url in items where exts.contains(url.pathExtension.lowercased()) {
-            let name = UUID().uuidString + "." + url.pathExtension
+        for url in items where url.pathExtension.lowercased() == "mp3" {
+            let name = UUID().uuidString + ".mp3"
             let dest = folder.appendingPathComponent(name)
             do {
                 try fm.moveItem(at: url, to: dest)
@@ -95,6 +93,7 @@ final class PlayerStore: NSObject, ObservableObject, AVAudioPlayerDelegate {
             var added: [Track] = []
             var failed = 0
             for url in urls {
+                if url.pathExtension.lowercased() != "mp3" { failed += 1; continue }
                 let access = url.startAccessingSecurityScopedResource()
                 let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
                 let name = UUID().uuidString + "." + ext
@@ -209,9 +208,9 @@ struct PlayerView: View {
         pl.importFiles(urls) { added, failed in
             importing = false
             if failed > 0 {
-                importMsg = tr("Не удалось добавить файлов: \(failed)",
-                               "Could not add files: \(failed)",
-                               "Dateien nicht hinzugefügt: \(failed)")
+                importMsg = tr("Не добавлено файлов: \(failed). Принимаются только MP3.",
+                               "Files not added: \(failed). Only MP3 is accepted.",
+                               "Nicht hinzugefügt: \(failed). Nur MP3 wird akzeptiert.")
             } else if added > 0 {
                 importMsg = tr("Добавлено: \(added)", "Added: \(added)", "Hinzugefügt: \(added)")
             }
@@ -240,7 +239,7 @@ struct PlayerView: View {
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             if pl.tracks.isEmpty {
-                                Text(tr("Добавь MP3-файлы с телефона. Они сохранятся в приложении и не пропадут после перезапуска.",
+                                Text(tr("Добавь MP3-файлы с телефона (принимаются только MP3). Они сохранятся в приложении и не пропадут после перезапуска.",
                                         "Add MP3 files from your phone. They are stored in the app and stay after restart.",
                                         "Füge MP3-Dateien vom Handy hinzu. Sie bleiben in der App gespeichert."))
                                     .font(.system(size: 14))
@@ -326,7 +325,7 @@ struct PlayerView: View {
                 }
             }
             .sheet(isPresented: $showImport) {
-                DocPicker(types: [.audio, .mp3, .mpeg4Audio, .wav]) { urls in
+                DocPicker(types: [.mp3]) { urls in
                     showImport = false
                     handleImport(urls)
                 }

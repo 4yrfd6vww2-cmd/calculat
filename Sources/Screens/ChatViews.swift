@@ -225,6 +225,7 @@ struct ChatView: View {
     @State private var aiPrompt = ""
     @State private var busy = false
     @State private var error = ""
+    @State private var dropTargeted = false
 
     private var thread: [Message] { store.thread(with: friend.id) }
 
@@ -255,9 +256,23 @@ struct ChatView: View {
         }
         .neonScreen(friend.nick)
         .task { await store.markRead(from: friend.id) }
-        .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in
-            if case .success(let url) = result { sendFile(url) }
+        .sheet(isPresented: $showFiles) {
+            DocPicker(types: [.item]) { urls in
+                showFiles = false
+                for u in urls { sendFile(u) }
+            }
+            .ignoresSafeArea()
         }
+        .onDrop(of: [.item], isTargeted: $dropTargeted) { providers in
+            handleDrop(providers)
+            return true
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Theme.accent, lineWidth: dropTargeted ? 3 : 0)
+                .padding(6)
+                .allowsHitTesting(false)
+        )
         .alert(tr("Картинка от ИИ", "AI image", "KI-Bild"), isPresented: $showAI) {
             TextField(tr("Опиши картинку", "Describe the image", "Bild beschreiben"), text: $aiPrompt)
             Button(tr("Создать и отправить", "Create and send", "Erstellen und senden")) { sendAIImage() }
@@ -330,6 +345,40 @@ struct ChatView: View {
             } catch { report(error) }
             busy = false
         }
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        for p in providers {
+            let ids = p.registeredTypeIdentifiers
+            let imageId = ids.first { UTType($0)?.conforms(to: .image) == true }
+            guard let typeId = imageId ?? ids.first(where: { UTType($0)?.conforms(to: .data) == true }) else { continue }
+            let isImage = imageId != nil
+            let suggested = p.suggestedName
+            p.loadFileRepresentation(forTypeIdentifier: typeId) { url, _ in
+                guard let url = url, let data = try? Data(contentsOf: url) else { return }
+                let ext = url.pathExtension
+                let base = suggested ?? url.deletingPathExtension().lastPathComponent
+                let fileName = ext.isEmpty || base.lowercased().hasSuffix("." + ext.lowercased()) ? base : base + "." + ext
+                Task { @MainActor in await sendDropped(data, fileName: fileName, ext: ext, isImage: isImage) }
+            }
+        }
+    }
+
+    @MainActor private func sendDropped(_ data: Data, fileName: String, ext: String, isImage: Bool) async {
+        busy = true
+        error = ""
+        do {
+            if data.count > 25 * 1024 * 1024 {
+                throw APIError(message: tr("Файл больше 25 МБ", "File is larger than 25 MB", "Datei ist größer als 25 MB"))
+            }
+            if isImage, let jpg = compressedJPEG(from: data) {
+                try await store.sendMedia(data: jpg, mime: "image/jpeg", fileName: "photo.jpg", kind: "image", to: friend.id)
+            } else {
+                let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream"
+                try await store.sendMedia(data: data, mime: mime, fileName: fileName, kind: "file", to: friend.id)
+            }
+        } catch { report(error) }
+        busy = false
     }
 
     private func sendFile(_ url: URL) {

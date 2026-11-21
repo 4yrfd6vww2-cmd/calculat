@@ -61,9 +61,9 @@ struct MainTabs: View {
                 .tag(3)
         }
         .tint(Theme.accent)
-        .onAppear { applyTabBarStyle() }
-        .onChange(of: st.accentHex) { _ in applyTabBarStyle() }
-        .onChange(of: st.mode) { _ in applyTabBarStyle() }
+        .onAppear { if #unavailable(iOS 26) { applyTabBarStyle() } }
+        .onChange(of: st.accentHex) { _ in if #unavailable(iOS 26) { applyTabBarStyle() } }
+        .onChange(of: st.mode) { _ in if #unavailable(iOS 26) { applyTabBarStyle() } }
     }
 }
 
@@ -96,13 +96,25 @@ private func restyleTabBars(in view: UIView, _ a: UITabBarAppearance) {
     for s in view.subviews { restyleTabBars(in: s, a) }
 }
 
+struct NavBarStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            // iOS 26: системное «жидкое стекло» — не перекрываем фон панели
+            content.toolbarColorScheme(Theme.scheme, for: .navigationBar)
+        } else {
+            content
+                .toolbarBackground(Theme.bgTop, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarColorScheme(Theme.scheme, for: .navigationBar)
+        }
+    }
+}
+
 extension View {
     func neonScreen(_ title: String) -> some View {
         self
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Theme.bgTop, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(Theme.scheme, for: .navigationBar)
+            .modifier(NavBarStyle())
     }
 }
