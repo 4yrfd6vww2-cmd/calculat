@@ -60,9 +60,9 @@ fun PlayerTab() {
             scope.launch {
                 val (added, failed) = withContext(Dispatchers.IO) { Player.import(ctx, uris) }
                 info = if (failed > 0) {
-                    tr("Добавлено: $added. Не добавлено: $failed (принимаются только MP3).",
-                        "Added: $added. Skipped: $failed (MP3 only).",
-                        "Hinzugefügt: $added. Übersprungen: $failed (nur MP3).")
+                    tr("Добавлено: $added. Не добавлено: $failed (принимаются MP3, M4A и MP4).",
+                        "Added: $added. Skipped: $failed (MP3, M4A and MP4 only).",
+                        "Hinzugefügt: $added. Übersprungen: $failed (nur MP3, M4A und MP4).")
                 } else {
                     tr("Добавлено: $added", "Added: $added", "Hinzugefügt: $added")
                 }
@@ -75,7 +75,7 @@ fun PlayerTab() {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { ScreenTitle(tr("Плеер", "Player", "Player")) }
             Box(Modifier.padding(end = 20.dp)) {
-                NxSmallButton("+ " + tr("Добавить", "Add", "Hinzufügen")) { picker.launch(arrayOf("audio/mpeg", "audio/*")) }
+                NxSmallButton("+ " + tr("Добавить", "Add", "Hinzufügen")) { picker.launch(arrayOf("audio/mpeg", "audio/*", "video/mp4")) }
             }
         }
         if (importing || info.isNotEmpty()) {
@@ -87,9 +87,9 @@ fun PlayerTab() {
 
         if (Player.tracks.isEmpty()) {
             Text(
-                tr("Добавь MP3-файлы с телефона (принимаются только MP3). Они сохранятся в приложении и не пропадут после перезапуска.",
-                    "Add MP3 files from your device (MP3 only). They are stored in the app and stay after restart.",
-                    "Füge MP3-Dateien von deinem Gerät hinzu (nur MP3). Sie bleiben in der App gespeichert."),
+                tr("Добавь MP3- или MP4-файлы с телефона. Они сохранятся в приложении и не пропадут после перезапуска.",
+                    "Add MP3 or MP4 files from your device. They are stored in the app and stay after restart.",
+                    "Füge MP3- oder MP4-Dateien von deinem Gerät hinzu. Sie bleiben in der App gespeichert."),
                 color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(20.dp).weight(1f)
             )
         } else {

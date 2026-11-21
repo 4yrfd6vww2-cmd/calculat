@@ -160,11 +160,7 @@ object Store {
                 } else {
                     for ((sender, group) in fresh.groupBy { it.sender }) {
                         val last = group.maxByOrNull { it.createdAt } ?: continue
-                        val preview = when (last.kind) {
-                            "image" -> "🖼 " + tr("Фото", "Photo", "Foto")
-                            "file" -> "📎 " + (last.fileName ?: tr("Файл", "File", "Datei"))
-                            else -> last.body ?: ""
-                        }
+                        val preview = previewOf(last)
                         val text = if (group.size > 1) {
                             tr("Новых: ${group.size}. ", "New: ${group.size}. ", "Neu: ${group.size}. ") + preview
                         } else preview
@@ -242,6 +238,23 @@ object Store {
         refresh()
     }
 
+    /** Одно вложение для отправки альбомом. kind: image / video / file / voice. */
+    class OutItem(val data: ByteArray, val mime: String, val name: String, val kind: String)
+
+    suspend fun sendAlbum(items: List<OutItem>, caption: String, to: String) {
+        val atts = org.json.JSONArray()
+        for (it in items) {
+            val ext = it.name.substringAfterLast('.', "")
+            val path = "$myId/${UUID.randomUUID()}" + (if (ext.isEmpty()) "" else ".$ext")
+            Api.upload("chat-media", path, it.data, it.mime)
+            atts.put(JSONObject().put("path", path).put("name", it.name).put("type", it.kind).put("mime", it.mime).put("size", it.data.size))
+        }
+        val row = JSONObject().put("sender", myId).put("receiver", to).put("kind", "album").put("attachments", atts)
+        if (caption.isNotEmpty()) row.put("body", caption)
+        Api.insert("messages", row)
+        refresh()
+    }
+
     suspend fun markRead(from: String) {
         if (unread(from) == 0) return
         Api.update(
@@ -260,7 +273,8 @@ object Store {
         for (m in list) {
             if (m.sender != myId) continue
             Api.delete("messages?id=eq.${m.id}")
-            m.mediaPath?.let {
+            val paths = listOfNotNull(m.mediaPath) + m.attachments.map { it.path }
+            for (it in paths) {
                 try {
                     Api.request("DELETE", "/storage/v1/object/chat-media/$it")
                 } catch (e: ApiError) {
@@ -280,6 +294,15 @@ object Store {
     }
 
     suspend fun forward(m: Message, to: String) {
+        if (m.kind == "album") {
+            val out = ArrayList<OutItem>()
+            for (a in m.attachments) {
+                val bytes = Api.download(Api.signedUrl("chat-media", a.path))
+                out.add(OutItem(bytes, a.mime.ifEmpty { "application/octet-stream" }, a.name, a.type))
+            }
+            sendAlbum(out, m.body ?: "", to)
+            return
+        }
         val path = m.mediaPath
         if (m.kind == "text" || path == null) {
             val t = m.body ?: ""

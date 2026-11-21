@@ -37,7 +37,7 @@ object Player {
     }
 
     private fun reload() {
-        tracks = dir.listFiles()?.filter { it.isFile && it.extension.lowercase() == "mp3" }
+        tracks = dir.listFiles()?.filter { it.isFile && it.extension.lowercase() in setOf("mp3", "mp4", "m4a") }
             ?.sortedBy { it.name.lowercase() } ?: emptyList()
     }
 
@@ -129,24 +129,30 @@ object Player {
         if (!wasCurrent && cur != null) currentIndex = tracks.indexOf(cur)
     }
 
-    /** Возвращает (добавлено, не добавлено). Принимаются только MP3. */
+    /** Возвращает (добавлено, не добавлено). Принимаются MP3, M4A и MP4. */
     fun import(ctx: Context, uris: List<Uri>): Pair<Int, Int> {
         var added = 0
         var failed = 0
         for (u in uris) {
             val name = displayName(ctx, u)
             val mime = ctx.contentResolver.getType(u) ?: ""
-            if (!(name.lowercase().endsWith(".mp3") || mime == "audio/mpeg")) {
+            val ext = when {
+                name.lowercase().endsWith(".mp3") || mime == "audio/mpeg" -> "mp3"
+                name.lowercase().endsWith(".m4a") || mime == "audio/mp4" || mime == "audio/x-m4a" -> "m4a"
+                name.lowercase().endsWith(".mp4") || mime == "video/mp4" -> "mp4"
+                else -> null
+            }
+            if (ext == null) {
                 failed++
                 continue
             }
             try {
                 var base = name.substringBeforeLast('.', name).replace(Regex("[\\\\/:*?\"<>|]"), "_")
                 if (base.isEmpty()) base = "track"
-                var f = File(dir, "$base.mp3")
+                var f = File(dir, "$base.$ext")
                 var n = 1
                 while (f.exists()) {
-                    f = File(dir, "$base ($n).mp3")
+                    f = File(dir, "$base ($n).$ext")
                     n++
                 }
                 ctx.contentResolver.openInputStream(u)?.use { input ->

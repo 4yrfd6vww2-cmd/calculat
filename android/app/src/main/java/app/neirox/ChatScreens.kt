@@ -1,6 +1,12 @@
 package app.neirox
 
+import android.Manifest
 import android.content.ClipData
+import android.content.pm.PackageManager
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -70,7 +76,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private const val MAX_FILE = 25 * 1024 * 1024
+private const val MAX_FILE = 50 * 1024 * 1024
 
 @Composable
 fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
@@ -110,12 +116,7 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     Avatar(p, 48.dp)
                     Column(Modifier.padding(start = 14.dp).weight(1f)) {
                         Text(p.nick, color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        val preview = when {
-                            last == null -> tr("Нет сообщений", "No messages", "Keine Nachrichten")
-                            last.kind == "image" -> "🖼 " + tr("Фото", "Photo", "Foto")
-                            last.kind == "file" -> "📎 " + (last.fileName ?: tr("Файл", "File", "Datei"))
-                            else -> last.body ?: ""
-                        }
+                        val preview = previewOf(last)
                         Text(preview, color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (unread > 0) {
@@ -162,6 +163,22 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     var showForward by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var menuSingle by remember { mutableStateOf(false) }
+    var showEmoji by remember { mutableStateOf(false) }
+    val pending = remember { mutableStateListOf<PendingItem>() }
+    var video by remember { mutableStateOf<String?>(null) }
+    var recording by remember { mutableStateOf(false) }
+    var recSecs by remember { mutableStateOf(0) }
+    val recorder = remember { VoiceRecorder(ctx) }
+    DisposableEffect(Unit) { onDispose { recorder.cancel() } }
+    LaunchedEffect(recording) {
+        if (recording) {
+            val t0 = System.currentTimeMillis()
+            while (true) {
+                recSecs = ((System.currentTimeMillis() - t0) / 1000).toInt()
+                delay(250)
+            }
+        }
+    }
 
     val selMsgs = thread.filter { it.id in selected }
 
@@ -191,44 +208,122 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show()
     }
 
-    fun sendUri(uri: Uri, photo: Boolean) {
+    fun addUris(uris: List<Uri>, forceFile: Boolean) {
+        for (u in uris) {
+            if (pending.size >= 20) {
+                error = tr("Не больше 20 вложений в одном сообщении", "Up to 20 attachments per message", "Höchstens 20 Anhänge pro Nachricht")
+                break
+            }
+            val mime = ctx.contentResolver.getType(u) ?: ""
+            val kind = when {
+                forceFile -> "file"
+                mime.startsWith("image/") -> "image"
+                mime.startsWith("video/") -> "video"
+                else -> "file"
+            }
+            pending.add(PendingItem(u, displayName(ctx, u), kind, mime.ifEmpty { "application/octet-stream" }))
+        }
+    }
+
+    fun sendPending(caption: String) {
+        val list = pending.toList()
         busy = true
         error = ""
         scope.launch {
             try {
-                if (photo) {
-                    val jpg = withContext(Dispatchers.IO) { compressImage(ctx, uri) }
-                        ?: throw ApiError(tr("Не удалось прочитать фото", "Could not read the photo", "Foto konnte nicht gelesen werden"))
-                    Store.sendMedia(jpg, "image/jpeg", "photo.jpg", "image", friendId)
-                } else {
-                    val bytes = withContext(Dispatchers.IO) {
-                        ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    } ?: throw ApiError(tr("Не удалось прочитать файл", "Could not read the file", "Datei konnte nicht gelesen werden"))
-                    if (bytes.size > MAX_FILE) {
-                        throw ApiError(tr("Файл больше 25 МБ", "File is larger than 25 MB", "Datei ist größer als 25 MB"))
+                val out = withContext(Dispatchers.IO) {
+                    list.map { p ->
+                        if (p.kind == "image") {
+                            val jpg = compressImage(ctx, p.uri)
+                                ?: throw ApiError(tr("Не удалось прочитать фото", "Could not read the photo", "Foto konnte nicht gelesen werden"))
+                            Store.OutItem(jpg, "image/jpeg", "photo.jpg", "image")
+                        } else {
+                            val bytes = ctx.contentResolver.openInputStream(p.uri)?.use { it.readBytes() }
+                                ?: throw ApiError(tr("Не удалось прочитать файл", "Could not read the file", "Datei konnte nicht gelesen werden"))
+                            if (bytes.size > MAX_FILE) {
+                                throw ApiError(tr("Файл больше 50 МБ", "File is larger than 50 MB", "Datei ist größer als 50 MB"))
+                            }
+                            Store.OutItem(bytes, p.mime, p.name, p.kind)
+                        }
                     }
-                    val mime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
-                    Store.sendMedia(bytes, mime, displayName(ctx, uri), "file", friendId)
                 }
+                Store.sendAlbum(out, caption, friendId)
+                pending.clear()
                 buzz()
             } catch (e: Exception) {
                 error = friendlyError(e.message ?: "")
+                if (input.isEmpty()) input = caption
             }
             busy = false
         }
     }
 
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) sendUri(uri, true)
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        addUris(uris, false)
     }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) sendUri(uri, false)
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        addUris(uris, true)
+    }
+
+    fun startRecording() {
+        if (recorder.start()) {
+            recSecs = 0
+            recording = true
+        } else {
+            error = tr("Не удалось начать запись", "Could not start recording", "Aufnahme konnte nicht gestartet werden")
+        }
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) startRecording()
+        else error = tr("Нет доступа к микрофону", "No access to the microphone", "Kein Zugriff auf das Mikrofon")
+    }
+
+    fun micClick() {
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording()
+        else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    fun cancelRecording() {
+        recording = false
+        recorder.cancel()
+    }
+
+    fun finishRecording() {
+        recording = false
+        val secs = recSecs
+        val f = recorder.stop()
+        if (f == null || secs < 1) {
+            f?.delete()
+            toast(tr("Слишком короткое сообщение", "Too short", "Zu kurz"))
+            return
+        }
+        busy = true
+        error = ""
+        scope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) { f.readBytes() }
+                Store.sendAlbum(listOf(Store.OutItem(bytes, "audio/mp4", "voice.m4a", "voice")), "", friendId)
+                buzz()
+            } catch (e: Exception) {
+                error = friendlyError(e.message ?: "")
+            }
+            f.delete()
+            busy = false
+        }
     }
 
     fun sendText() {
         val t = input.trim()
-        if (t.isEmpty() || busy) return
+        if (busy) return
         val ed = editing
+        if (ed == null && pending.isNotEmpty()) {
+            input = ""
+            buzz()
+            sendPending(t)
+            return
+        }
+        if (t.isEmpty()) return
         if (ed != null) {
             error = ""
             scope.launch {
@@ -278,6 +373,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             when (m.kind) {
                 "text" -> m.body
                 "file" -> m.fileName
+                "album" -> m.body ?: m.attachments.filter { it.type == "file" }.joinToString("\n") { it.name }.ifEmpty { null }
                 else -> null
             }
         }
@@ -372,9 +468,15 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                     selected = m.id in selected,
                     selecting = selected.isNotEmpty(),
                     onImage = { fullscreen = it },
+                    onVideo = { video = it },
                     onToggle = { selected = if (m.id in selected) selected - m.id else selected + m.id },
                     onCopy = {
-                        val t = if (m.kind == "text") m.body else if (m.kind == "file") m.fileName else null
+                        val t = when (m.kind) {
+                            "text" -> m.body
+                            "file" -> m.fileName
+                            "album" -> m.body ?: m.attachments.filter { it.type == "file" }.joinToString("\n") { it.name }.ifEmpty { null }
+                            else -> null
+                        }
                         if (t == null) toast(tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"))
                         else {
                             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -411,25 +513,51 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (editing == null) {
-                Box {
-                    Text("📎", fontSize = 26.sp, modifier = Modifier.clickable { menu = true }.padding(8.dp))
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text(tr("Фото", "Photo", "Foto")) }, onClick = { menu = false; photoPicker.launch("image/*") })
-                        DropdownMenuItem(text = { Text(tr("Файл", "File", "Datei")) }, onClick = { menu = false; filePicker.launch("*/*") })
-                        DropdownMenuItem(text = { Text(tr("Картинка от ИИ", "AI image", "KI-Bild")) }, onClick = { menu = false; showAI = true })
+        if (pending.isNotEmpty() && editing == null) {
+            PendingTray(pending) { pending.removeAt(it) }
+        }
+        if (showEmoji) {
+            EmojiPanel { input += it }
+        }
+        if (recording) {
+            Row(
+                Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🔴", fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
+                Text(fmtSecs(recSecs), color = Txt, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                Text("🗑", fontSize = 24.sp, modifier = Modifier.clickable { cancelRecording() }.padding(10.dp))
+                Text("➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { finishRecording() }.padding(10.dp))
+            }
+        } else {
+            Row(
+                Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (editing == null) {
+                    Box {
+                        Text("📎", fontSize = 26.sp, modifier = Modifier.clickable { menu = true }.padding(8.dp))
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Фото и видео", "Photos and videos", "Fotos und Videos")) },
+                                onClick = { menu = false; mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+                            )
+                            DropdownMenuItem(text = { Text(tr("Файл", "File", "Datei")) }, onClick = { menu = false; filePicker.launch(arrayOf("*/*")) })
+                            DropdownMenuItem(text = { Text(tr("Картинка от ИИ", "AI image", "KI-Bild")) }, onClick = { menu = false; showAI = true })
+                        }
                     }
                 }
+                Text("😊", fontSize = 26.sp, modifier = Modifier.clickable { showEmoji = !showEmoji }.padding(6.dp))
+                NxField(
+                    input, { input = it }, tr("Сообщение", "Message", "Nachricht"),
+                    modifier = Modifier.weight(1f), singleLine = false
+                )
+                if (editing == null && input.isBlank() && pending.isEmpty()) {
+                    Text("🎤", fontSize = 26.sp, modifier = Modifier.clickable { micClick() }.padding(10.dp))
+                } else {
+                    Text(if (editing != null) "✓" else "➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { sendText() }.padding(10.dp))
+                }
             }
-            NxField(
-                input, { input = it }, tr("Сообщение", "Message", "Nachricht"),
-                modifier = Modifier.weight(1f), singleLine = false
-            )
-            Text(if (editing != null) "✓" else "➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { sendText() }.padding(10.dp))
         }
     }
 
@@ -494,6 +622,9 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         )
     }
 
+    val vd = video
+    if (vd != null) VideoDialog(vd) { video = null }
+
     val fs = fullscreen
     if (fs != null) {
         Dialog(onDismissRequest = { fullscreen = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -513,7 +644,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
 @Composable
 fun MessageBubble(
     m: Message, mine: Boolean, selected: Boolean, selecting: Boolean,
-    onImage: (String) -> Unit, onToggle: () -> Unit,
+    onImage: (String) -> Unit, onVideo: (String) -> Unit, onToggle: () -> Unit,
     onCopy: () -> Unit, onEdit: (() -> Unit)?, onForward: () -> Unit, onDelete: () -> Unit
 ) {
     val ctx = LocalContext.current
@@ -567,8 +698,22 @@ fun MessageBubble(
                     Text("📎", fontSize = 22.sp)
                     Text(m.fileName ?: tr("Файл", "File", "Datei"), color = textColor, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
                 }
+            } else if (m.kind == "album") {
+                AlbumContent(
+                    m, textColor, selecting, onToggle, { if (selecting) onToggle() else menuOpen = true },
+                    onImage, onVideo,
+                    { p ->
+                        scope.launch {
+                            try {
+                                val url = Api.signedUrl("chat-media", p)
+                                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            } catch (e: Exception) {
+                            }
+                        }
+                    }
+                )
             } else {
-                Text(m.body ?: "", color = textColor, fontSize = 16.sp)
+                Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 16.sp)
             }
             Text(
                 (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt) + if (mine && m.readAt != null) " ✓✓" else "",
@@ -611,6 +756,7 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
     }
     var input by remember { mutableStateOf("") }
     var imageMode by remember { mutableStateOf(false) }
+    var showEmoji by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -699,7 +845,7 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
                         if (m.image != null) {
                             Image(m.image.asImageBitmap(), null, Modifier.widthIn(max = 260.dp), contentScale = ContentScale.Fit)
                         } else {
-                            Text(m.text, color = if (mine) Color.White else Txt, fontSize = 16.sp)
+                            Text(linkified(m.text, if (mine) Color.White else Accent), color = if (mine) Color.White else Txt, fontSize = 16.sp)
                         }
                     }
                 }
@@ -713,10 +859,12 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
             NxSmallButton(tr("Текст", "Text", "Text"), filled = !imageMode) { imageMode = false }
             NxSmallButton(tr("Картинка", "Image", "Bild"), filled = imageMode) { imageMode = true }
         }
+        if (showEmoji) EmojiPanel { input += it }
         Row(
             Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Text("😊", fontSize = 26.sp, modifier = Modifier.clickable { showEmoji = !showEmoji }.padding(6.dp))
             NxField(
                 input, { input = it },
                 if (imageMode) tr("Что нарисовать?", "What to draw?", "Was zeichnen?") else tr("Сообщение", "Message", "Nachricht"),
