@@ -312,3 +312,14 @@ revoke all on public.app_secrets from anon, authenticated;
 -- messages.edited_at timestamptz; таблица message_hidden(message_id, user_id);
 -- политики: отправитель может удалять свои сообщения и менять body/edited_at
 -- (триггер запрещает менять их не отправителю); storage delete для своих файлов.
+
+-- 16. (0.5.0) Альбомы и голосовые: сообщение kind='album' хранит вложения в messages.attachments
+--     [{path,name,type(image|video|file|voice),mime,size}], лимит файла в chat-media 50 МБ.
+-- alter table public.messages add column if not exists attachments jsonb;
+-- alter table public.messages drop constraint if exists messages_kind_check;
+-- alter table public.messages add constraint messages_kind_check check (kind = any (array['text','image','file','album']));
+-- alter table public.messages drop constraint if exists messages_check1;
+-- alter table public.messages add constraint messages_check1 check (body is not null or media_path is not null or attachments is not null);
+-- alter table public.messages add constraint messages_attachments_check check (attachments is null or (jsonb_typeof(attachments) = 'array' and jsonb_array_length(attachments) between 1 and 20));
+-- grant select (attachments), insert (attachments) on public.messages to authenticated;
+-- update storage.buckets set file_size_limit = 52428800 where id = 'chat-media';
