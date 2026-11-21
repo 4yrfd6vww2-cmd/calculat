@@ -18,6 +18,12 @@
       "artifactName": "Neirox-Windows.${ext}",
       "icon": "build/icon.png"
     },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Network",
+      "icon": "build/icon.png",
+      "artifactName": "Neirox-Linux.${ext}"
+    },
     "mac": {
       "target": ["dir"],
       "category": "public.app-category.social-networking",

@@ -67,8 +67,27 @@ jobs:
           name: mac
           path: desktop/Neirox-Mac.dmg
 
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build AppImage
+        working-directory: desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund electron@33.2.1
+          npx electron-builder --linux AppImage --x64 --config.extraMetadata.version=0.0.1 --publish never
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: desktop/dist/Neirox-Linux.AppImage
+
   release:
-    needs: [windows, mac]
+    needs: [windows, mac, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -79,8 +98,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-${{ github.run_number }}
-          name: Neirox Desktop ${{ github.run_number }} (Windows 0.0.2 Alfa, Mac 0.5.0)
+          name: Neirox Desktop ${{ github.run_number }} (Windows 0.0.2 Alfa, Mac 0.5.0, Linux 0.0.1 Alfa)
           files: |
             out/win/Neirox-Windows.exe
             out/win/Neirox-Windows-32.exe
             out/mac/Neirox-Mac.dmg
+            out/linux/Neirox-Linux.AppImage
