@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 
-const VERSION = process.platform === 'darwin' ? '0.5.0 Mac' : process.platform === 'linux' ? '0.0.1 Alfa' : '0.0.2 Alfa';
+const VERSION = process.platform === 'darwin' ? '0.6 Mac' : '0.1 Windows and Linux build';
 
 // В AppImage на новых Ubuntu песочница Chromium может не стартовать; грузим только свои файлы.
 if (process.platform === 'linux') app.commandLine.appendSwitch('no-sandbox');
@@ -24,13 +24,13 @@ function createWindow() {
     }
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith('file:')) {
       e.preventDefault();
-      shell.openExternal(url);
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     }
   });
   win.loadFile(path.join(__dirname, 'app', 'index.html'), { query: { v: VERSION } });

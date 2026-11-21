@@ -1,6 +1,6 @@
 {
   "name": "neirox-desktop",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "neirox — Умный Чат",
   "main": "main.js",
   "author": "neirox",
@@ -28,6 +28,7 @@
       "target": ["dir"],
       "category": "public.app-category.social-networking",
       "identity": null,
+      "extendInfo": { "NSMicrophoneUsageDescription": "Микрофон нужен для голосовых сообщений" },
       "icon": "build/icon.png"
     }
   }

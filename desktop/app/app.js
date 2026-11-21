@@ -4,7 +4,7 @@
 const SB_URL = 'https://seimbpskeemozcibybsy.supabase.co';
 const SB_KEY = 'sb_publishable_h5MfmS1nk907f6_1gwjm-Q_7JsUwDpI';
 const VERSION = new URLSearchParams(location.search).get('v') || 'web';
-const MAX_FILE = 25 * 1024 * 1024;
+const MAX_FILE = 50 * 1024 * 1024;
 
 
 /* ---------- иконки (рисуются одинаково на любой системе, включая Windows 7) ---------- */
@@ -38,6 +38,9 @@ const IC = {
   palette: '<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 1.6-3.2 2 2 0 0 1 1.6-3.3H18a4 4 0 0 0 4-4A10 10 0 0 0 12 2z"/>',
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
   info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>',
+  mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
+  film: '<rect x="2" y="2" width="20" height="20" rx="2.2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
 };
 function icons(html) {
@@ -52,6 +55,30 @@ const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == n
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
 
 /* ---------- настройки ---------- */
+function linkify(text) {
+  const src = String(text == null ? '' : text);
+  const re = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(src))) {
+    let u = m[0], tail = '';
+    while (/[.,!?;:)\]}»"']$/.test(u)) { tail = u.slice(-1) + tail; u = u.slice(0, -1); }
+    if (u.length < 5) continue;
+    const href = /^www\./i.test(u) ? 'https://' + u : u;
+    out += esc(src.slice(last, m.index)) + '<a class="lnk" href="' + esc(href) + '" data-url="' + esc(href) + '">' + esc(u) + '</a>';
+    last = m.index + u.length;
+    re.lastIndex = last;
+  }
+  return out + esc(src.slice(last));
+}
+const attsOf = m => (m && Array.isArray(m.attachments) ? m.attachments : []);
+const EMO = [
+  ['😀', '😀 😃 😄 😁 😆 😅 😂 🤣 🙂 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😋 😛 😜 🤪 😝 🤗 🤭 🤔 🤨 😐 😑 😶 🙄 😏 😴 😌 😔 😪 🤤 😷 🤒 🤕 🤢 🤮 🥵 🥶 😵 🤯 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 💀 💩 🤡 👻 👽 🤖'],
+  ['👍', '👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 🙏 💪 👏 🙌 👐 🤲 ✍️ 💅 🧠 👀 👅 👄 🙋 🤦 🤷 💃 🕺 🚶 🏃'],
+  ['❤️', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 ✨ ⭐ 🌟 💫 🔥 💥 💯 ✅ ❌ ❓ ❗ ⚡ 🎉 🎊 🎁 🏆 🥇 🎵 🎶 💤 💢 💬'],
+  ['🐶', '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🐺 🐴 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🐙 🦀 🐠 🐬 🐳 🌸 🌹 🌻 🌷 🌲 🌴 🍀 🍁 🌈 ☀️ 🌙 ☁️ ❄️ 🌊'],
+  ['🍕', '🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🥑 🥦 🥕 🌽 🥔 🍞 🧀 🍳 🥞 🥓 🍔 🍟 🍕 🌭 🌮 🍝 🍣 🍜 🍦 🍩 🍪 🎂 🍰 🍫 🍬 🍭 ☕ 🍵 🥤 🍺 🍷 🥂'],
+  ['⚽', '⚽ 🏀 🏈 ⚾ 🎾 🏐 🎱 🏓 🎮 🎲 🎯 🎸 🎹 🎤 🎧 📱 💻 ⌨️ 📷 🎬 📚 ✏️ 📌 📎 🔑 🔒 💡 💰 💳 🚗 ✈️ 🚀 🏠']
+].map(c => ({ icon: c[0], list: c[1].split(' ') }));
 const ACCENTS = ['#4AA8FF', '#9B6BFF', '#35E0B4', '#FF6BB5', '#FF8A4A', '#FFD24A', '#4AE0E0', '#7CFF6B', '#FF5C5C', '#B06BFF', '#6B8BFF', '#E06BFF'];
 const S = {
   lang: lsGet('s.lang', 'ru'),
@@ -236,7 +263,7 @@ function notifyNew(msgs) {
       if (!document.hasFocus() && 'Notification' in window) {
         try {
           const p = D.profiles[fresh[0].sender];
-          const body = fresh[0].kind === 'text' ? fresh[0].body : (fresh[0].kind === 'image' ? t('Фото', 'Photo', 'Foto') : (fresh[0].file_name || ''));
+          const body = preview(fresh[0]);
           if (Notification.permission === 'granted') new Notification(p ? p.nick : 'neirox', { body });
           else if (Notification.permission === 'default') Notification.requestPermission();
         } catch (e) { }
@@ -289,6 +316,24 @@ async function sendMedia(blob, mime, fileName, kind, to) {
   await ins('messages', { sender: myId(), receiver: to, kind, media_path: path, file_name: fileName });
   await refresh();
 }
+async function uploadAtt(blob, mime, fileName) {
+  const ext = (fileName.split('.').pop() || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+  const path = myId() + '/' + crypto.randomUUID() + (ext && ext !== fileName ? '.' + ext : '');
+  await uploadFile('chat-media', path, blob, mime, false);
+  return path;
+}
+async function sendAlbum(items, caption, to) {
+  const atts = [];
+  for (const it of items) {
+    let blob = it.blob || it.file, mime = it.mime || blob.type || 'application/octet-stream', name = it.name;
+    if (it.type === 'image' && !it.raw) { blob = await compress(blob); mime = 'image/jpeg'; name = 'photo.jpg'; }
+    if (blob.size > MAX_FILE) throw new Error(t('Файл больше 50 МБ', 'File is larger than 50 MB', 'Datei ist größer als 50 MB'));
+    const path = await uploadAtt(blob, mime, name);
+    atts.push({ path, name, type: it.type, mime, size: blob.size });
+  }
+  await ins('messages', { sender: myId(), receiver: to, kind: 'album', body: caption || null, attachments: atts });
+  await refresh();
+}
 async function editMessage(id, text) {
   await upd('messages', { id: 'eq.' + id }, { body: text, edited_at: new Date().toISOString() });
   await refresh();
@@ -298,6 +343,7 @@ async function deleteForAll(list) {
     if (m.sender !== myId()) continue;
     await del('messages', { id: 'eq.' + m.id });
     if (m.media_path) raw('DELETE', '/storage/v1/object/chat-media/' + m.media_path).catch(() => { });
+    attsOf(m).forEach(a => raw('DELETE', '/storage/v1/object/chat-media/' + a.path).catch(() => { }));
   }
   await refresh();
 }
@@ -308,6 +354,14 @@ async function deleteForMe(list) {
 }
 async function forwardMsg(m, to) {
   if (m.kind === 'text') { await sendText(m.body || '', to); return; }
+  if (m.kind === 'album') {
+    const out = [];
+    for (const a of attsOf(m)) {
+      const blob = await (await fetch(await signedUrl(a.path))).blob();
+      out.push({ blob, mime: a.mime || blob.type, name: a.name, type: a.type, raw: true });
+    }
+    await sendAlbum(out, m.body || '', to); return;
+  }
   if (!m.media_path) return;
   const blob = await (await fetch(await signedUrl(m.media_path))).blob();
   const name = m.file_name || (m.kind === 'image' ? 'photo.jpg' : 'file');
@@ -464,6 +518,15 @@ function preview(m) {
   const pre = m.sender === myId() ? t('Вы: ', 'You: ', 'Du: ') : '';
   if (m.kind === 'image') return pre + t('Фото', 'Photo', 'Foto');
   if (m.kind === 'file') return pre + (m.file_name || '');
+  if (m.kind === 'album') {
+    const a = attsOf(m);
+    let x;
+    if (a.length && a.every(q => q.type === 'voice')) x = t('Голосовое сообщение', 'Voice message', 'Sprachnachricht');
+    else if (a.length && a.every(q => q.type === 'image')) x = t('Фото', 'Photo', 'Foto') + (a.length > 1 ? ' (' + a.length + ')' : '');
+    else if (a.length && a.every(q => q.type === 'video')) x = t('Видео', 'Video', 'Video') + (a.length > 1 ? ' (' + a.length + ')' : '');
+    else x = t('Вложения', 'Attachments', 'Anhänge') + ' (' + a.length + ')';
+    return pre + x + (m.body ? ': ' + m.body : '');
+  }
   return pre + (m.body || '');
 }
 function renderList() {
@@ -491,18 +554,26 @@ function buildPane() {
   const pane = $('#pane');
   if (!U.chat) { pane.innerHTML = '<div class="pane-empty">' + t('Выбери чат слева', 'Pick a chat on the left', 'Wähle links einen Chat') + '</div>'; paneBuilt = null; return; }
   const ai = U.chat === 'ai';
+  if (REC.on && REC.to !== U.chat) cancelRec();
   pane.innerHTML = icons(
     '<div class="chead" id="chead"></div>' +
     '<div class="msgs" id="msgs"></div>' +
     '<div id="cerr"></div>' +
     '<div id="banner"></div>' +
-    '<div class="composer">' +
+    '<div id="tray"></div>' +
+    '<div id="emoji" class="hidden"></div>' +
+    '<div class="composer" id="composer">' +
     (ai ? '<div class="seg" id="aimode"></div>' :
-      '<button class="icon-btn" data-act="attach-photo" title="' + t('Фото', 'Photo', 'Foto') + '">{i:image}</button>' +
+      '<button class="icon-btn" data-act="attach-photo" title="' + t('Фото и видео', 'Photos and videos', 'Fotos und Videos') + '">{i:image}</button>' +
       '<button class="icon-btn" data-act="attach-file" title="' + t('Файл', 'File', 'Datei') + '">{i:clip}</button>' +
       '<button class="icon-btn" data-act="ai-pic" title="' + t('Картинка от ИИ', 'AI image', 'KI-Bild') + '">{i:sparkles}</button>') +
+    '<button class="icon-btn" data-act="emoji" title="' + t('Смайлики', 'Emoji', 'Emojis') + '">{i:smile}</button>' +
     '<textarea id="inp" rows="1" placeholder="' + t('Сообщение', 'Message', 'Nachricht') + '"></textarea>' +
-    '<button class="icon-btn send" id="sendbtn" data-act="send">{i:send}</button></div>');
+    (ai ? '' : '<button class="icon-btn" data-act="rec-start" title="' + t('Голосовое сообщение', 'Voice message', 'Sprachnachricht') + '">{i:mic}</button>') +
+    '<button class="icon-btn send" id="sendbtn" data-act="send">{i:send}</button>' +
+    '<div id="recbar"><span class="recdot"></span><span id="rec-t">0:00</span><span class="grow" style="flex:1"></span>' +
+    '<button class="icon-btn" data-act="rec-cancel" title="' + t('Отмена', 'Cancel', 'Abbrechen') + '">{i:trash}</button>' +
+    '<button class="icon-btn send" data-act="rec-send" title="' + t('Отправить', 'Send', 'Senden') + '">{i:send}</button></div></div>');
   const inp = $('#inp');
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
   inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(140, inp.scrollHeight) + 'px'; });
@@ -511,9 +582,14 @@ function buildPane() {
     pane.ondragleave = () => pane.classList.remove('drop');
     pane.ondrop = e => {
       e.preventDefault(); pane.classList.remove('drop');
-      Array.from(e.dataTransfer.files || []).forEach(f => sendPicked(f, f.type.startsWith('image/')));
+      addPending(Array.from(e.dataTransfer.files || []), 'auto');
     };
   } else { pane.ondragover = pane.ondragleave = pane.ondrop = null; }
+  const mb = $('#msgs');
+  mb.addEventListener('scroll', () => { mb._stick = mb.scrollHeight - mb.scrollTop - mb.clientHeight < 80; });
+  mb.addEventListener('load', () => { if (mb._stick) mb.scrollTop = mb.scrollHeight; }, true);
+  mb.addEventListener('loadedmetadata', () => { if (mb._stick) mb.scrollTop = mb.scrollHeight; }, true);
+  if (REC.on) $('#composer').classList.add('rec');
   paneBuilt = U.chat;
   setTimeout(() => inp.focus(), 30);
 }
@@ -554,46 +630,200 @@ function renderPane() {
     setHTML($('#aimode'), '<button data-act="ai-mode" data-v="0" class="' + (!U.aiImageMode ? 'on' : '') + '">' + t('Текст', 'Text', 'Text') + '</button><button data-act="ai-mode" data-v="1" class="' + (U.aiImageMode ? 'on' : '') + '">' + t('Картинка', 'Image', 'Bild') + '</button>');
     setHTML($('#banner'), '');
   } else {
-    const list = thread(U.chat);
-    html = list.map(m => {
-      const mine = m.sender === myId();
-      let inner;
-      if (m.kind === 'image' && m.media_path) {
-        const c = urlCache[m.media_path];
-        const ok = c && c.exp > Date.now();
-        inner = '<img class="pic" data-path="' + esc(m.media_path) + '" ' + (ok ? 'src="' + esc(c.url) + '" data-full="' + esc(c.url) + '"' : '') + ' alt="">';
-      }
-      else if (m.kind === 'file' && m.media_path) inner = '<div class="file" data-act="open-file" data-id="' + m.id + '">{i:file} <span>' + esc(m.file_name || 'file') + '</span></div>';
-      else inner = esc(m.body || '');
-      return '<div class="mrow ' + (mine ? 'mine' : '') + (U.selected.has(m.id) ? ' sel' : '') + '" data-mid="' + m.id + '">' +
-        '<div class="bubble" data-mid="' + m.id + '">' + inner +
-        '<div class="meta">' + (m.edited_at ? t('изм. ', 'edited ', 'bearb. ') : '') + timeOf(m.created_at) + (mine && m.read_at ? ' {i:checks}' : '') + '</div>' +
-        '<button class="dots" data-act="menu" data-id="' + m.id + '">{i:dots}</button></div></div>';
-    }).join('');
+    html = null;
     setHTML($('#cerr'), U.error ? '<div class="err" style="padding:0 18px">' + esc(U.error) + '</div>' : '');
-    setHTML($('#banner'), U.editing ? '<div class="banner"><span class="grow" style="flex:1">{i:edit} ' + t('Редактирование', 'Editing', 'Bearbeiten') + '</span><button data-act="edit-cancel">{i:x}</button></div>' : '');
+    setHTML($('#banner'), U.editing ? '<div class="banner"><span class="grow" style="flex:1">{i:edit} ' + t('Редактирование', 'Editing', 'Bearbeiten') + '</span><button data-act="edit-cancel">{i:x}</button></div>' :
+      (U.sending ? '<div class="banner"><span class="grow" style="flex:1">{i:clip} ' + t('Отправка…', 'Sending…', 'Senden…') + '</span></div>' : ''));
+    setHTML($('#tray'), trayHtml());
   }
-  const changed = msgs._h !== html;
-  setHTML(msgs, html);
+  if (ai) setHTML($('#tray'), '');
+  const emo = $('#emoji');
+  if (emo) { emo.classList.toggle('hidden', !U.emoji); setHTML(emo, U.emoji ? emojiHtml() : ''); }
+  let changed;
+  if (ai) {
+    if (msgs._kind !== 'ai') { msgs.innerHTML = ''; msgs._rows = null; msgs._kind = 'ai'; msgs._h = undefined; }
+    changed = msgs._h !== html;
+    setHTML(msgs, html);
+  } else {
+    changed = syncMsgs(msgs, thread(U.chat));
+  }
   if (changed) {
-    if (atBottom || msgs._first !== U.chat) { msgs.scrollTop = msgs.scrollHeight; msgs._first = U.chat; }
+    if (atBottom || msgs._first !== U.chat) { msgs.scrollTop = msgs.scrollHeight; msgs._first = U.chat; msgs._stick = true; }
     hydrateImages(msgs);
   }
   const sb = $('#sendbtn');
   if (sb) sb.innerHTML = icons(U.editing ? '{i:check}' : '{i:send}');
 }
 function hydrateImages(root) {
-  root.querySelectorAll('img.pic[data-path]').forEach(img => {
-    if (img.src) return;
-    signedUrl(img.dataset.path).then(u => { img.src = u; img.dataset.full = u; }).catch(() => { });
+  root.querySelectorAll('[data-path]').forEach(el => {
+    if (el.getAttribute('src')) return;
+    signedUrl(el.dataset.path).then(u => { el.src = u; if (el.tagName === 'IMG') el.dataset.full = u; }).catch(() => { });
   });
+}
+function srcAttr(path, withFull) {
+  const c = urlCache[path];
+  return c && c.exp > Date.now() ? ' src="' + esc(c.url) + '"' + (withFull ? ' data-full="' + esc(c.url) + '"' : '') : '';
+}
+function msgContent(m) {
+  if (m.kind === 'image' && m.media_path) return '<img class="pic" data-path="' + esc(m.media_path) + '"' + srcAttr(m.media_path, true) + ' alt="">';
+  if (m.kind === 'file' && m.media_path) return '<div class="file" data-act="open-file" data-id="' + m.id + '">{i:file} <span>' + esc(m.file_name || 'file') + '</span></div>';
+  if (m.kind === 'album') {
+    const a = attsOf(m).map((x, i) => ({ x, i }));
+    const vis = a.filter(o => o.x.type === 'image' || o.x.type === 'video');
+    let h = '';
+    if (vis.length) {
+      h += '<div class="album n' + Math.min(vis.length, 4) + '">' + vis.map(o => o.x.type === 'image'
+        ? '<img class="pic" data-path="' + esc(o.x.path) + '"' + srcAttr(o.x.path, true) + ' alt="">'
+        : '<video class="vid" controls preload="metadata" playsinline data-path="' + esc(o.x.path) + '"' + srcAttr(o.x.path) + '></video>').join('') + '</div>';
+    }
+    a.filter(o => o.x.type === 'voice').forEach(o => { h += '<audio class="voice" controls preload="metadata" data-path="' + esc(o.x.path) + '"' + srcAttr(o.x.path) + '></audio>'; });
+    a.filter(o => o.x.type === 'file').forEach(o => { h += '<div class="file" data-act="open-att" data-id="' + m.id + '" data-i="' + o.i + '">{i:file} <span>' + esc(o.x.name || 'file') + '</span></div>'; });
+    if (m.body) h += '<div class="cap">' + linkify(m.body) + '</div>';
+    return h;
+  }
+  return linkify(m.body || '');
+}
+function msgMeta(m, mine) {
+  return (m.edited_at ? t('изм. ', 'edited ', 'bearb. ') : '') + timeOf(m.created_at) + (mine && m.read_at ? ' {i:checks}' : '');
+}
+function syncMsgs(box, list) {
+  if (box._kind !== 'chat' || box._mode !== U.chat) { box.innerHTML = ''; box._rows = {}; box._kind = 'chat'; box._mode = U.chat; box._h = undefined; }
+  const rows = box._rows;
+  let changed = false;
+  const keep = new Set();
+  let prev = null;
+  list.forEach(m => {
+    keep.add(m.id);
+    let r = rows[m.id];
+    if (!r) {
+      r = document.createElement('div');
+      r.dataset.mid = m.id;
+      r.innerHTML = icons('<div class="bubble" data-mid="' + m.id + '"><div class="bc"></div><div class="meta"></div><button class="dots" data-act="menu" data-id="' + m.id + '">{i:dots}</button></div>');
+      rows[m.id] = r; changed = true;
+    }
+    const mine = m.sender === myId();
+    const cls = 'mrow' + (mine ? ' mine' : '') + (U.selected.has(m.id) ? ' sel' : '');
+    if (r.className !== cls) r.className = cls;
+    const bc = r.firstChild.children[0], meta = r.firstChild.children[1];
+    const ch = msgContent(m);
+    if (bc._h !== ch) { bc._h = ch; bc.innerHTML = icons(ch); changed = true; }
+    const mh = msgMeta(m, mine);
+    if (meta._h !== mh) { meta._h = mh; meta.innerHTML = icons(mh); }
+    const want = prev ? prev.nextSibling : box.firstChild;
+    if (want !== r) { box.insertBefore(r, want); changed = true; }
+    prev = r;
+  });
+  Object.keys(rows).forEach(k => { if (!keep.has(Number(k))) { rows[k].remove(); delete rows[k]; changed = true; } });
+  return changed;
+}
+
+/* ---------- вложения, смайлики, голосовые ---------- */
+const PEND = {};
+let pendSeq = 0;
+const pend = () => (PEND[U.chat] || (PEND[U.chat] = []));
+function addPending(files, mode) {
+  if (!U.chat || U.chat === 'ai') return;
+  const list = pend();
+  files.forEach(f => {
+    if (list.length >= 20) { U.error = t('Не больше 20 вложений в одном сообщении', 'Up to 20 attachments per message', 'Höchstens 20 Anhänge pro Nachricht'); return; }
+    if (f.size > MAX_FILE) { U.error = t('Файл больше 50 МБ: ', 'File is larger than 50 MB: ', 'Datei ist größer als 50 MB: ') + f.name; return; }
+    const type = mode === 'file' ? 'file' : (f.type.startsWith('image/') ? 'image' : (f.type.startsWith('video/') ? 'video' : 'file'));
+    list.push({ id: ++pendSeq, file: f, type, name: f.name || 'file', url: type === 'file' ? '' : URL.createObjectURL(f) });
+  });
+  renderAll();
+}
+function trayHtml() {
+  const list = PEND[U.chat] || [];
+  if (!list.length) return '';
+  return '<div class="tray">' + list.map((p, i) => {
+    const x = '<button class="px" data-act="pend-del" data-i="' + i + '">{i:x}</button>';
+    if (p.type === 'image') return '<div class="pt"><img src="' + esc(p.url) + '" alt="">' + x + '</div>';
+    if (p.type === 'video') return '<div class="pt"><video src="' + esc(p.url) + '#t=0.1" preload="metadata" muted></video><span class="vb">{i:film}</span>' + x + '</div>';
+    return '<div class="pt f">{i:file}<span>' + esc(p.name) + '</span>' + x + '</div>';
+  }).join('') + '</div>';
+}
+function emojiHtml() {
+  const c = EMO[U.emojiCat || 0] || EMO[0];
+  return '<div class="emo-tabs">' + EMO.map((g, i) => '<button data-act="emo-cat" data-i="' + i + '" class="' + (i === (U.emojiCat || 0) ? 'on' : '') + '">' + g.icon + '</button>').join('') + '</div>' +
+    '<div class="emo-grid">' + c.list.map(e => '<button data-act="emo" data-e="' + e + '">' + e + '</button>').join('') + '</div>';
+}
+function insertEmoji(e) {
+  const i = $('#inp'); if (!i) return;
+  const a = i.selectionStart == null ? i.value.length : i.selectionStart, b = i.selectionEnd == null ? a : i.selectionEnd;
+  i.value = i.value.slice(0, a) + e + i.value.slice(b);
+  const p = a + e.length;
+  try { i.setSelectionRange(p, p); } catch (er) { }
+  i.focus();
+  i.dispatchEvent(new Event('input'));
+}
+const REC = { on: false, to: null, ctx: null, stream: null, node: null, src: null, chunks: [], rate: 44100, t0: 0, tm: null };
+async function startRec() {
+  if (REC.on || !U.chat || U.chat === 'ai' || U.editing) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const node = ctx.createScriptProcessor(4096, 1, 1);
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    REC.chunks = [];
+    node.onaudioprocess = e => { REC.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+    src.connect(node); node.connect(mute); mute.connect(ctx.destination);
+    Object.assign(REC, { on: true, to: U.chat, ctx, stream, node, src, rate: ctx.sampleRate, t0: Date.now() });
+    const c = $('#composer'); if (c) c.classList.add('rec');
+    const tt = $('#rec-t'); if (tt) tt.textContent = '0:00';
+    REC.tm = setInterval(() => {
+      const sec = Math.floor((Date.now() - REC.t0) / 1000);
+      const el = $('#rec-t'); if (el) el.textContent = fmt(sec);
+      if (sec >= 300) finishRec();
+    }, 250);
+  } catch (e) {
+    U.error = t('Нет доступа к микрофону', 'No access to the microphone', 'Kein Zugriff auf das Mikrofon'); renderAll();
+  }
+}
+function stopRecHw() {
+  clearInterval(REC.tm);
+  try { REC.node.disconnect(); REC.src.disconnect(); } catch (e) { }
+  try { REC.stream.getTracks().forEach(x => x.stop()); } catch (e) { }
+  try { REC.ctx.close(); } catch (e) { }
+  REC.on = false;
+  const c = $('#composer'); if (c) c.classList.remove('rec');
+}
+function cancelRec() { if (!REC.on) return; stopRecHw(); REC.chunks = []; }
+function encodeWav(chunks, rate, target) {
+  let n = 0; chunks.forEach(c => { n += c.length; });
+  const all = new Float32Array(n); let o = 0;
+  chunks.forEach(c => { all.set(c, o); o += c.length; });
+  const ratio = rate / target, len = Math.floor(n / ratio);
+  const buf = new ArrayBuffer(44 + len * 2), dv = new DataView(buf);
+  const w = (p, str) => { for (let i = 0; i < str.length; i++) dv.setUint8(p + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + len * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, target, true); dv.setUint32(28, target * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  w(36, 'data'); dv.setUint32(40, len * 2, true);
+  for (let i = 0; i < len; i++) {
+    const a = Math.floor(i * ratio), b = Math.min(n, Math.max(a + 1, Math.floor((i + 1) * ratio)));
+    let sum = 0; for (let j = a; j < b; j++) sum += all[j];
+    let v = Math.max(-1, Math.min(1, sum / (b - a)));
+    dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+async function finishRec() {
+  if (!REC.on) return;
+  const chunks = REC.chunks, rate = REC.rate, to = REC.to, dur = Date.now() - REC.t0;
+  stopRecHw(); REC.chunks = [];
+  if (dur < 700 || !chunks.length) { toast(t('Слишком короткое сообщение', 'Too short', 'Zu kurz')); return; }
+  U.sending = true; U.error = ''; renderAll();
+  try { await sendAlbum([{ blob: encodeWav(chunks, rate, 16000), mime: 'audio/wav', name: 'voice.wav', type: 'voice' }], '', to); } catch (e) { U.error = friendly(e); }
+  U.sending = false; renderAll();
 }
 
 /* ---------- отправка ---------- */
 async function doSend() {
   const inp = $('#inp');
   const text = inp.value.trim();
-  if (!text) return;
+  const queued = U.chat === 'ai' ? [] : (PEND[U.chat] || []);
+  if (!text && !queued.length) return;
   if (U.chat === 'ai') { inp.value = ''; inp.style.height = 'auto'; aiSend(text); return; }
   const to = U.chat;
   U.error = '';
@@ -605,23 +835,20 @@ async function doSend() {
     } catch (e) { U.error = friendly(e); }
     renderAll(); return;
   }
+  if (queued.length) {
+    if (U.sending) return;
+    const list = queued.slice();
+    inp.value = ''; inp.style.height = 'auto';
+    U.sending = true; renderAll();
+    try {
+      await sendAlbum(list, text, to);
+      PEND[to] = (PEND[to] || []).filter(x => !list.includes(x));
+      list.forEach(x => { if (x.url) URL.revokeObjectURL(x.url); });
+    } catch (e) { U.error = friendly(e); if (U.chat === to && !inp.value) inp.value = text; }
+    U.sending = false; renderAll(); return;
+  }
   inp.value = ''; inp.style.height = 'auto';
   try { await sendText(text, to); } catch (e) { inp.value = text; U.error = friendly(e); renderAll(); }
-}
-async function sendPicked(file, photo) {
-  if (!U.chat || U.chat === 'ai') return;
-  const to = U.chat;
-  U.error = ''; U.busy = true; renderAll();
-  try {
-    if (photo) {
-      const b = await compress(file);
-      await sendMedia(b, 'image/jpeg', 'photo.jpg', 'image', to);
-    } else {
-      if (file.size > MAX_FILE) throw new Error(t('Файл больше 25 МБ', 'File is larger than 25 MB', 'Datei ist größer als 25 MB'));
-      await sendMedia(file, file.type || 'application/octet-stream', file.name, 'file', to);
-    }
-  } catch (e) { U.error = friendly(e); }
-  U.busy = false; renderAll();
 }
 async function sendAiPic() {
   openDialog(t('Картинка от ИИ', 'AI image', 'KI-Bild'),
@@ -814,7 +1041,7 @@ function fallbackCopy(text, done) {
   try { document.execCommand('copy'); done(); } catch (e) { } ta.remove();
 }
 function copyMessages(list) {
-  const parts = list.map(m => m.kind === 'text' ? m.body : (m.kind === 'file' ? m.file_name : null)).filter(Boolean);
+  const parts = list.map(m => m.kind === 'text' ? m.body : (m.kind === 'file' ? m.file_name : (m.kind === 'album' ? (m.body || attsOf(m).filter(a => a.type === 'file').map(a => a.name).join('\n')) : null))).filter(Boolean);
   if (!parts.length) { toast(t('Нечего копировать', 'Nothing to copy', 'Nichts zu kopieren')); return false; }
   copyText(parts.join('\n')); return true;
 }
@@ -846,6 +1073,7 @@ function openView(url) {
 document.addEventListener('click', async e => {
   const hide = !e.target.closest('#ctx');
   if (hide) hideCtx();
+  if (U.emoji && !e.target.closest('#emoji') && !e.target.closest('[data-act="emoji"]')) { U.emoji = false; renderAll(); }
   if (e.target.closest('#viewer')) { $('#viewer').classList.add('hidden'); return; }
   const modal = $('#modal');
   if (e.target === modal) { closeDialog(); return; }
@@ -857,6 +1085,8 @@ document.addEventListener('click', async e => {
     if (U.selected.has(id)) U.selected.delete(id); else U.selected.add(id);
     renderAll(); return;
   }
+  const lnk = e.target.closest('a.lnk');
+  if (lnk) { e.preventDefault(); if (!U.selected.size) { window.open(lnk.dataset.url); return; } }
   const pic = e.target.closest('img.pic[data-full]');
   if (pic && !U.selected.size) { openView(pic.dataset.full); return; }
   const aiPic = e.target.closest('img.pic[data-act="view-url"]');
@@ -893,6 +1123,22 @@ document.addEventListener('click', async e => {
     case 'f-chat': U.tab = 'chats'; U.chat = id; renderAll(); markReadIfOpen(); break;
     case 'send': doSend(); break;
     case 'attach-photo': $('#pick-photo').click(); break;
+    case 'emoji': U.emoji = !U.emoji; renderAll(); break;
+    case 'emo-cat': U.emojiCat = Number(el.dataset.i); renderAll(); break;
+    case 'emo': insertEmoji(el.dataset.e); break;
+    case 'pend-del': {
+      const l = pend(), p = l[Number(el.dataset.i)];
+      if (p) { if (p.url) URL.revokeObjectURL(p.url); l.splice(Number(el.dataset.i), 1); }
+      renderAll(); break;
+    }
+    case 'rec-start': startRec(); break;
+    case 'rec-cancel': cancelRec(); renderAll(); break;
+    case 'rec-send': finishRec(); break;
+    case 'open-att': {
+      const m = D.messages.find(mm => mm.id === Number(id)), a = attsOf(m)[Number(el.dataset.i)];
+      if (a) { try { window.open(await signedUrl(a.path)); } catch (er) { } }
+      break;
+    }
     case 'attach-file': $('#pick-file').click(); break;
     case 'ai-pic': sendAiPic(); break;
     case 'ai-pic-go': {
@@ -984,6 +1230,7 @@ document.addEventListener('contextmenu', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (!$('#viewer').classList.contains('hidden')) $('#viewer').classList.add('hidden');
+    else if (U.emoji) { U.emoji = false; renderAll(); }
     else if (!$('#modal').classList.contains('hidden')) closeDialog();
     else if (U.selected.size) { U.selected = new Set(); renderAll(); }
     else hideCtx();
@@ -1002,8 +1249,8 @@ document.addEventListener('input', e => {
     clearTimeout(searchT); searchT = setTimeout(doSearch, 300);
   }
 });
-$('#pick-photo').addEventListener('change', e => { Array.from(e.target.files).forEach(f => sendPicked(f, true)); e.target.value = ''; });
-$('#pick-file').addEventListener('change', e => { Array.from(e.target.files).forEach(f => sendPicked(f, false)); e.target.value = ''; });
+$('#pick-photo').addEventListener('change', e => { addPending(Array.from(e.target.files), 'auto'); e.target.value = ''; });
+$('#pick-file').addEventListener('change', e => { addPending(Array.from(e.target.files), 'file'); e.target.value = ''; });
 $('#pick-avatar').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
