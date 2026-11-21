@@ -31,6 +31,8 @@ object Store {
         private set
     var recoveryEmail by mutableStateOf<String?>(null)
         private set
+    var hidden by mutableStateOf<Set<Long>>(emptySet())
+        private set
 
     @Volatile
     var appVisible = false
@@ -99,8 +101,13 @@ object Store {
 
             val ms = Api.select("messages?select=*&order=created_at.desc&limit=1000")
             val list = (0 until ms.length()).map { parseMessage(ms.getJSONObject(it)) }
+            try {
+                val hid = Api.select("message_hidden?select=message_id")
+                hidden = (0 until hid.length()).map { hid.getJSONObject(it).getLong("message_id") }.toSet()
+            } catch (e: ApiError) {
+            }
             notifyNew(list)
-            messages = list.reversed()
+            messages = list.filter { it.id !in hidden }.reversed()
 
             val ids = HashSet<String>()
             for (f in friendships) { ids.add(f.requester); ids.add(f.addressee) }
@@ -242,6 +249,49 @@ object Store {
             JSONObject().put("read_at", Instant.now().toString())
         )
         refresh()
+    }
+
+    suspend fun editMessage(id: Long, text: String) {
+        Api.update("messages?id=eq.$id", JSONObject().put("body", text).put("edited_at", Instant.now().toString()))
+        refresh()
+    }
+
+    suspend fun deleteForAll(list: List<Message>) {
+        for (m in list) {
+            if (m.sender != myId) continue
+            Api.delete("messages?id=eq.${m.id}")
+            m.mediaPath?.let {
+                try {
+                    Api.request("DELETE", "/storage/v1/object/chat-media/$it")
+                } catch (e: ApiError) {
+                }
+            }
+        }
+        refresh()
+    }
+
+    suspend fun deleteForMe(list: List<Message>) {
+        for (m in list) {
+            Api.insert("message_hidden", JSONObject().put("message_id", m.id))
+        }
+        hidden = hidden + list.map { it.id }
+        messages = messages.filter { it.id !in hidden }
+        refresh()
+    }
+
+    suspend fun forward(m: Message, to: String) {
+        val path = m.mediaPath
+        if (m.kind == "text" || path == null) {
+            val t = m.body ?: ""
+            if (t.isNotEmpty()) sendText(t, to)
+            return
+        }
+        val bytes = Api.download(Api.signedUrl("chat-media", path))
+        val name = m.fileName ?: "file"
+        val mime = if (m.kind == "image") "image/jpeg" else
+            (android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase()) ?: "application/octet-stream")
+        sendMedia(bytes, mime, name, m.kind, to)
     }
 
     // Профиль

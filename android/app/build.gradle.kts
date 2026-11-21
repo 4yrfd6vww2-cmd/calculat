@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.neirox"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.4.0 AN"
+        versionCode = 2
+        versionName = "0.4.3 AN"
     }
 
     buildFeatures {

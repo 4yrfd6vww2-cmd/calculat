@@ -20,7 +20,8 @@ data class Message(
     val mediaPath: String?,
     val fileName: String?,
     val createdAt: String,
-    val readAt: String?
+    val readAt: String?,
+    val editedAt: String?
 )
 
 fun parseProfile(o: JSONObject) = Profile(o.getString("id"), o.getString("nick"), o.str("avatar_url"), o.str("created_at"))
@@ -30,7 +31,7 @@ fun parseFriendship(o: JSONObject) =
 
 fun parseMessage(o: JSONObject) = Message(
     o.getLong("id"), o.getString("sender"), o.getString("receiver"), o.optString("kind", "text"),
-    o.str("body"), o.str("media_path"), o.str("file_name"), o.getString("created_at"), o.str("read_at")
+    o.str("body"), o.str("media_path"), o.str("file_name"), o.getString("created_at"), o.str("read_at"), o.str("edited_at")
 )
 
 fun timeOf(iso: String): String = try {

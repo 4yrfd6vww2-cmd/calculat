@@ -1,6 +1,15 @@
 package app.neirox
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import android.net.Uri
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -131,8 +140,9 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatScreen(friendId: String, onBack: () -> Unit) {
+fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> Unit) {
     val friend = Store.profiles[friendId]
     val thread = Store.thread(friendId)
     val ctx = LocalContext.current
@@ -147,6 +157,21 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
     var showAI by remember { mutableStateOf(false) }
     var aiPrompt by remember { mutableStateOf("") }
     var fullscreen by remember { mutableStateOf<String?>(null) }
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var editing by remember { mutableStateOf<Message?>(null) }
+    var showForward by remember { mutableStateOf(false) }
+    var showDelete by remember { mutableStateOf(false) }
+
+    val selMsgs = thread.filter { it.id in selected }
+
+    BackHandler(enabled = selected.isNotEmpty() || editing != null) {
+        if (selected.isNotEmpty()) {
+            selected = emptySet()
+        } else {
+            editing = null
+            input = ""
+        }
+    }
 
     LaunchedEffect(thread.size) {
         if (thread.isNotEmpty()) listState.scrollToItem(thread.size - 1)
@@ -159,6 +184,10 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
 
     fun buzz() {
         if (Settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+    }
+
+    fun toast(text: String) {
+        Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show()
     }
 
     fun sendUri(uri: Uri, photo: Boolean) {
@@ -198,6 +227,20 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
     fun sendText() {
         val t = input.trim()
         if (t.isEmpty() || busy) return
+        val ed = editing
+        if (ed != null) {
+            error = ""
+            scope.launch {
+                try {
+                    if (t != (ed.body ?: "")) Store.editMessage(ed.id, t)
+                    editing = null
+                    input = ""
+                } catch (e: Exception) {
+                    error = friendlyError(e.message ?: "")
+                }
+            }
+            return
+        }
         input = ""
         error = ""
         buzz()
@@ -229,11 +272,88 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
         }
     }
 
+    fun copySelected() {
+        val texts = selMsgs.sortedBy { it.createdAt }.mapNotNull { m ->
+            when (m.kind) {
+                "text" -> m.body
+                "file" -> m.fileName
+                else -> null
+            }
+        }
+        if (texts.isEmpty()) {
+            toast(tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"))
+        } else {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("neirox", texts.joinToString("\n")))
+            toast(tr("Скопировано", "Copied", "Kopiert"))
+            selected = emptySet()
+        }
+    }
+
+    fun forwardTo(to: String) {
+        val list = selMsgs.sortedBy { it.createdAt }
+        showForward = false
+        selected = emptySet()
+        busy = true
+        error = ""
+        scope.launch {
+            try {
+                for (m in list) Store.forward(m, to)
+                toast(tr("Переслано", "Forwarded", "Weitergeleitet"))
+            } catch (e: Exception) {
+                error = friendlyError(e.message ?: "")
+            }
+            busy = false
+        }
+    }
+
+    fun forwardToAI() {
+        val text = selMsgs.sortedBy { it.createdAt }.filter { it.kind == "text" }.mapNotNull { it.body }.joinToString("\n")
+        if (text.isEmpty()) {
+            toast(tr("В ИИ можно переслать только текст", "Only text can be sent to AI", "An die KI kann nur Text gesendet werden"))
+            return
+        }
+        showForward = false
+        selected = emptySet()
+        onForwardToAI(text)
+    }
+
+    fun deleteSelected(forAll: Boolean) {
+        val list = selMsgs
+        showDelete = false
+        selected = emptySet()
+        scope.launch {
+            try {
+                if (forAll) Store.deleteForAll(list) else Store.deleteForMe(list)
+            } catch (e: Exception) {
+                error = friendlyError(e.message ?: "")
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
-            Avatar(friend, 38.dp)
-            Text(friend?.nick ?: "", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.padding(start = 10.dp))
+        if (selected.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("✕", color = Txt, fontSize = 22.sp, modifier = Modifier.clickable { selected = emptySet() }.padding(12.dp))
+                Text("${selected.size}", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                val one = selMsgs.singleOrNull()
+                if (one != null && one.sender == Store.myId && one.kind == "text") {
+                    Text("✏️", fontSize = 22.sp, modifier = Modifier.clickable {
+                        editing = one
+                        input = one.body ?: ""
+                        selected = emptySet()
+                    }.padding(12.dp))
+                }
+                Text("📋", fontSize = 22.sp, modifier = Modifier.clickable { copySelected() }.padding(12.dp))
+                Text("↪️", fontSize = 22.sp, modifier = Modifier.clickable { showForward = true }.padding(12.dp))
+                Text("🗑", fontSize = 22.sp, modifier = Modifier.clickable { showDelete = true }.padding(12.dp))
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
+                Avatar(friend, 38.dp)
+                Text(friend?.nick ?: "", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.padding(start = 10.dp))
+            }
         }
 
         LazyColumn(
@@ -243,7 +363,14 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(thread, key = { it.id }) { m ->
-                MessageBubble(m, mine = m.sender == Store.myId, onImage = { fullscreen = it })
+                MessageBubble(
+                    m,
+                    mine = m.sender == Store.myId,
+                    selected = m.id in selected,
+                    selecting = selected.isNotEmpty(),
+                    onImage = { fullscreen = it },
+                    onToggle = { selected = if (m.id in selected) selected - m.id else selected + m.id }
+                )
             }
         }
 
@@ -256,24 +383,35 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
                 Text(tr("Отправляю…", "Sending…", "Sende …"), color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
             }
         }
+        if (editing != null) {
+            Row(
+                Modifier.fillMaxWidth().background(CardBg).padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("✏️ " + tr("Редактирование", "Editing", "Bearbeiten"), color = Accent, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable { editing = null; input = "" }.padding(6.dp))
+            }
+        }
 
         Row(
             Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box {
-                Text("📎", fontSize = 26.sp, modifier = Modifier.clickable { menu = true }.padding(8.dp))
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text(tr("Фото", "Photo", "Foto")) }, onClick = { menu = false; photoPicker.launch("image/*") })
-                    DropdownMenuItem(text = { Text(tr("Файл", "File", "Datei")) }, onClick = { menu = false; filePicker.launch("*/*") })
-                    DropdownMenuItem(text = { Text(tr("Картинка от ИИ", "AI image", "KI-Bild")) }, onClick = { menu = false; showAI = true })
+            if (editing == null) {
+                Box {
+                    Text("📎", fontSize = 26.sp, modifier = Modifier.clickable { menu = true }.padding(8.dp))
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text(tr("Фото", "Photo", "Foto")) }, onClick = { menu = false; photoPicker.launch("image/*") })
+                        DropdownMenuItem(text = { Text(tr("Файл", "File", "Datei")) }, onClick = { menu = false; filePicker.launch("*/*") })
+                        DropdownMenuItem(text = { Text(tr("Картинка от ИИ", "AI image", "KI-Bild")) }, onClick = { menu = false; showAI = true })
+                    }
                 }
             }
             NxField(
                 input, { input = it }, tr("Сообщение", "Message", "Nachricht"),
                 modifier = Modifier.weight(1f), singleLine = false
             )
-            Text("➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { sendText() }.padding(10.dp))
+            Text(if (editing != null) "✓" else "➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { sendText() }.padding(10.dp))
         }
     }
 
@@ -284,6 +422,57 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
             text = { NxField(aiPrompt, { aiPrompt = it }, tr("Что нарисовать?", "What to draw?", "Was zeichnen?")) },
             confirmButton = { TextButton(onClick = { sendAIImage() }) { Text(tr("Отправить", "Send", "Senden")) } },
             dismissButton = { TextButton(onClick = { showAI = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
+
+    if (showForward) {
+        val friends = Store.friendIds.mapNotNull { Store.profiles[it] }
+        AlertDialog(
+            onDismissRequest = { showForward = false },
+            title = { Text(tr("Переслать", "Forward", "Weiterleiten")) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { forwardToAI() }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("✨", fontSize = 26.sp, modifier = Modifier.padding(end = 12.dp))
+                        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), fontSize = 16.sp)
+                    }
+                    for (p in friends) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { forwardTo(p.id) }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Avatar(p, 36.dp)
+                            Text(p.nick, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showForward = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
+
+    if (showDelete) {
+        val allMine = selMsgs.isNotEmpty() && selMsgs.all { it.sender == Store.myId }
+        AlertDialog(
+            onDismissRequest = { showDelete = false },
+            title = { Text(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?")) },
+            text = {
+                Text(
+                    if (allMine) tr("Можно удалить у всех или только у себя.", "Delete for everyone or only for you.", "Für alle oder nur für dich löschen.")
+                    else tr("Сообщения собеседника удалятся только у тебя.", "Messages from the other person are deleted only for you.", "Nachrichten des anderen werden nur bei dir gelöscht.")
+                )
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { deleteSelected(false) }) { Text(tr("У меня", "For me", "Für mich")) }
+                    if (allMine) TextButton(onClick = { deleteSelected(true) }) { Text(tr("У всех", "For everyone", "Für alle")) }
+                }
+            },
+            dismissButton = { TextButton(onClick = { showDelete = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
         )
     }
 
@@ -302,17 +491,43 @@ fun ChatScreen(friendId: String, onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MessageBubble(m: Message, mine: Boolean, onImage: (String) -> Unit) {
+fun MessageBubble(m: Message, mine: Boolean, selected: Boolean, selecting: Boolean, onImage: (String) -> Unit, onToggle: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (selected) Accent.copy(alpha = 0.18f) else Color.Transparent)
+            .padding(vertical = 2.dp),
+        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
+    ) {
         val shape = RoundedCornerShape(18.dp)
         Column(
             Modifier
                 .widthIn(max = 290.dp)
                 .clip(shape)
                 .background(if (mine) Brush.horizontalGradient(listOf(Accent, Accent2)) else Brush.horizontalGradient(listOf(CardBg, CardBg)))
+                .combinedClickable(
+                    onClick = {
+                        val path = m.mediaPath
+                        if (selecting) {
+                            onToggle()
+                        } else if (m.kind == "image" && path != null) {
+                            onImage(path)
+                        } else if (m.kind == "file" && path != null) {
+                            scope.launch {
+                                try {
+                                    val url = Api.signedUrl("chat-media", path)
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                } catch (e: Exception) {
+                                }
+                            }
+                        }
+                    },
+                    onLongClick = { onToggle() }
+                )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             val textColor = if (mine) Color.White else Txt
@@ -321,22 +536,11 @@ fun MessageBubble(m: Message, mine: Boolean, onImage: (String) -> Unit) {
                 RemoteImage(
                     key = "chat:$path",
                     loader = { Api.download(Api.signedUrl("chat-media", path)) },
-                    modifier = Modifier.widthIn(max = 260.dp).height(220.dp).clip(RoundedCornerShape(12.dp)).clickable { onImage(path) },
+                    modifier = Modifier.widthIn(max = 260.dp).height(220.dp).clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else if (m.kind == "file" && path != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        scope.launch {
-                            try {
-                                val url = Api.signedUrl("chat-media", path)
-                                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            } catch (e: Exception) {
-                            }
-                        }
-                    }
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("📎", fontSize = 22.sp)
                     Text(m.fileName ?: tr("Файл", "File", "Datei"), color = textColor, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
                 }
@@ -344,7 +548,7 @@ fun MessageBubble(m: Message, mine: Boolean, onImage: (String) -> Unit) {
                 Text(m.body ?: "", color = textColor, fontSize = 16.sp)
             }
             Text(
-                timeOf(m.createdAt) + if (mine && m.readAt != null) " ✓✓" else "",
+                (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt) + if (mine && m.readAt != null) " ✓✓" else "",
                 color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.End)
             )
@@ -356,8 +560,9 @@ fun MessageBubble(m: Message, mine: Boolean, onImage: (String) -> Unit) {
 
 private class AiMsg(val role: String, val text: String, val image: android.graphics.Bitmap? = null)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AIChatScreen(onBack: () -> Unit) {
+fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("neirox_ai", 0) }
     val msgs = remember {
@@ -389,10 +594,10 @@ fun AIChatScreen(onBack: () -> Unit) {
         if (msgs.isNotEmpty()) listState.scrollToItem(msgs.size - 1)
     }
 
-    fun send() {
-        val t = input.trim()
+    fun send(override: String? = null) {
+        val t = (override ?: input).trim()
         if (t.isEmpty() || busy) return
-        input = ""
+        if (override == null) input = ""
         error = ""
         msgs.add(AiMsg("user", t))
         busy = true
@@ -413,6 +618,10 @@ fun AIChatScreen(onBack: () -> Unit) {
             }
             busy = false
         }
+    }
+
+    LaunchedEffect(Unit) {
+        if (initial.isNotEmpty()) send(initial)
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -446,6 +655,13 @@ fun AIChatScreen(onBack: () -> Unit) {
                             .widthIn(max = 300.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .background(if (mine) Brush.horizontalGradient(listOf(Accent, Accent2)) else Brush.horizontalGradient(listOf(CardBg, CardBg)))
+                            .combinedClickable(onClick = {}, onLongClick = {
+                                if (m.image == null) {
+                                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    cm.setPrimaryClip(ClipData.newPlainText("neirox", m.text))
+                                    Toast.makeText(ctx, tr("Скопировано", "Copied", "Kopiert"), Toast.LENGTH_SHORT).show()
+                                }
+                            })
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         if (m.image != null) {

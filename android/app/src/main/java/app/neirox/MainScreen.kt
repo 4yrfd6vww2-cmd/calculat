@@ -59,16 +59,27 @@ fun MainScreen() {
     var tab by remember { mutableIntStateOf(0) }
     var openChat by remember { mutableStateOf<String?>(null) }
     var openAI by remember { mutableStateOf(false) }
+    var aiInitial by remember { mutableStateOf("") }
 
     val chatId = openChat
     if (openAI) {
-        BackHandler { openAI = false }
-        Column(Modifier.fillMaxSize().statusBarsPadding()) { AIChatScreen(onBack = { openAI = false }) }
+        BackHandler { openAI = false; aiInitial = "" }
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            AIChatScreen(onBack = { openAI = false; aiInitial = "" }, initial = aiInitial)
+        }
         return
     }
     if (chatId != null) {
         BackHandler { openChat = null }
-        Column(Modifier.fillMaxSize().statusBarsPadding()) { ChatScreen(chatId, onBack = { openChat = null }) }
+        Column(Modifier.fillMaxSize().statusBarsPadding()) { ChatScreen(
+                chatId,
+                onBack = { openChat = null },
+                onForwardToAI = { text ->
+                    aiInitial = text
+                    openChat = null
+                    openAI = true
+                }
+            ) }
         return
     }
 
