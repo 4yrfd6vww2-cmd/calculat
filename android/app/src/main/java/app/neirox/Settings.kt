@@ -39,12 +39,12 @@ object Settings {
         haptics = p.getBoolean("haptics", true)
     }
 
-    fun setLang(v: String) { lang = v; p.edit().putString("lang", v).apply() }
-    fun setMode(v: Int) { mode = v; p.edit().putInt("mode", v).apply() }
-    fun setAccent(v: Long) { accent = v; p.edit().putLong("accent", v).apply() }
-    fun setTextSize(v: Int) { textSize = v; p.edit().putInt("size", v).apply() }
-    fun setSound(v: Boolean) { sound = v; p.edit().putBoolean("sound", v).apply() }
-    fun setHaptics(v: Boolean) { haptics = v; p.edit().putBoolean("haptics", v).apply() }
+    fun updateLang(v: String) { lang = v; p.edit().putString("lang", v).apply() }
+    fun updateMode(v: Int) { mode = v; p.edit().putInt("mode", v).apply() }
+    fun updateAccent(v: Long) { accent = v; p.edit().putLong("accent", v).apply() }
+    fun updateTextSize(v: Int) { textSize = v; p.edit().putInt("size", v).apply() }
+    fun updateSound(v: Boolean) { sound = v; p.edit().putBoolean("sound", v).apply() }
+    fun updateHaptics(v: Boolean) { haptics = v; p.edit().putBoolean("haptics", v).apply() }
 }
 
 fun tr(ru: String, en: String, de: String): String = when (Settings.lang) {

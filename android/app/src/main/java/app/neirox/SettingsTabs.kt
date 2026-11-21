@@ -260,15 +260,15 @@ private fun EmailPage() {
 private fun LookPage() {
     Text(tr("Тема", "Theme", "Design"), color = TextSecondary, fontSize = 13.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        NxSmallButton(tr("Тёмная", "Dark", "Dunkel"), filled = Settings.mode == 0) { Settings.setMode(0) }
-        NxSmallButton(tr("Чёрная", "Black", "Schwarz"), filled = Settings.mode == 1) { Settings.setMode(1) }
-        NxSmallButton(tr("Светлая", "Light", "Hell"), filled = Settings.mode == 2) { Settings.setMode(2) }
+        NxSmallButton(tr("Тёмная", "Dark", "Dunkel"), filled = Settings.mode == 0) { Settings.updateMode(0) }
+        NxSmallButton(tr("Чёрная", "Black", "Schwarz"), filled = Settings.mode == 1) { Settings.updateMode(1) }
+        NxSmallButton(tr("Светлая", "Light", "Hell"), filled = Settings.mode == 2) { Settings.updateMode(2) }
     }
     Text(tr("Размер текста", "Text size", "Textgröße"), color = TextSecondary, fontSize = 13.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        NxSmallButton(tr("Мелкий", "Small", "Klein"), filled = Settings.textSize == 0) { Settings.setTextSize(0) }
-        NxSmallButton(tr("Обычный", "Normal", "Normal"), filled = Settings.textSize == 1) { Settings.setTextSize(1) }
-        NxSmallButton(tr("Крупный", "Large", "Groß"), filled = Settings.textSize == 2) { Settings.setTextSize(2) }
+        NxSmallButton(tr("Мелкий", "Small", "Klein"), filled = Settings.textSize == 0) { Settings.updateTextSize(0) }
+        NxSmallButton(tr("Обычный", "Normal", "Normal"), filled = Settings.textSize == 1) { Settings.updateTextSize(1) }
+        NxSmallButton(tr("Крупный", "Large", "Groß"), filled = Settings.textSize == 2) { Settings.updateTextSize(2) }
     }
     Text(tr("Акцентный цвет", "Accent color", "Akzentfarbe"), color = TextSecondary, fontSize = 13.sp)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -280,7 +280,7 @@ private fun LookPage() {
                     .clip(CircleShape)
                     .background(Color(c))
                     .then(if (selected) Modifier.border(3.dp, Txt, CircleShape) else Modifier)
-                    .clickable { Settings.setAccent(c) }
+                    .clickable { Settings.updateAccent(c) }
             )
         }
     }
@@ -298,15 +298,15 @@ private fun SoundPage() {
             Switch(checked = value, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = Accent))
         }
     }
-    ToggleRow(tr("Звук сообщений", "Message sound", "Nachrichtenton"), Settings.sound) { Settings.setSound(it) }
-    ToggleRow(tr("Вибрация", "Haptics", "Vibration"), Settings.haptics) { Settings.setHaptics(it) }
+    ToggleRow(tr("Звук сообщений", "Message sound", "Nachrichtenton"), Settings.sound) { Settings.updateSound(it) }
+    ToggleRow(tr("Вибрация", "Haptics", "Vibration"), Settings.haptics) { Settings.updateHaptics(it) }
 }
 
 @Composable
 private fun LangPage() {
     for (code in listOf("ru", "en", "de")) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { Settings.setLang(code) }.padding(16.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { Settings.updateLang(code) }.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(langTitle(code), color = Txt, fontSize = 16.sp, modifier = Modifier.weight(1f))
