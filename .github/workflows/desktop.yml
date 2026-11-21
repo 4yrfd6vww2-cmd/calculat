@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'desktop/**'
+      - '!desktop/xp/**'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
 

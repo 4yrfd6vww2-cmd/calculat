@@ -1,0 +1,120 @@
+name: Build Legacy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/xp/**'
+      - '.github/workflows/legacy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LABEL: '0.0.1 trapped build'
+
+jobs:
+  xp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Собрать приложение под Chromium 49
+        working-directory: desktop/xp
+        run: |
+          npm install --no-audit --no-fund
+          node build.js
+      - name: Собрать папку с NW.js 0.14.7 (последний с поддержкой Windows XP)
+        run: |
+          curl -fL -o nw.zip https://dl.nwjs.io/v0.14.7/nwjs-v0.14.7-win-ia32.zip
+          unzip -q nw.zip
+          mv nwjs-v0.14.7-win-ia32 Neirox-WinXP
+          mv Neirox-WinXP/nw.exe Neirox-WinXP/Neirox.exe
+          cp -R desktop/xp/out/package.nw Neirox-WinXP/package.nw
+          printf 'Запусти Neirox.exe\r\n' > Neirox-WinXP/ЧИТАЙ-МЕНЯ.txt
+          zip -qr Neirox-WinXP.zip Neirox-WinXP
+          ls -la Neirox-WinXP.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xp
+          path: Neirox-WinXP.zip
+
+  mac-old:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build app (Electron 22, macOS 10.11 и новее)
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          sed -i '' "s/^const VERSION = .*/const VERSION = '${LABEL}';/" main.js
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund electron@22.3.27
+          npx electron-builder --mac dir --universal --config.extraMetadata.version=0.0.1 --publish never
+      - name: Sign ad-hoc and make DMG
+        working-directory: desktop
+        run: |
+          APP=$(find dist -maxdepth 2 -name "Neirox.app" | head -1)
+          codesign --force --deep --sign - "$APP"
+          mkdir -p stage
+          cp -R "$APP" stage/
+          ln -s /Applications stage/Applications
+          hdiutil create -volname "Neirox" -srcfolder stage -ov -format UDZO Neirox-Mac-Old.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macold
+          path: desktop/Neirox-Mac-Old.dmg
+
+  linux-old:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Linux 64 bit (Electron 22, старые дистрибутивы)
+        working-directory: desktop
+        run: |
+          sed -i "s/^const VERSION = .*/const VERSION = '${LABEL}';/" main.js
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund electron@22.3.27
+          npx electron-builder --linux AppImage --x64 --config.linux.artifactName='Neirox-Linux-Old.${ext}' --config.extraMetadata.version=0.0.1 --publish never
+          ls -la dist
+      - name: Linux 32 bit (Electron 19 — последний с поддержкой 32 bit)
+        working-directory: desktop
+        run: |
+          npm install --no-save --no-audit --no-fund electron@19.1.9
+          npx electron-builder --linux AppImage --ia32 --config.linux.artifactName='Neirox-Linux-32.${ext}' --config.extraMetadata.version=0.0.1 --publish never
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linuxold
+          path: |
+            desktop/dist/Neirox-Linux-Old.AppImage
+            desktop/dist/Neirox-Linux-32.AppImage
+
+  release:
+    needs: [xp, mac-old, linux-old]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+      - run: ls -R out
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: legacy-${{ github.run_number }}
+          name: Neirox Legacy ${{ github.run_number }} (0.0.1 trapped build)
+          files: |
+            out/xp/Neirox-WinXP.zip
+            out/macold/Neirox-Mac-Old.dmg
+            out/linuxold/Neirox-Linux-Old.AppImage
+            out/linuxold/Neirox-Linux-32.AppImage

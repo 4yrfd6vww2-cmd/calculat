@@ -1,0 +1,9 @@
+/* замены для Chromium 49: нет grid, flex-gap, inset, min() */
+.album{display:block;width:326px;max-width:100%;font-size:0}
+.album>*{display:inline-block;vertical-align:top;width:158px;margin:0 4px 4px 0}
+.album.n1>*{width:100%}
+.album img.pic,.album video.vid{width:100%}
+.emo-grid{display:block;font-size:0}
+.emo-grid button{display:inline-block;width:40px}
+.bubble{max-width:75%}
+.rail-btn:hover{background:rgba(var(--accent-rgb),.10)}

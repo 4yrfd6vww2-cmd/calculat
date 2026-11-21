@@ -1,0 +1,17 @@
+{
+  "name": "neirox-xp-build",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "core-js": "3.37.1",
+    "esbuild": "0.21.5",
+    "postcss": "8.4.38",
+    "@babel/core": "7.24.7",
+    "@babel/preset-env": "7.24.7",
+    "regenerator-runtime": "0.14.1",
+    "acorn": "8.12.0"
+  }
+}

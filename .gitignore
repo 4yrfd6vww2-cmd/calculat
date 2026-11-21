@@ -4,3 +4,6 @@ android/app/build/
 android/local.properties
 desktop/node_modules/
 desktop/dist/
+desktop/xp/node_modules/
+desktop/xp/out/
+desktop/xp/tmp/
