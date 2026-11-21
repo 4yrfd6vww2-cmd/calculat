@@ -87,10 +87,10 @@ jobs:
           npm install --no-save --no-audit --no-fund electron@22.3.27
           npx electron-builder --linux AppImage --x64 --config.linux.artifactName='Neirox-Linux-Old.${ext}' --config.extraMetadata.version=0.0.1 --publish never
           ls -la dist
-      - name: Linux 32 bit (Electron 19 — последний с поддержкой 32 bit)
+      - name: Linux 32 bit (Electron 18 — последний с поддержкой Linux 32 bit)
         working-directory: desktop
         run: |
-          npm install --no-save --no-audit --no-fund electron@19.1.9
+          npm install --no-save --no-audit --no-fund electron@18.3.15
           npx electron-builder --linux AppImage --ia32 --config.linux.artifactName='Neirox-Linux-32.${ext}' --config.extraMetadata.version=0.0.1 --publish never
           ls -la dist
       - uses: actions/upload-artifact@v4
