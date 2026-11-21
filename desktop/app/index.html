@@ -5,6 +5,19 @@
 <title>neirox</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="style.css">
+<script>
+// Свой шрифт со смайликами только там, где нет системного цветного: Windows 7 и старше, Linux
+(function () {
+  var u = navigator.userAgent, m = /Windows NT (\d+)\.(\d+)/.exec(u);
+  var old = m && (+m[1] < 6 || (+m[1] === 6 && +m[2] <= 1));
+  var lin = /Linux/.test(u) && !/Android/.test(u);
+  if (old || lin) {
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = 'emoji-font.css';
+    document.head.appendChild(l);
+  }
+})();
+</script>
 </head>
 <body>
 <div id="auth" class="hidden"></div>
