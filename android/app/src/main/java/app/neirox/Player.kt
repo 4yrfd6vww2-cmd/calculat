@@ -12,7 +12,12 @@ import java.io.File
 
 object Player {
     private lateinit var dir: File
+    private lateinit var appCtx: Context
     private var mp: MediaPlayer? = null
+
+    private fun changed() {
+        if (::appCtx.isInitialized) Notif.update(appCtx)
+    }
 
     var tracks by mutableStateOf<List<File>>(emptyList())
         private set
@@ -26,7 +31,8 @@ object Player {
         private set
 
     fun init(ctx: Context) {
-        dir = File(ctx.applicationContext.filesDir, "music").apply { mkdirs() }
+        appCtx = ctx.applicationContext
+        dir = File(appCtx.filesDir, "music").apply { mkdirs() }
         reload()
     }
 
@@ -51,6 +57,7 @@ object Player {
     fun stopAll() {
         release()
         currentIndex = -1
+        changed()
     }
 
     fun play(i: Int) {
@@ -58,6 +65,7 @@ object Player {
         release()
         try {
             val p = MediaPlayer()
+            p.setWakeMode(appCtx, android.os.PowerManager.PARTIAL_WAKE_LOCK)
             p.setDataSource(f.absolutePath)
             p.setOnCompletionListener { next() }
             p.prepare()
@@ -69,6 +77,7 @@ object Player {
         } catch (e: Exception) {
             release()
         }
+        changed()
     }
 
     fun toggle() {
@@ -84,6 +93,7 @@ object Player {
             p.start()
             playing = true
         }
+        changed()
     }
 
     fun next() {

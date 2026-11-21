@@ -32,6 +32,10 @@ object Store {
     var recoveryEmail by mutableStateOf<String?>(null)
         private set
 
+    @Volatile
+    var appVisible = false
+    private var initialized = false
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
     private var known = emptySet<Long>()
@@ -40,6 +44,8 @@ object Store {
     val myId: String get() = Api.userId()
 
     fun init(ctx: Context) {
+        if (initialized) return
+        initialized = true
         appCtx = ctx.applicationContext
         loggedIn = Api.isLoggedIn()
         if (loggedIn) start()
@@ -48,6 +54,7 @@ object Store {
     fun onLogin() {
         loggedIn = true
         start()
+        NeiroxService.start(appCtx)
     }
 
     fun logout() {
@@ -55,6 +62,8 @@ object Store {
         job = null
         Api.signOut()
         Player.stopAll()
+        NeiroxService.stop(appCtx)
+        Notif.clearMessages(appCtx)
         me = null
         friendships = emptyList()
         profiles = emptyMap()
@@ -129,14 +138,31 @@ object Store {
 
     private fun notifyNew(list: List<Message>) {
         val ids = list.map { it.id }.toSet()
-        if (firstLoad && Settings.sound) {
-            val fresh = list.any { it.id !in known && it.receiver == myId }
-            if (fresh) {
-                try {
-                    RingtoneManager.getRingtone(
-                        appCtx, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                    )?.play()
-                } catch (e: Exception) {
+        if (firstLoad) {
+            val fresh = list.filter { it.id !in known && it.receiver == myId }
+            if (fresh.isNotEmpty()) {
+                if (appVisible) {
+                    if (Settings.sound) {
+                        try {
+                            RingtoneManager.getRingtone(
+                                appCtx, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                            )?.play()
+                        } catch (e: Exception) {
+                        }
+                    }
+                } else {
+                    for ((sender, group) in fresh.groupBy { it.sender }) {
+                        val last = group.maxByOrNull { it.createdAt } ?: continue
+                        val preview = when (last.kind) {
+                            "image" -> "🖼 " + tr("Фото", "Photo", "Foto")
+                            "file" -> "📎 " + (last.fileName ?: tr("Файл", "File", "Datei"))
+                            else -> last.body ?: ""
+                        }
+                        val text = if (group.size > 1) {
+                            tr("Новых: ${group.size}. ", "New: ${group.size}. ", "Neu: ${group.size}. ") + preview
+                        } else preview
+                        Notif.message(appCtx, sender, profiles[sender]?.nick ?: "neirox", text)
+                    }
                 }
             }
         }
