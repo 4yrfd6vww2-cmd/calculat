@@ -199,6 +199,10 @@ struct Bubble: View {
     var selecting: Bool = false
     var onToggle: () -> Void = {}
     var onImage: (String) -> Void = { _ in }
+    var onCopy: () -> Void = {}
+    var onEdit: (() -> Void)? = nil
+    var onForward: () -> Void = {}
+    var onDelete: () -> Void = {}
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -227,7 +231,17 @@ struct Bubble: View {
                     Task { if let u = try? await API.shared.signedURL(bucket: "chat-media", path: p) { openURL(u) } }
                 }
             }
-            .onLongPressGesture(minimumDuration: 0.4) { haptic(); onToggle() }
+            .contextMenu {
+                if !selecting {
+                    Button { onCopy() } label: { Label(tr("Копировать", "Copy", "Kopieren"), systemImage: "doc.on.doc") }
+                    if let e = onEdit {
+                        Button { e() } label: { Label(tr("Изменить", "Edit", "Bearbeiten"), systemImage: "square.and.pencil") }
+                    }
+                    Button { onForward() } label: { Label(tr("Переслать", "Forward", "Weiterleiten"), systemImage: "arrowshape.turn.up.right") }
+                    Button(role: .destructive) { onDelete() } label: { Label(tr("Удалить", "Delete", "Löschen"), systemImage: "trash") }
+                    Button { onToggle() } label: { Label(tr("Выделить", "Select", "Auswählen"), systemImage: "checkmark.circle") }
+                }
+            }
             if !mine { Spacer(minLength: 50) }
         }
         .padding(.vertical, 2)
@@ -289,7 +303,11 @@ struct ChatView: View {
                             ForEach(thread) { m in
                                 Bubble(m: m, mine: m.sender == store.myId,
                                        selected: selected.contains(m.id), selecting: !selected.isEmpty,
-                                       onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 }).id(m.id)
+                                       onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 },
+                                       onCopy: { copyOne(m) },
+                                       onEdit: (m.sender == store.myId && m.kind == "text") ? { editing = m; text = m.body ?? "" } : nil,
+                                       onForward: { selected = [m.id]; showForward = true },
+                                       onDelete: { selected = [m.id]; showDelete = true }).id(m.id)
                             }
                         }
                         .padding(14)
@@ -435,6 +453,13 @@ struct ChatView: View {
         Task {
             do { try await store.sendText(t, to: friend.id) } catch { report(error); text = t }
         }
+    }
+
+    private func copyOne(_ m: Message) {
+        guard let t = m.kind == "text" ? m.body : (m.kind == "file" ? m.fileName : nil) else {
+            error = tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"); return
+        }
+        UIPasteboard.general.string = t
     }
 
     private func copySelected() {

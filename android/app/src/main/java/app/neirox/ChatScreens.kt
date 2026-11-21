@@ -161,6 +161,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     var editing by remember { mutableStateOf<Message?>(null) }
     var showForward by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
+    var menuSingle by remember { mutableStateOf(false) }
 
     val selMsgs = thread.filter { it.id in selected }
 
@@ -294,6 +295,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         val list = selMsgs.sortedBy { it.createdAt }
         showForward = false
         selected = emptySet()
+        menuSingle = false
         busy = true
         error = ""
         scope.launch {
@@ -322,6 +324,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         val list = selMsgs
         showDelete = false
         selected = emptySet()
+        menuSingle = false
         scope.launch {
             try {
                 if (forAll) Store.deleteForAll(list) else Store.deleteForMe(list)
@@ -369,7 +372,22 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                     selected = m.id in selected,
                     selecting = selected.isNotEmpty(),
                     onImage = { fullscreen = it },
-                    onToggle = { selected = if (m.id in selected) selected - m.id else selected + m.id }
+                    onToggle = { selected = if (m.id in selected) selected - m.id else selected + m.id },
+                    onCopy = {
+                        val t = if (m.kind == "text") m.body else if (m.kind == "file") m.fileName else null
+                        if (t == null) toast(tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"))
+                        else {
+                            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("neirox", t))
+                            toast(tr("Скопировано", "Copied", "Kopiert"))
+                        }
+                    },
+                    onEdit = if (m.sender == Store.myId && m.kind == "text") ({
+                        editing = m
+                        input = m.body ?: ""
+                    }) else null,
+                    onForward = { menuSingle = true; selected = setOf(m.id); showForward = true },
+                    onDelete = { menuSingle = true; selected = setOf(m.id); showDelete = true }
                 )
             }
         }
@@ -428,7 +446,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     if (showForward) {
         val friends = Store.friendIds.mapNotNull { Store.profiles[it] }
         AlertDialog(
-            onDismissRequest = { showForward = false },
+            onDismissRequest = { showForward = false; if (menuSingle) { selected = emptySet(); menuSingle = false } },
             title = { Text(tr("Переслать", "Forward", "Weiterleiten")) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -451,14 +469,14 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showForward = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+            dismissButton = { TextButton(onClick = { showForward = false; if (menuSingle) { selected = emptySet(); menuSingle = false } }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
         )
     }
 
     if (showDelete) {
         val allMine = selMsgs.isNotEmpty() && selMsgs.all { it.sender == Store.myId }
         AlertDialog(
-            onDismissRequest = { showDelete = false },
+            onDismissRequest = { showDelete = false; if (menuSingle) { selected = emptySet(); menuSingle = false } },
             title = { Text(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?")) },
             text = {
                 Text(
@@ -472,7 +490,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                     if (allMine) TextButton(onClick = { deleteSelected(true) }) { Text(tr("У всех", "For everyone", "Für alle")) }
                 }
             },
-            dismissButton = { TextButton(onClick = { showDelete = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+            dismissButton = { TextButton(onClick = { showDelete = false; if (menuSingle) { selected = emptySet(); menuSingle = false } }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
         )
     }
 
@@ -493,8 +511,13 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MessageBubble(m: Message, mine: Boolean, selected: Boolean, selecting: Boolean, onImage: (String) -> Unit, onToggle: () -> Unit) {
+fun MessageBubble(
+    m: Message, mine: Boolean, selected: Boolean, selecting: Boolean,
+    onImage: (String) -> Unit, onToggle: () -> Unit,
+    onCopy: () -> Unit, onEdit: (() -> Unit)?, onForward: () -> Unit, onDelete: () -> Unit
+) {
     val ctx = LocalContext.current
+    var menuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     Row(
         Modifier
@@ -526,7 +549,7 @@ fun MessageBubble(m: Message, mine: Boolean, selected: Boolean, selecting: Boole
                             }
                         }
                     },
-                    onLongClick = { onToggle() }
+                    onLongClick = { if (selecting) onToggle() else menuOpen = true }
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
@@ -552,6 +575,15 @@ fun MessageBubble(m: Message, mine: Boolean, selected: Boolean, selecting: Boole
                 color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.End)
             )
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { Text(tr("Копировать", "Copy", "Kopieren")) }, onClick = { menuOpen = false; onCopy() })
+                if (onEdit != null) {
+                    DropdownMenuItem(text = { Text(tr("Изменить", "Edit", "Bearbeiten")) }, onClick = { menuOpen = false; onEdit() })
+                }
+                DropdownMenuItem(text = { Text(tr("Переслать", "Forward", "Weiterleiten")) }, onClick = { menuOpen = false; onForward() })
+                DropdownMenuItem(text = { Text(tr("Удалить", "Delete", "Löschen"), color = Color(0xFFE5484D)) }, onClick = { menuOpen = false; onDelete() })
+                DropdownMenuItem(text = { Text(tr("Выделить", "Select", "Auswählen")) }, onClick = { menuOpen = false; onToggle() })
+            }
         }
     }
 }
