@@ -2,6 +2,7 @@ package app.neirox
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -64,21 +65,30 @@ object Api {
         }
     }
 
-    suspend fun request(method: String, path: String, json: JSONObject? = null, auth: Boolean = true): String {
+    suspend fun call(
+        method: String,
+        path: String,
+        body: ByteArray? = null,
+        contentType: String? = null,
+        headers: Map<String, String> = emptyMap(),
+        auth: Boolean = true
+    ): String {
         if (auth) refreshIfNeeded()
         return withContext(Dispatchers.IO) {
             try {
                 val c = URL(Cfg.URL + path).openConnection() as HttpURLConnection
                 c.requestMethod = method
                 c.connectTimeout = 20_000
-                c.readTimeout = 60_000
+                c.readTimeout = 90_000
                 c.setRequestProperty("apikey", Cfg.KEY)
                 val token = prefs.getString("access", null)
                 if (auth && token != null) c.setRequestProperty("Authorization", "Bearer $token")
-                if (json != null) {
+                for ((k, v) in headers) c.setRequestProperty(k, v)
+                if (body != null) {
                     c.doOutput = true
-                    c.setRequestProperty("Content-Type", "application/json")
-                    c.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
+                    c.setRequestProperty("Content-Type", contentType ?: "application/octet-stream")
+                    c.setFixedLengthStreamingMode(body.size)
+                    c.outputStream.use { it.write(body) }
                 }
                 val code = c.responseCode
                 val stream = if (code in 200..299) c.inputStream else c.errorStream
@@ -90,6 +100,14 @@ object Api {
             }
         }
     }
+
+    suspend fun request(
+        method: String,
+        path: String,
+        json: JSONObject? = null,
+        auth: Boolean = true,
+        headers: Map<String, String> = emptyMap()
+    ): String = call(method, path, json?.toString()?.toByteArray(Charsets.UTF_8), "application/json", headers, auth)
 
     private fun extractError(text: String, code: Int): String {
         try {
@@ -133,9 +151,72 @@ object Api {
         )
     }
 
-    suspend fun fetchNick(): String {
-        val t = request("GET", "/rest/v1/profiles?id=eq.${userId()}&select=nick")
-        val a = JSONArray(t)
-        return if (a.length() > 0) a.getJSONObject(0).getString("nick") else ""
+    suspend fun changeNick(nick: String) {
+        request("POST", "/functions/v1/account", JSONObject().put("action", "change_nick").put("nick", nick))
+    }
+
+    // REST
+
+    suspend fun select(path: String): JSONArray = JSONArray(request("GET", "/rest/v1/$path"))
+
+    suspend fun insert(table: String, row: JSONObject) {
+        request("POST", "/rest/v1/$table", row, headers = mapOf("Prefer" to "return=minimal"))
+    }
+
+    suspend fun update(tableAndQuery: String, values: JSONObject) {
+        request("PATCH", "/rest/v1/$tableAndQuery", values, headers = mapOf("Prefer" to "return=minimal"))
+    }
+
+    suspend fun delete(tableAndQuery: String) {
+        request("DELETE", "/rest/v1/$tableAndQuery")
+    }
+
+    // Storage
+
+    suspend fun upload(bucket: String, path: String, data: ByteArray, mime: String, upsert: Boolean = false) {
+        call(
+            "POST", "/storage/v1/object/$bucket/$path", data, mime,
+            mapOf("x-upsert" to (if (upsert) "true" else "false"))
+        )
+    }
+
+    suspend fun signedUrl(bucket: String, path: String): String {
+        val t = request("POST", "/storage/v1/object/sign/$bucket/$path", JSONObject().put("expiresIn", 3600))
+        return Cfg.URL + "/storage/v1" + JSONObject(t).getString("signedURL")
+    }
+
+    fun publicUrl(bucket: String, path: String) = Cfg.URL + "/storage/v1/object/public/$bucket/$path"
+
+    suspend fun download(url: String): ByteArray = withContext(Dispatchers.IO) {
+        try {
+            val c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 20_000
+            c.readTimeout = 90_000
+            if (c.responseCode !in 200..299) throw ApiError("HTTP ${c.responseCode}")
+            val bytes = c.inputStream.use { it.readBytes() }
+            c.disconnect()
+            bytes
+        } catch (e: IOException) {
+            throw ApiError("network")
+        }
+    }
+
+    // AI
+
+    suspend fun aiText(messages: List<Pair<String, String>>): String {
+        val arr = JSONArray()
+        for ((role, content) in messages) arr.put(JSONObject().put("role", role).put("content", content))
+        val t = request("POST", "/functions/v1/ai", JSONObject().put("type", "text").put("messages", arr))
+        val o = JSONObject(t)
+        val s = o.optString("text", "")
+        if (s.isEmpty()) throw ApiError("Empty AI answer")
+        return s
+    }
+
+    suspend fun aiImage(prompt: String): ByteArray {
+        val t = request("POST", "/functions/v1/ai", JSONObject().put("type", "image").put("prompt", prompt))
+        val b64 = JSONObject(t).optString("base64", "")
+        if (b64.isEmpty()) throw ApiError("Empty AI image")
+        return Base64.decode(b64, Base64.DEFAULT)
     }
 }
