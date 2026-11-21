@@ -26,11 +26,14 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@22.3.27
           npx electron-builder --win portable --x64 --config.extraMetadata.version=0.0.1 --publish never
+          npx electron-builder --win portable --ia32 --config.win.artifactName='Neirox-Windows-32.${ext}' --config.extraMetadata.version=0.0.1 --publish never
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
           name: win
-          path: desktop/dist/Neirox-Windows.exe
+          path: |
+            desktop/dist/Neirox-Windows.exe
+            desktop/dist/Neirox-Windows-32.exe
 
   mac:
     runs-on: macos-latest
@@ -79,4 +82,5 @@ jobs:
           name: Neirox Desktop ${{ github.run_number }} (Windows 0.0.1 Alfa, Mac 0.5.0)
           files: |
             out/win/Neirox-Windows.exe
+            out/win/Neirox-Windows-32.exe
             out/mac/Neirox-Mac.dmg
