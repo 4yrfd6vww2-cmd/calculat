@@ -136,6 +136,12 @@ h2{font-size:clamp(28px,5vw,42px);font-weight:800;letter-spacing:-.01em;margin-b
 .dl-card.ios .btn{color:#021013;background:linear-gradient(90deg,var(--c),#7ab7ff);box-shadow:0 0 26px rgba(62,231,255,.4)}
 .dl-card.and .btn{color:#041006;background:linear-gradient(90deg,var(--g),#b8ff5c);box-shadow:0 0 26px rgba(125,255,92,.4)}
 .note{color:var(--muted);font-size:14px;margin-top:14px}
+.grp{font-size:20px;margin:26px 0 14px;color:var(--text)}
+.dl-card.win:hover{border-color:var(--p);box-shadow:0 0 36px rgba(139,108,255,.25)}
+.dl-card.mac:hover{border-color:#ffffff55;box-shadow:0 0 36px rgba(255,255,255,.12)}
+.dl-card.win .btn:not(.gh){color:#0a0714;background:linear-gradient(90deg,var(--p),var(--c));box-shadow:0 0 26px rgba(139,108,255,.4)}
+.dl-card.mac .btn:not(.gh){color:#0b0b0b;background:linear-gradient(90deg,#e8ecf5,#aeb6c8);box-shadow:0 0 22px rgba(255,255,255,.2)}
+.dl-card{flex:1 1 300px}
 
 /* problems */
 details{
@@ -318,6 +324,7 @@ footer .grad{font-weight:800}
   <section id="download">
     <h2>Скачать <span class="grad">neirox</span></h2>
     <p class="sub">Выберите свою платформу. Приложение бесплатное и устанавливается за пару минут.</p>
+    <h3 class="grp">Для телефона</h3>
     <div class="dl">
 
       <div class="dl-card ios">
@@ -348,6 +355,58 @@ footer .grad{font-weight:800}
         <a class="btn" href="files/Neirox.apk" download>Скачать с сайта</a>
         <a class="btn gh" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/tag/android-7">Скачать с GitHub</a>
         <p class="note">Если телефон спросит разрешение на установку из этого источника, разрешите его.</p>
+      </div>
+
+    </div>
+
+    <h3 class="grp">Для компьютера</h3>
+    <div class="dl">
+
+      <div class="dl-card win">
+        <div class="dl-top">
+          <div class="big">🖥️</div>
+          <div><h3>Windows · 64 bit</h3><small>Windows 7 и новее</small></div>
+        </div>
+        <div class="meta">
+          <span class="chip">Версия <b>0.0.2 Alfa</b></span>
+          <span class="chip">Размер <b>62 МБ</b></span>
+          <span class="chip"><b>64 bit</b></span>
+          <span class="chip">Windows 7 +</span>
+        </div>
+        <a class="btn" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-3/Neirox-Windows.exe">Скачать для Windows 64 bit</a>
+        <a class="btn gh" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/tag/desktop-3">Все файлы на GitHub</a>
+        <p class="note">Один файл .exe, установка не нужна: скачай и запусти.</p>
+      </div>
+
+      <div class="dl-card win">
+        <div class="dl-top">
+          <div class="big">🖥️</div>
+          <div><h3>Windows · 32 bit</h3><small>Windows 7 и новее</small></div>
+        </div>
+        <div class="meta">
+          <span class="chip">Версия <b>0.0.2 Alfa</b></span>
+          <span class="chip">Размер <b>59 МБ</b></span>
+          <span class="chip"><b>32 bit</b></span>
+          <span class="chip">Windows 7 +</span>
+        </div>
+        <a class="btn" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-3/Neirox-Windows-32.exe">Скачать для Windows 32 bit</a>
+        <a class="btn gh" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/tag/desktop-3">Все файлы на GitHub</a>
+        <p class="note">Для старых компьютеров с 32-битной системой. Один файл .exe.</p>
+      </div>
+
+      <div class="dl-card mac">
+        <div class="dl-top">
+          <div class="big">💻</div>
+          <div><h3>MacBook / Mac</h3><small>Intel и Apple Silicon</small></div>
+        </div>
+        <div class="meta">
+          <span class="chip">Версия <b>0.5.0 Mac</b></span>
+          <span class="chip">Размер <b>201 МБ</b></span>
+          <span class="chip">macOS</span>
+        </div>
+        <a class="btn" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-3/Neirox-Mac.dmg">Скачать для Mac</a>
+        <a class="btn gh" href="https://github.com/4yrfd6vww2-cmd/calculat/releases/tag/desktop-3">Все файлы на GitHub</a>
+        <p class="note">Приложение без подписи Apple: при первом запуске нажми правой кнопкой по Neirox, затем «Открыть». Версия для Mac пока не проверена на реальном устройстве.</p>
       </div>
 
     </div>
