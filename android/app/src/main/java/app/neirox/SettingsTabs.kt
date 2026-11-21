@@ -255,6 +255,7 @@ private fun EmailPage() {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun LookPage() {
     Text(tr("Тема", "Theme", "Design"), color = TextSecondary, fontSize = 13.sp)
