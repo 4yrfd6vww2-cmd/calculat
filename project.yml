@@ -7,17 +7,23 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    from: 140.0.0
 targets:
   Neirox:
     type: application
     platform: iOS
+    dependencies:
+      - package: WebRTC
     sources:
       - path: Sources
     info:
       path: Config/Info.plist
       properties:
         UIFileSharingEnabled: true
-        NSMicrophoneUsageDescription: "Микрофон нужен для голосовых сообщений"
+        NSMicrophoneUsageDescription: "Микрофон нужен для голосовых сообщений и звонков"
         LSSupportsOpeningDocumentsInPlace: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: Audio
@@ -31,7 +37,7 @@ targets:
       base:
         PRODUCT_NAME: Neirox
         PRODUCT_BUNDLE_IDENTIFIER: com.example.neirox
-        MARKETING_VERSION: "0.5.0"
+        MARKETING_VERSION: "0.6.0"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

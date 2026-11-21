@@ -12,6 +12,7 @@ struct NeiroxApp: App {
 struct RootView: View {
     @ObservedObject private var store = Store.shared
     @ObservedObject private var st = Settings.shared
+    @ObservedObject private var calls = Calls.shared
 
     var body: some View {
         Group {
@@ -23,6 +24,9 @@ struct RootView: View {
         }
         .preferredColorScheme(Theme.scheme)
         .dynamicTypeSize(st.textSize.dynamic)
+        .fullScreenCover(isPresented: Binding(get: { calls.state != .idle && store.loggedIn }, set: { _ in })) {
+            CallView()
+        }
         .task {
             if store.loggedIn { await store.start() }
         }

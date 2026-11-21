@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.neirox"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.5.0 AN"
+        versionCode = 5
+        versionName = "0.6.0 AN"
     }
 
     buildFeatures {
@@ -38,4 +38,5 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("io.getstream:stream-webrtc-android:1.3.8")
 }

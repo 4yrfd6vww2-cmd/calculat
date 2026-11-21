@@ -279,6 +279,15 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         else error = tr("Нет доступа к микрофону", "No access to the microphone", "Kein Zugriff auf das Mikrofon")
     }
 
+    val callPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) Calls.start(friendId)
+        else error = tr("Нет доступа к микрофону", "No access to the microphone", "Kein Zugriff auf das Mikrofon")
+    }
+
+    fun callClick() {
+        if (Calls.hasMic(ctx)) Calls.start(friendId) else callPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
     fun micClick() {
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording()
         else micPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -451,7 +460,8 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
                 Avatar(friend, 38.dp)
-                Text(friend?.nick ?: "", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.padding(start = 10.dp))
+                Text(friend?.nick ?: "", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.padding(start = 10.dp).weight(1f))
+                Text("📞", fontSize = 22.sp, modifier = Modifier.clickable { callClick() }.padding(12.dp))
             }
         }
 

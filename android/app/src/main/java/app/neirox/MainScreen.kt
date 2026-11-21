@@ -43,12 +43,15 @@ fun NeiroxApp() {
     }
     CompositionLocalProvider(LocalDensity provides Density(base.density, base.fontScale * scale)) {
         MaterialTheme(colorScheme = scheme) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.verticalGradient(listOf(BgTop, BgBottom)))
-            ) {
-                if (Store.loggedIn) MainScreen() else AuthFlow()
+            Box(Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(BgTop, BgBottom)))
+                ) {
+                    if (Store.loggedIn) MainScreen() else AuthFlow()
+                }
+                if (Store.loggedIn && Calls.state != CallState.IDLE) CallScreen()
             }
         }
     }

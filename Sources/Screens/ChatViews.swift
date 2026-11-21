@@ -366,6 +366,10 @@ struct ChatView: View {
                     Button { showDelete = true } label: { Image(systemName: "trash") }
                     Button { selected = [] } label: { Image(systemName: "xmark") }
                 }
+            } else {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { Calls.shared.start(peer: friend.id) } label: { Image(systemName: "phone.fill") }
+                }
             }
         }
         .sheet(isPresented: $showForward) { forwardSheet }

@@ -50,6 +50,7 @@ object Store {
         initialized = true
         appCtx = ctx.applicationContext
         loggedIn = Api.isLoggedIn()
+        Calls.init(appCtx)
         if (loggedIn) start()
     }
 
@@ -62,6 +63,7 @@ object Store {
     fun logout() {
         job?.cancel()
         job = null
+        Calls.reset()
         Api.signOut()
         Player.stopAll()
         NeiroxService.stop(appCtx)

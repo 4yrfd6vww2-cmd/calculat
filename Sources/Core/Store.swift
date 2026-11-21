@@ -32,6 +32,7 @@ final class Store: ObservableObject {
     func logout() {
         timer?.invalidate()
         timer = nil
+        Calls.shared.reset()
         API.shared.signOut()
         me = nil
         friendships = []
@@ -46,6 +47,7 @@ final class Store: ObservableObject {
 
     func start() async {
         guard API.shared.isLoggedIn else { return }
+        Calls.shared.startPolling()
         await refresh()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { _ in
