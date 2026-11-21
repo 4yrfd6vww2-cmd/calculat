@@ -26,7 +26,10 @@ struct Message: Codable, Identifiable, Hashable {
     var fileName: String?
     let createdAt: Date
     var readAt: Date?
+    var editedAt: Date?
 }
+
+struct HiddenRow: Codable { let messageId: Int }
 
 struct PrivateProfile: Codable {
     let userId: String

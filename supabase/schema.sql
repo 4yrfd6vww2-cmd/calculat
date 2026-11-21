@@ -303,3 +303,12 @@ create table if not exists public.app_secrets (name text primary key, value text
 alter table public.app_secrets enable row level security;
 revoke all on public.password_resets from anon, authenticated;
 revoke all on public.app_secrets from anon, authenticated;
+
+-- ============================================================
+-- 15. Правка / удаление / скрытие сообщений (0.4.3)
+-- Уже применено на проекте миграцией message_edit_delete_hide.
+-- Здесь — только пометка; актуальное состояние смотри в миграциях Supabase.
+-- ============================================================
+-- messages.edited_at timestamptz; таблица message_hidden(message_id, user_id);
+-- политики: отправитель может удалять свои сообщения и менять body/edited_at
+-- (триггер запрещает менять их не отправителю); storage delete для своих файлов.

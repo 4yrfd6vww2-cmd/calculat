@@ -1,5 +1,6 @@
 import SwiftUI
 import AudioToolbox
+import UniformTypeIdentifiers
 
 @MainActor
 final class Store: ObservableObject {
@@ -9,6 +10,7 @@ final class Store: ObservableObject {
     @Published var friendships: [Friendship] = []
     @Published var profiles: [String: Profile] = [:]
     @Published var messages: [Message] = []
+    @Published var hidden: Set<Int> = []
     @Published var recoveryEmail: String?
     @Published var loggedIn: Bool = API.shared.isLoggedIn
     @Published var selectedTab = 0
@@ -35,6 +37,7 @@ final class Store: ObservableObject {
         friendships = []
         profiles = [:]
         messages = []
+        hidden = []
         recoveryEmail = nil
         knownMessageIds = []
         firstLoadDone = false
@@ -66,8 +69,10 @@ final class Store: ObservableObject {
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "created_at.desc"),
                 URLQueryItem(name: "limit", value: "1000")])
+            let hid: [HiddenRow] = (try? await API.shared.select("message_hidden", [URLQueryItem(name: "select", value: "message_id")])) ?? []
+            hidden = Set(hid.map { $0.messageId })
             notifyNew(msgs)
-            messages = msgs.reversed()
+            messages = msgs.filter { !hidden.contains($0.id) }.reversed()
 
             var ids = Set<String>()
             for f in fr { ids.insert(f.requester); ids.insert(f.addressee) }
@@ -173,6 +178,45 @@ final class Store: ObservableObject {
         try await API.shared.insert("messages", ["sender": myId, "receiver": id, "kind": kind,
                                                   "media_path": path, "file_name": fileName])
         await refresh()
+    }
+
+    func editMessage(_ id: Int, text: String) async throws {
+        try await API.shared.update("messages", [URLQueryItem(name: "id", value: "eq.\(id)")],
+                                    ["body": text, "edited_at": ISO.now()])
+        await refresh()
+    }
+
+    func deleteForAll(_ list: [Message]) async throws {
+        for m in list where m.sender == myId {
+            try await API.shared.delete("messages", [URLQueryItem(name: "id", value: "eq.\(m.id)")])
+            if let p = m.mediaPath {
+                _ = try? await API.shared.raw("DELETE", "/storage/v1/object/chat-media/\(p)")
+            }
+        }
+        await refresh()
+    }
+
+    func deleteForMe(_ list: [Message]) async throws {
+        for m in list {
+            try await API.shared.insert("message_hidden", ["message_id": m.id])
+            hidden.insert(m.id)
+        }
+        messages = messages.filter { !hidden.contains($0.id) }
+        await refresh()
+    }
+
+    func forward(_ m: Message, to id: String) async throws {
+        if m.kind == "text" {
+            try await sendText(m.body ?? "", to: id)
+        } else if let p = m.mediaPath {
+            let url = try await API.shared.signedURL(bucket: "chat-media", path: p)
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let name = m.fileName ?? (m.kind == "image" ? "photo.jpg" : "file")
+            let ext = (name as NSString).pathExtension
+            let mime = m.kind == "image" ? "image/jpeg"
+                : (UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream")
+            try await sendMedia(data: data, mime: mime, fileName: name, kind: m.kind, to: id)
+        }
     }
 
     func markRead(from id: String) async {

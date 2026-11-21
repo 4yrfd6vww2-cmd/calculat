@@ -30,7 +30,7 @@ targets:
       base:
         PRODUCT_NAME: Neirox
         PRODUCT_BUNDLE_IDENTIFIER: com.example.neirox
-        MARKETING_VERSION: "0.4.0"
+        MARKETING_VERSION: "0.4.3"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

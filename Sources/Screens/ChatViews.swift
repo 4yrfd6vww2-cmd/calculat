@@ -38,6 +38,8 @@ let timeFormatter: DateFormatter = {
 struct ChatsView: View {
     @ObservedObject private var st = Settings.shared
     @ObservedObject private var store = Store.shared
+    @ObservedObject private var inbox = AIInbox.shared
+    @State private var aiActive = false
 
     private var friends: [Profile] {
         let list = store.friendIds.compactMap { store.profiles[$0] }
@@ -132,6 +134,12 @@ struct ChatsView: View {
                 }
             }
             .neonScreen(tr("Чаты", "Chats", "Chats"))
+            .navigationDestination(isPresented: $aiActive) { AIChatView() }
+            .onChange(of: inbox.pending) { v in
+                if v != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { aiActive = true }
+                }
+            }
         }
     }
 }
@@ -163,10 +171,34 @@ struct MediaImage: View {
     }
 }
 
+struct MediaImageFull: View {
+    let path: String
+    @State private var url: URL?
+    var body: some View {
+        Group {
+            if let url = url {
+                AsyncImage(url: url) { phase in
+                    if let img = phase.image { img.resizable().scaledToFit() } else { ProgressView() }
+                }
+            } else { ProgressView() }
+        }
+        .task { url = try? await API.shared.signedURL(bucket: "chat-media", path: path) }
+    }
+}
+
+final class AIInbox: ObservableObject {
+    static let shared = AIInbox()
+    @Published var pending: String?
+}
+
 struct Bubble: View {
     @ObservedObject private var st = Settings.shared
     let m: Message
     let mine: Bool
+    var selected: Bool = false
+    var selecting: Bool = false
+    var onToggle: () -> Void = {}
+    var onImage: (String) -> Void = { _ in }
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -174,7 +206,7 @@ struct Bubble: View {
             if mine { Spacer(minLength: 50) }
             VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                 content
-                Text(timeFormatter.string(from: m.createdAt))
+                Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
                     .font(.system(size: 10))
                     .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
             }
@@ -187,25 +219,30 @@ struct Bubble: View {
             )
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(mine ? Color.clear : Theme.stroke, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 18))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .onTapGesture {
+                if selecting { onToggle() }
+                else if m.kind == "image", let p = m.mediaPath { onImage(p) }
+                else if m.kind == "file", let p = m.mediaPath {
+                    Task { if let u = try? await API.shared.signedURL(bucket: "chat-media", path: p) { openURL(u) } }
+                }
+            }
+            .onLongPressGesture(minimumDuration: 0.4) { haptic(); onToggle() }
             if !mine { Spacer(minLength: 50) }
         }
+        .padding(.vertical, 2)
+        .background(selected ? Theme.accent.opacity(0.2) : Color.clear)
     }
 
     @ViewBuilder private var content: some View {
         if m.kind == "image", let p = m.mediaPath {
             MediaImage(path: p)
         } else if m.kind == "file", let p = m.mediaPath {
-            Button {
-                Task {
-                    if let u = try? await API.shared.signedURL(bucket: "chat-media", path: p) { openURL(u) }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.fill")
-                    Text(m.fileName ?? "file").lineLimit(2).multilineTextAlignment(.leading)
-                }
-                .foregroundColor(mine ? .white : Theme.text)
+            HStack(spacing: 8) {
+                Image(systemName: "doc.fill")
+                Text(m.fileName ?? "file").lineLimit(2).multilineTextAlignment(.leading)
             }
+            .foregroundColor(mine ? .white : Theme.text)
         } else {
             Text(m.body ?? "")
                 .foregroundColor(mine ? .white : Theme.text)
@@ -226,6 +263,19 @@ struct ChatView: View {
     @State private var busy = false
     @State private var error = ""
     @State private var dropTargeted = false
+    @State private var selected = Set<Int>()
+    @State private var editing: Message?
+    @State private var showForward = false
+    @State private var showDelete = false
+    @State private var fullscreenPath: String?
+    @Environment(\.dismiss) private var dismiss
+    var onForwardToAI: ((String) -> Void)? = nil
+
+    private var selMsgs: [Message] { thread.filter { selected.contains($0.id) } }
+
+    private func toggle(_ id: Int) {
+        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+    }
 
     private var thread: [Message] { store.thread(with: friend.id) }
 
@@ -237,7 +287,9 @@ struct ChatView: View {
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             ForEach(thread) { m in
-                                Bubble(m: m, mine: m.sender == store.myId).id(m.id)
+                                Bubble(m: m, mine: m.sender == store.myId,
+                                       selected: selected.contains(m.id), selecting: !selected.isEmpty,
+                                       onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 }).id(m.id)
                             }
                         }
                         .padding(14)
@@ -251,10 +303,47 @@ struct ChatView: View {
                     }
                 }
                 if !error.isEmpty { ErrorText(text: error).padding(.horizontal, 14) }
+                if editing != nil {
+                    HStack {
+                        Text("✏️ " + tr("Редактирование", "Editing", "Bearbeiten")).font(.system(size: 13)).foregroundColor(Theme.accent)
+                        Spacer()
+                        Button { editing = nil; text = "" } label: { Image(systemName: "xmark").foregroundColor(Theme.textSecondary) }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .background(Theme.card)
+                }
                 inputBar
             }
         }
         .neonScreen(friend.nick)
+        .toolbar {
+            if !selected.isEmpty {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    if selMsgs.count == 1, let one = selMsgs.first, one.sender == store.myId, one.kind == "text" {
+                        Button { editing = one; text = one.body ?? ""; selected = [] } label: { Image(systemName: "pencil") }
+                    }
+                    Button { copySelected() } label: { Image(systemName: "doc.on.doc") }
+                    Button { showForward = true } label: { Image(systemName: "arrowshape.turn.up.right") }
+                    Button { showDelete = true } label: { Image(systemName: "trash") }
+                    Button { selected = [] } label: { Image(systemName: "xmark") }
+                }
+            }
+        }
+        .sheet(isPresented: $showForward) { forwardSheet }
+        .confirmationDialog(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?"), isPresented: $showDelete, titleVisibility: .visible) {
+            Button(tr("У меня", "For me", "Für mich"), role: .destructive) { deleteSelected(forAll: false) }
+            if !selMsgs.isEmpty && selMsgs.allSatisfy({ $0.sender == store.myId }) {
+                Button(tr("У всех", "For everyone", "Für alle"), role: .destructive) { deleteSelected(forAll: true) }
+            }
+            Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) {}
+        }
+        .fullScreenCover(isPresented: Binding(get: { fullscreenPath != nil }, set: { if !$0 { fullscreenPath = nil } })) {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let p = fullscreenPath { MediaImageFull(path: p) }
+            }
+            .onTapGesture { fullscreenPath = nil }
+        }
         .task { await store.markRead(from: friend.id) }
         .sheet(isPresented: $showFiles) {
             DocPicker(types: [.item]) { urls in
@@ -291,14 +380,16 @@ struct ChatView: View {
 
     private var inputBar: some View {
         HStack(spacing: 10) {
-            PhotosPicker(selection: $photoItem, matching: .images) {
-                Image(systemName: "photo").font(.system(size: 20)).foregroundColor(Theme.accent)
-            }
-            Button { showFiles = true } label: {
-                Image(systemName: "paperclip").font(.system(size: 20)).foregroundColor(Theme.accent)
-            }
-            Button { showAI = true } label: {
-                Image(systemName: "sparkles").font(.system(size: 20)).foregroundColor(Theme.accent)
+            if editing == nil {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Image(systemName: "photo").font(.system(size: 20)).foregroundColor(Theme.accent)
+                }
+                Button { showFiles = true } label: {
+                    Image(systemName: "paperclip").font(.system(size: 20)).foregroundColor(Theme.accent)
+                }
+                Button { showAI = true } label: {
+                    Image(systemName: "sparkles").font(.system(size: 20)).foregroundColor(Theme.accent)
+                }
             }
             TextField("", text: $text, prompt: Text(tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
                 .foregroundColor(Theme.text)
@@ -311,7 +402,7 @@ struct ChatView: View {
                 ProgressView()
             } else {
                 Button { sendText() } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                    Image(systemName: editing != nil ? "checkmark.circle.fill" : "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
                 }
             }
         }
@@ -327,12 +418,84 @@ struct ChatView: View {
     private func sendText() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
+        if let ed = editing {
+            error = ""
+            Task {
+                do {
+                    if t != (ed.body ?? "") { try await store.editMessage(ed.id, text: t) }
+                    editing = nil
+                    text = ""
+                } catch { report(error) }
+            }
+            return
+        }
         text = ""
         error = ""
         haptic()
         Task {
             do { try await store.sendText(t, to: friend.id) } catch { report(error); text = t }
         }
+    }
+
+    private func copySelected() {
+        let parts = selMsgs.sorted { $0.createdAt < $1.createdAt }.compactMap { m -> String? in
+            m.kind == "text" ? m.body : (m.kind == "file" ? m.fileName : nil)
+        }
+        guard !parts.isEmpty else { error = tr("Нечего копировать", "Nothing to copy", "Nichts zu kopieren"); return }
+        UIPasteboard.general.string = parts.joined(separator: "\n")
+        selected = []
+    }
+
+    private func deleteSelected(forAll: Bool) {
+        let list = selMsgs
+        selected = []
+        Task {
+            do { forAll ? try await store.deleteForAll(list) : try await store.deleteForMe(list) } catch { report(error) }
+        }
+    }
+
+    private func forwardTo(_ id: String) {
+        let list = selMsgs.sorted { $0.createdAt < $1.createdAt }
+        showForward = false
+        selected = []
+        busy = true
+        error = ""
+        Task {
+            do { for m in list { try await store.forward(m, to: id) } } catch { report(error) }
+            busy = false
+        }
+    }
+
+    private func forwardToAI() {
+        let t = selMsgs.sorted { $0.createdAt < $1.createdAt }.filter { $0.kind == "text" }.compactMap { $0.body }.joined(separator: "\n")
+        guard !t.isEmpty else {
+            error = tr("В ИИ можно переслать только текст", "Only text can be sent to AI", "An die KI kann nur Text gesendet werden")
+            showForward = false
+            return
+        }
+        showForward = false
+        selected = []
+        AIInbox.shared.pending = t
+        store.selectedTab = 0
+        dismiss()
+    }
+
+    private var forwardSheet: some View {
+        NavigationStack {
+            List {
+                Button { forwardToAI() } label: {
+                    HStack { Image(systemName: "sparkles"); Text(tr("Умный Чат", "Smart Chat", "Smarter Chat")) }
+                }
+                ForEach(store.friendIds.compactMap { store.profiles[$0] }) { p in
+                    Button { forwardTo(p.id) } label: {
+                        HStack(spacing: 12) { Avatar(nick: p.nick, url: p.avatarUrl, size: 36); Text(p.nick) }
+                    }
+                }
+            }
+            .navigationTitle(tr("Переслать", "Forward", "Weiterleiten"))
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium])
     }
 
     private func sendImage(_ data: Data) {
@@ -431,6 +594,7 @@ struct AIChatView: View {
     @State private var imageMode = false
     @State private var busy = false
     @State private var error = ""
+    @ObservedObject private var inbox = AIInbox.shared
 
     private let saveKey = "neirox.ai.history"
 
@@ -497,7 +661,16 @@ struct AIChatView: View {
                 Button { msgs = []; images = [:]; save() } label: { Image(systemName: "trash") }
             }
         }
-        .onAppear { load() }
+        .onAppear { load(); takePending() }
+        .onChange(of: inbox.pending) { _ in takePending() }
+    }
+
+    private func takePending() {
+        guard let t = inbox.pending else { return }
+        inbox.pending = nil
+        input = t
+        imageMode = false
+        send()
     }
 
     @ViewBuilder private func aiBubble(_ m: AIMsg) -> some View {
@@ -520,6 +693,13 @@ struct AIChatView: View {
             )
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(mine ? Color.clear : Theme.stroke, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 18))
+            .contextMenu {
+                if images[m.id] == nil {
+                    Button { UIPasteboard.general.string = m.text } label: {
+                        Label(tr("Копировать", "Copy", "Kopieren"), systemImage: "doc.on.doc")
+                    }
+                }
+            }
             if !mine { Spacer(minLength: 50) }
         }
     }
