@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 
-const VERSION = process.platform === 'darwin' ? '0.5.0 Mac' : '0.0.1 Alfa';
+const VERSION = process.platform === 'darwin' ? '0.5.0 Mac' : '0.0.2 Alfa';
 
 function createWindow() {
   const win = new BrowserWindow({

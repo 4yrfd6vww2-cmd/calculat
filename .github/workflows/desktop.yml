@@ -25,8 +25,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@22.3.27
-          npx electron-builder --win portable --x64 --config.extraMetadata.version=0.0.1 --publish never
-          npx electron-builder --win portable --ia32 --config.win.artifactName='Neirox-Windows-32.${ext}' --config.extraMetadata.version=0.0.1 --publish never
+          npx electron-builder --win portable --x64 --config.extraMetadata.version=0.0.2 --publish never
+          npx electron-builder --win portable --ia32 --config.win.artifactName='Neirox-Windows-32.${ext}' --config.extraMetadata.version=0.0.2 --publish never
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
@@ -79,7 +79,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-${{ github.run_number }}
-          name: Neirox Desktop ${{ github.run_number }} (Windows 0.0.1 Alfa, Mac 0.5.0)
+          name: Neirox Desktop ${{ github.run_number }} (Windows 0.0.2 Alfa, Mac 0.5.0)
           files: |
             out/win/Neirox-Windows.exe
             out/win/Neirox-Windows-32.exe

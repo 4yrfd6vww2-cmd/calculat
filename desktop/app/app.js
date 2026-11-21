@@ -6,8 +6,48 @@ const SB_KEY = 'sb_publishable_h5MfmS1nk907f6_1gwjm-Q_7JsUwDpI';
 const VERSION = new URLSearchParams(location.search).get('v') || 'web';
 const MAX_FILE = 25 * 1024 * 1024;
 
+
+/* ---------- иконки (рисуются одинаково на любой системе, включая Windows 7) ---------- */
+const IC = {
+  chat: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  settings: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  clip: '<path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/>',
+  send: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  forward: '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>',
+  trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  select: '<path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><polyline points="22 4 12 14 9 11"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  play: '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>',
+  prev: '<polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" y1="19" x2="5" y2="5"/>',
+  next: '<polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  bolt: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+  checks: '<polyline points="1 13 5 17 12 8"/><polyline points="9 15 12 18 22 6"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  palette: '<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 1.6-3.2 2 2 0 0 1 1.6-3.3H18a4 4 0 0 0 4-4A10 10 0 0 0 12 2z"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
+};
+function icons(html) {
+  return html.replace(/\{i:([a-z]+)\}/g, (all, n) => IC[n]
+    ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'
+    : all);
+}
+
 const $ = (s, r) => (r || document).querySelector(s);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"'{]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '{': '&#123;' }[c]));
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
 
@@ -196,7 +236,7 @@ function notifyNew(msgs) {
       if (!document.hasFocus() && 'Notification' in window) {
         try {
           const p = D.profiles[fresh[0].sender];
-          const body = fresh[0].kind === 'text' ? fresh[0].body : (fresh[0].kind === 'image' ? '📷' : '📎 ' + (fresh[0].file_name || ''));
+          const body = fresh[0].kind === 'text' ? fresh[0].body : (fresh[0].kind === 'image' ? t('Фото', 'Photo', 'Foto') : (fresh[0].file_name || ''));
           if (Notification.permission === 'granted') new Notification(p ? p.nick : 'neirox', { body });
           else if (Notification.permission === 'default') Notification.requestPermission();
         } catch (e) { }
@@ -306,7 +346,7 @@ function setHTML(el, html) {
   if (!el) return;
   if (el._h === html) return;
   el._h = html;
-  el.innerHTML = html;
+  el.innerHTML = icons(html);
 }
 function timeOf(iso) {
   try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
@@ -388,7 +428,7 @@ function logout() {
 /* ---------- каркас ---------- */
 function buildShell() { renderRail(); renderContent(true); }
 function renderRail() {
-  const tabs = [['chats', '💬', t('Чаты', 'Chats', 'Chats')], ['friends', '👥', t('Друзья', 'Friends', 'Freunde')], ['player', '🎵', t('Плеер', 'Player', 'Player')], ['settings', '⚙️', t('Настройки', 'Settings', 'Einstellungen')]];
+  const tabs = [['chats', '{i:chat}', t('Чаты', 'Chats', 'Chats')], ['friends', '{i:users}', t('Друзья', 'Friends', 'Freunde')], ['player', '{i:music}', t('Плеер', 'Player', 'Player')], ['settings', '{i:settings}', t('Настройки', 'Settings', 'Einstellungen')]];
   const n = totalUnread();
   setHTML($('#rail'), tabs.map(([id, ic, name]) =>
     '<button class="rail-btn ' + (U.tab === id ? 'on' : '') + '" data-act="tab" data-v="' + id + '">' + ic + '<small>' + esc(name) + '</small>' +
@@ -422,8 +462,8 @@ function renderAll() {
 function preview(m) {
   if (!m) return t('Нет сообщений', 'No messages', 'Keine Nachrichten');
   const pre = m.sender === myId() ? t('Вы: ', 'You: ', 'Du: ') : '';
-  if (m.kind === 'image') return pre + '📷 ' + t('Фото', 'Photo', 'Foto');
-  if (m.kind === 'file') return pre + '📎 ' + (m.file_name || '');
+  if (m.kind === 'image') return pre + t('Фото', 'Photo', 'Foto');
+  if (m.kind === 'file') return pre + (m.file_name || '');
   return pre + (m.body || '');
 }
 function renderList() {
@@ -433,7 +473,7 @@ function renderList() {
     return la !== lb ? (la < lb ? 1 : -1) : a.nick.localeCompare(b.nick);
   });
   let h = '<div class="chat-item ' + (U.chat === 'ai' ? 'on' : '') + '" data-act="open" data-v="ai">' +
-    '<div class="avatar" style="width:46px;height:46px;font-size:22px;background:linear-gradient(135deg,var(--accent),var(--accent2))">✨</div>' +
+    '<div class="avatar" style="width:46px;height:46px;font-size:22px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div>' +
     '<div class="grow" style="min-width:0"><div class="title">' + t('Умный Чат (ИИ)', 'Smart Chat (AI)', 'Smarter Chat (KI)') + '</div><div class="prev">' + t('Вопросы и картинки', 'Questions and images', 'Fragen und Bilder') + '</div></div></div>';
   friends.forEach(p => {
     const u = unread(p.id);
@@ -451,18 +491,18 @@ function buildPane() {
   const pane = $('#pane');
   if (!U.chat) { pane.innerHTML = '<div class="pane-empty">' + t('Выбери чат слева', 'Pick a chat on the left', 'Wähle links einen Chat') + '</div>'; paneBuilt = null; return; }
   const ai = U.chat === 'ai';
-  pane.innerHTML =
+  pane.innerHTML = icons(
     '<div class="chead" id="chead"></div>' +
     '<div class="msgs" id="msgs"></div>' +
     '<div id="cerr"></div>' +
     '<div id="banner"></div>' +
     '<div class="composer">' +
     (ai ? '<div class="seg" id="aimode"></div>' :
-      '<button class="icon-btn" data-act="attach-photo" title="' + t('Фото', 'Photo', 'Foto') + '">🖼</button>' +
-      '<button class="icon-btn" data-act="attach-file" title="' + t('Файл', 'File', 'Datei') + '">📎</button>' +
-      '<button class="icon-btn" data-act="ai-pic" title="' + t('Картинка от ИИ', 'AI image', 'KI-Bild') + '">✨</button>') +
+      '<button class="icon-btn" data-act="attach-photo" title="' + t('Фото', 'Photo', 'Foto') + '">{i:image}</button>' +
+      '<button class="icon-btn" data-act="attach-file" title="' + t('Файл', 'File', 'Datei') + '">{i:clip}</button>' +
+      '<button class="icon-btn" data-act="ai-pic" title="' + t('Картинка от ИИ', 'AI image', 'KI-Bild') + '">{i:sparkles}</button>') +
     '<textarea id="inp" rows="1" placeholder="' + t('Сообщение', 'Message', 'Nachricht') + '"></textarea>' +
-    '<button class="icon-btn send" id="sendbtn" data-act="send">➤</button></div>';
+    '<button class="icon-btn send" id="sendbtn" data-act="send">{i:send}</button></div>');
   const inp = $('#inp');
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
   inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(140, inp.scrollHeight) + 'px'; });
@@ -486,13 +526,13 @@ function renderPane() {
   let head;
   if (U.selected.size) {
     const one = U.selected.size === 1 ? D.messages.find(m => m.id === Array.from(U.selected)[0]) : null;
-    head = '<button class="icon-btn" data-act="sel-clear">✕</button><div class="title grow" style="flex:1">' + U.selected.size + '</div>' +
-      (one && one.sender === myId() && one.kind === 'text' ? '<button class="icon-btn" data-act="sel-edit" title="' + t('Изменить', 'Edit', 'Bearbeiten') + '">✏️</button>' : '') +
-      '<button class="icon-btn" data-act="sel-copy" title="' + t('Копировать', 'Copy', 'Kopieren') + '">📋</button>' +
-      '<button class="icon-btn" data-act="sel-forward" title="' + t('Переслать', 'Forward', 'Weiterleiten') + '">↪️</button>' +
-      '<button class="icon-btn" data-act="sel-delete" title="' + t('Удалить', 'Delete', 'Löschen') + '">🗑</button>';
+    head = '<button class="icon-btn" data-act="sel-clear">{i:x}</button><div class="title grow" style="flex:1">' + U.selected.size + '</div>' +
+      (one && one.sender === myId() && one.kind === 'text' ? '<button class="icon-btn" data-act="sel-edit" title="' + t('Изменить', 'Edit', 'Bearbeiten') + '">{i:edit}</button>' : '') +
+      '<button class="icon-btn" data-act="sel-copy" title="' + t('Копировать', 'Copy', 'Kopieren') + '">{i:copy}</button>' +
+      '<button class="icon-btn" data-act="sel-forward" title="' + t('Переслать', 'Forward', 'Weiterleiten') + '">{i:forward}</button>' +
+      '<button class="icon-btn" data-act="sel-delete" title="' + t('Удалить', 'Delete', 'Löschen') + '">{i:trash}</button>';
   } else if (ai) {
-    head = '<div class="avatar" style="width:40px;height:40px;font-size:20px;background:linear-gradient(135deg,var(--accent),var(--accent2))">✨</div><div class="title" style="flex:1">' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><button class="icon-btn" data-act="ai-clear" title="' + t('Очистить', 'Clear', 'Leeren') + '">🗑</button>';
+    head = '<div class="avatar" style="width:40px;height:40px;font-size:20px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div class="title" style="flex:1">' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><button class="icon-btn" data-act="ai-clear" title="' + t('Очистить', 'Clear', 'Leeren') + '">{i:trash}</button>';
   } else {
     head = avatarHtml(p, 40) + '<div class="title">' + esc(p ? p.nick : '') + '</div>';
   }
@@ -523,15 +563,15 @@ function renderPane() {
         const ok = c && c.exp > Date.now();
         inner = '<img class="pic" data-path="' + esc(m.media_path) + '" ' + (ok ? 'src="' + esc(c.url) + '" data-full="' + esc(c.url) + '"' : '') + ' alt="">';
       }
-      else if (m.kind === 'file' && m.media_path) inner = '<div class="file" data-act="open-file" data-id="' + m.id + '">📄 <span>' + esc(m.file_name || 'file') + '</span></div>';
+      else if (m.kind === 'file' && m.media_path) inner = '<div class="file" data-act="open-file" data-id="' + m.id + '">{i:file} <span>' + esc(m.file_name || 'file') + '</span></div>';
       else inner = esc(m.body || '');
       return '<div class="mrow ' + (mine ? 'mine' : '') + (U.selected.has(m.id) ? ' sel' : '') + '" data-mid="' + m.id + '">' +
         '<div class="bubble" data-mid="' + m.id + '">' + inner +
-        '<div class="meta">' + (m.edited_at ? t('изм. ', 'edited ', 'bearb. ') : '') + timeOf(m.created_at) + (mine && m.read_at ? ' ✓✓' : '') + '</div>' +
-        '<button class="dots" data-act="menu" data-id="' + m.id + '">⋯</button></div></div>';
+        '<div class="meta">' + (m.edited_at ? t('изм. ', 'edited ', 'bearb. ') : '') + timeOf(m.created_at) + (mine && m.read_at ? ' {i:checks}' : '') + '</div>' +
+        '<button class="dots" data-act="menu" data-id="' + m.id + '">{i:dots}</button></div></div>';
     }).join('');
     setHTML($('#cerr'), U.error ? '<div class="err" style="padding:0 18px">' + esc(U.error) + '</div>' : '');
-    setHTML($('#banner'), U.editing ? '<div class="banner"><span class="grow" style="flex:1">✏️ ' + t('Редактирование', 'Editing', 'Bearbeiten') + '</span><button data-act="edit-cancel">✕</button></div>' : '');
+    setHTML($('#banner'), U.editing ? '<div class="banner"><span class="grow" style="flex:1">{i:edit} ' + t('Редактирование', 'Editing', 'Bearbeiten') + '</span><button data-act="edit-cancel">{i:x}</button></div>' : '');
   }
   const changed = msgs._h !== html;
   setHTML(msgs, html);
@@ -540,7 +580,7 @@ function renderPane() {
     hydrateImages(msgs);
   }
   const sb = $('#sendbtn');
-  if (sb) sb.textContent = U.editing ? '✓' : '➤';
+  if (sb) sb.innerHTML = icons(U.editing ? '{i:check}' : '{i:send}');
 }
 function hydrateImages(root) {
   root.querySelectorAll('img.pic[data-path]').forEach(img => {
@@ -604,7 +644,7 @@ async function aiSend(text) {
   try {
     if (U.aiImageMode) {
       const b = await aiImage(text);
-      const m = { id: crypto.randomUUID(), role: 'assistant', text: '🖼' };
+      const m = { id: crypto.randomUUID(), role: 'assistant', text: '…' };
       A.images[m.id] = URL.createObjectURL(b);
       A.msgs.push(m);
     } else {
@@ -675,15 +715,15 @@ function playTrack(i) {
 function renderPlayer() {
   const cur = P.tracks[P.cur];
   let h = '<h2>' + t('Плеер', 'Player', 'Player') + '</h2>' +
-    '<button class="btn" data-act="music-add">＋ ' + t('Добавить музыку', 'Add music', 'Musik hinzufügen') + '</button>';
+    '<button class="btn" data-act="music-add">{i:plus} ' + t('Добавить музыку', 'Add music', 'Musik hinzufügen') + '</button>';
   if (cur) {
     h += '<div class="card" style="text-align:center"><div class="title" style="font-size:18px;margin-bottom:10px">' + esc(cur.name) + '</div>' +
       '<input type="range" id="p-seek" min="0" max="1000" value="0">' +
       '<div class="row muted" style="justify-content:space-between;font-size:12px"><span id="p-cur">0:00</span><span id="p-dur">0:00</span></div>' +
-      '<div class="ctrls"><button data-act="p-prev">⏮</button><button data-act="p-toggle">' + (P.playing ? '⏸' : '▶️') + '</button><button data-act="p-next">⏭</button></div></div>';
+      '<div class="ctrls"><button data-act="p-prev">{i:prev}</button><button data-act="p-toggle">' + (P.playing ? '{i:pause}' : '{i:play}') + '</button><button data-act="p-next">{i:next}</button></div></div>';
   }
   if (!P.tracks.length) h += '<div class="empty">' + t('Добавь музыкальные файлы с компьютера, и они появятся здесь.', 'Add music files from your computer and they will appear here.', 'Füge Musikdateien von deinem Computer hinzu.') + '</div>';
-  P.tracks.forEach((tr, i) => { h += '<div class="track ' + (i === P.cur ? 'on' : '') + '" data-act="p-play" data-i="' + i + '">' + (i === P.cur && P.playing ? '🔊' : '🎵') + '<div class="grow" style="flex:1">' + esc(tr.name) + '</div></div>'; });
+  P.tracks.forEach((tr, i) => { h += '<div class="track ' + (i === P.cur ? 'on' : '') + '" data-act="p-play" data-i="' + i + '">' + (i === P.cur && P.playing ? '{i:volume}' : '{i:music}') + '<div class="grow" style="flex:1">' + esc(tr.name) + '</div></div>'; });
   const page = $('#page');
   if (page._h === h) return;
   setHTML(page, h);
@@ -701,25 +741,37 @@ function tickPlayer() {
 
 /* ---------- настройки ---------- */
 function renderSettings() {
+  if (U.picking) return;
   const me = D.me;
+  const tab = U.setTab || 'profile';
+  const tabs = [['profile', 'user', t('Профиль', 'Profile', 'Profil')], ['look', 'palette', t('Оформление', 'Look', 'Darstellung')],
+    ['notify', 'bell', t('Уведомления', 'Notifications', 'Benachrichtigungen')], ['nox', 'bolt', 'nox'], ['about', 'info', t('О программе', 'About', 'Info')]];
   const seg = (key, opts) => '<div class="seg">' + opts.map(([v, l]) => '<button data-act="set" data-k="' + key + '" data-v="' + v + '" class="' + (S[key] === v ? 'on' : '') + '">' + esc(l) + '</button>').join('') + '</div>';
   let h = '<h2>' + t('Настройки', 'Settings', 'Einstellungen') + '</h2>' +
-    '<div class="card row">' + avatarHtml(me, 64) + '<div class="grow" style="flex:1"><div class="title" style="font-size:18px">' + esc(me ? me.nick : '') + '</div><div class="muted" style="font-size:13px">' + esc(D.email || t('Почта не привязана', 'No email bound', 'Keine E-Mail verknüpft')) + '</div></div>' +
-    '<button class="btn sm ghost" data-act="avatar">' + t('Сменить фото', 'Change photo', 'Foto ändern') + '</button></div>' +
-    (U.error ? '<div class="err">' + esc(U.error) + '</div>' : '') +
-    '<div class="card row"><div class="grow" style="flex:1">' + t('Ник', 'Nick', 'Nick') + '</div><button class="btn sm ghost" data-act="nick">' + t('Изменить', 'Change', 'Ändern') + '</button></div>' +
-    (D.email ? '' : '<div class="card row"><div class="grow" style="flex:1">' + t('Почта для восстановления пароля', 'Recovery email', 'Wiederherstellungs-E-Mail') + '</div><button class="btn sm ghost" data-act="email">' + t('Привязать', 'Bind', 'Verknüpfen') + '</button></div>') +
-    '<div class="section">' + t('Оформление', 'Look', 'Darstellung') + '</div>' +
-    '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Язык', 'Language', 'Sprache') + '</div>' + seg('lang', [['ru', 'Русский'], ['en', 'English'], ['de', 'Deutsch']]) + '</div>' +
-    '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Тема', 'Theme', 'Design') + '</div>' + seg('mode', [['dark', t('Тёмная', 'Dark', 'Dunkel')], ['black', t('Чёрная', 'Black', 'Schwarz')], ['light', t('Светлая', 'Light', 'Hell')]]) + '</div>' +
-    '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Размер текста', 'Text size', 'Textgröße') + '</div>' + seg('size', [['small', t('Мелкий', 'Small', 'Klein')], ['medium', t('Средний', 'Medium', 'Mittel')], ['large', t('Крупный', 'Large', 'Groß')]]) + '</div>' +
-    '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Цвет свечения', 'Accent color', 'Akzentfarbe') + '</div><div class="swatches">' +
-    ACCENTS.map(c => '<button class="sw ' + (S.accent.toLowerCase() === c.toLowerCase() ? 'on' : '') + '" style="background:' + c + '" data-act="accent" data-v="' + c + '"></button>').join('') + '</div></div>' +
-    '<div class="card row"><div class="grow" style="flex:1">' + t('Звук сообщений', 'Message sound', 'Nachrichtenton') + '</div><button class="switch ' + (S.sound ? 'on' : '') + '" data-act="sound"></button></div>' +
-    '<div class="section">nox</div>' +
-    '<div class="card"><div class="title">⚡ ' + t('Мой nox', 'My nox', 'Mein nox') + '</div><div class="muted" style="font-size:14px;margin-top:4px">' + t('Пока что данная механика nox находится в разработке', 'The nox mechanic is still in development', 'Die nox-Mechanik ist noch in Entwicklung') + '</div></div>' +
-    '<button class="btn ghost" data-act="logout" style="margin-top:10px">' + t('Выйти из аккаунта', 'Sign out', 'Abmelden') + '</button>' +
-    '<div class="muted" style="text-align:center;font-size:12px;margin-top:6px">neirox · v' + esc(VERSION) + '</div>';
+    '<div class="tabs">' + tabs.map(([id, ic, name]) => '<button class="tab ' + (tab === id ? 'on' : '') + '" data-act="set-tab" data-v="' + id + '">{i:' + ic + '} ' + esc(name) + '</button>').join('') + '</div>' +
+    (U.error ? '<div class="err">' + esc(U.error) + '</div>' : '');
+  if (tab === 'profile') {
+    h += '<div class="card row">' + avatarHtml(me, 64) + '<div class="grow" style="flex:1"><div class="title" style="font-size:18px">' + esc(me ? me.nick : '') + '</div><div class="muted" style="font-size:13px">' + esc(D.email || t('Почта не привязана', 'No email bound', 'Keine E-Mail verknüpft')) + '</div></div>' +
+      '<button class="btn sm ghost" data-act="avatar">{i:image} ' + t('Сменить фото', 'Change photo', 'Foto ändern') + '</button></div>' +
+      '<div class="card row"><div class="grow" style="flex:1">' + t('Ник', 'Nick', 'Nick') + '</div><button class="btn sm ghost" data-act="nick">{i:edit} ' + t('Изменить', 'Change', 'Ändern') + '</button></div>' +
+      (D.email ? '' : '<div class="card row"><div class="grow" style="flex:1">' + t('Почта для восстановления пароля', 'Recovery email', 'Wiederherstellungs-E-Mail') + '</div><button class="btn sm ghost" data-act="email">' + t('Привязать', 'Bind', 'Verknüpfen') + '</button></div>') +
+      '<button class="btn ghost" data-act="logout" style="margin-top:10px;align-self:flex-start">{i:logout} ' + t('Выйти из аккаунта', 'Sign out', 'Abmelden') + '</button>';
+  } else if (tab === 'look') {
+    const known = ACCENTS.some(c => c.toLowerCase() === S.accent.toLowerCase());
+    h += '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Язык', 'Language', 'Sprache') + '</div>' + seg('lang', [['ru', 'Русский'], ['en', 'English'], ['de', 'Deutsch']]) + '</div>' +
+      '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Тема', 'Theme', 'Design') + '</div>' + seg('mode', [['dark', t('Тёмная', 'Dark', 'Dunkel')], ['black', t('Чёрная', 'Black', 'Schwarz')], ['light', t('Светлая', 'Light', 'Hell')]]) + '</div>' +
+      '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Размер текста', 'Text size', 'Textgröße') + '</div>' + seg('size', [['small', t('Мелкий', 'Small', 'Klein')], ['medium', t('Средний', 'Medium', 'Mittel')], ['large', t('Крупный', 'Large', 'Groß')]]) + '</div>' +
+      '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Цвет свечения', 'Accent color', 'Akzentfarbe') + '</div><div class="swatches">' +
+      ACCENTS.map(c => '<button class="sw ' + (S.accent.toLowerCase() === c.toLowerCase() ? 'on' : '') + '" style="background:' + c + '" data-act="accent" data-v="' + c + '"></button>').join('') +
+      '<label class="sw custom ' + (known ? '' : 'on') + '" title="' + t('Свой цвет', 'Custom color', 'Eigene Farbe') + '"><input type="color" id="accent-custom" value="' + esc(S.accent) + '">{i:plus}</label></div>' +
+      '<div class="muted" style="font-size:12px;margin-top:8px">' + t('Кнопка «+» открывает палитру: выбери любой цвет.', 'The “+” button opens a palette: pick any color.', 'Die „+“-Taste öffnet eine Palette: wähle eine beliebige Farbe.') + '</div></div>';
+  } else if (tab === 'notify') {
+    h += '<div class="card row"><div class="grow" style="flex:1">' + t('Звук сообщений', 'Message sound', 'Nachrichtenton') + '</div><button class="switch ' + (S.sound ? 'on' : '') + '" data-act="sound"></button></div>';
+  } else if (tab === 'nox') {
+    h += '<div class="card"><div class="title">{i:bolt} ' + t('Мой nox', 'My nox', 'Mein nox') + '</div><div class="muted" style="font-size:14px;margin-top:4px">' + t('Пока что данная механика nox находится в разработке', 'The nox mechanic is still in development', 'Die nox-Mechanik ist noch in Entwicklung') + '</div></div>';
+  } else {
+    h += '<div class="card"><div class="title">neirox · ' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><div class="muted" style="margin-top:4px">' + t('Версия', 'Version', 'Version') + ' ' + esc(VERSION) + '</div></div>';
+  }
   if ($('#page')._h === h) return;
   setHTML($('#page'), h);
 }
@@ -727,8 +779,8 @@ function renderSettings() {
 /* ---------- диалоги и меню ---------- */
 function openDialog(title, bodyHtml, buttons) {
   const m = $('#modal');
-  m.innerHTML = '<div class="dlg"><h3>' + esc(title) + '</h3>' + bodyHtml + '<div class="acts">' +
-    buttons.map(([act, label, cls, extra]) => '<button class="btn sm ' + (cls || '') + '" data-act="' + act + '" ' + (extra || '') + '>' + esc(label) + '</button>').join('') + '</div></div>';
+  m.innerHTML = icons('<div class="dlg"><h3>' + esc(title) + '</h3>' + bodyHtml + '<div class="acts">' +
+    buttons.map(([act, label, cls, extra]) => '<button class="btn sm ' + (cls || '') + '" data-act="' + act + '" ' + (extra || '') + '>' + esc(label) + '</button>').join('') + '</div></div>');
   m.classList.remove('hidden');
 }
 function closeDialog() { $('#modal').classList.add('hidden'); $('#modal').innerHTML = ''; }
@@ -738,12 +790,12 @@ function showCtx(id, x, y) {
   if (!m) return;
   const c = $('#ctx');
   const canEdit = m.sender === myId() && m.kind === 'text';
-  c.innerHTML =
-    '<button data-act="c-copy" data-id="' + id + '">📋 ' + t('Копировать', 'Copy', 'Kopieren') + '</button>' +
-    (canEdit ? '<button data-act="c-edit" data-id="' + id + '">✏️ ' + t('Изменить', 'Edit', 'Bearbeiten') + '</button>' : '') +
-    '<button data-act="c-forward" data-id="' + id + '">↪️ ' + t('Переслать', 'Forward', 'Weiterleiten') + '</button>' +
-    '<button class="del" data-act="c-delete" data-id="' + id + '">🗑 ' + t('Удалить', 'Delete', 'Löschen') + '</button>' +
-    '<button data-act="c-select" data-id="' + id + '">☑️ ' + t('Выделить', 'Select', 'Auswählen') + '</button>';
+  c.innerHTML = icons(
+    '<button data-act="c-copy" data-id="' + id + '">{i:copy} ' + t('Копировать', 'Copy', 'Kopieren') + '</button>' +
+    (canEdit ? '<button data-act="c-edit" data-id="' + id + '">{i:edit} ' + t('Изменить', 'Edit', 'Bearbeiten') + '</button>' : '') +
+    '<button data-act="c-forward" data-id="' + id + '">{i:forward} ' + t('Переслать', 'Forward', 'Weiterleiten') + '</button>' +
+    '<button class="del" data-act="c-delete" data-id="' + id + '">{i:trash} ' + t('Удалить', 'Delete', 'Löschen') + '</button>' +
+    '<button data-act="c-select" data-id="' + id + '">{i:select} ' + t('Выделить', 'Select', 'Auswählen') + '</button>');
   c.classList.remove('hidden');
   const w = c.offsetWidth, h = c.offsetHeight;
   c.style.left = Math.max(6, Math.min(x, innerWidth - w - 6)) + 'px';
@@ -775,7 +827,7 @@ function openForward(list) {
   const friends = friendIds().map(id => D.profiles[id]).filter(Boolean);
   window._fwd = list;
   openDialog(t('Переслать', 'Forward', 'Weiterleiten'),
-    '<div class="pick" data-act="fwd-ai"><div class="avatar" style="width:36px;height:36px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">✨</div><div>' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div></div>' +
+    '<div class="pick" data-act="fwd-ai"><div class="avatar" style="width:36px;height:36px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div>' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div></div>' +
     friends.map(p => '<div class="pick" data-act="fwd-to" data-id="' + esc(p.id) + '">' + avatarHtml(p, 36) + '<div>' + esc(p.nick) + '</div></div>').join(''),
     [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost']]);
 }
@@ -896,6 +948,7 @@ document.addEventListener('click', async e => {
     case 'p-toggle': { const a = aud(); if (!a.src && P.tracks.length) playTrack(0); else if (a.paused) { a.play(); P.playing = true; } else { a.pause(); P.playing = false; } renderAll(); break; }
     case 'p-next': playTrack((P.cur + 1) % Math.max(1, P.tracks.length)); break;
     case 'p-prev': playTrack((P.cur - 1 + P.tracks.length) % Math.max(1, P.tracks.length)); break;
+    case 'set-tab': U.setTab = v; U.error = ''; renderAll(); break;
     case 'set': S[el.dataset.k] = v; saveSettings(); renderAll(); break;
     case 'accent': S.accent = v; saveSettings(); renderAll(); break;
     case 'sound': S.sound = !S.sound; saveSettings(); renderAll(); break;
@@ -943,6 +996,7 @@ document.addEventListener('keydown', e => {
   }
 });
 document.addEventListener('input', e => {
+  if (e.target.id === 'accent-custom') { U.picking = true; S.accent = e.target.value; applyTheme(); lsSet('s.accent', S.accent); return; }
   if (e.target.id === 'f-q') {
     U.query = e.target.value;
     clearTimeout(searchT); searchT = setTimeout(doSearch, 300);
@@ -971,6 +1025,7 @@ A_.addEventListener('timeupdate', tickPlayer);
 A_.addEventListener('loadedmetadata', tickPlayer);
 A_.addEventListener('ended', () => { if (P.tracks.length) playTrack((P.cur + 1) % P.tracks.length); });
 document.addEventListener('change', e => {
+  if (e.target.id === 'accent-custom') { U.picking = false; S.accent = e.target.value; saveSettings(); renderAll(); return; }
   if (e.target.id === 'p-seek') { const a = aud(); if (a.duration) a.currentTime = a.duration * e.target.value / 1000; }
 });
 

@@ -173,3 +173,34 @@ input,textarea{font:inherit;color:var(--text);outline:none}
 .track.on{background:rgba(var(--accent-rgb),.16)}
 .ctrls{display:flex;align-items:center;justify-content:center;gap:18px;font-size:26px}
 input[type=range]{width:100%;accent-color:var(--accent)}
+
+/* иконки и подсветка */
+.ic{width:1.15em;height:1.15em;vertical-align:-.2em;flex:none}
+.rail-btn .ic{width:24px;height:24px;margin-bottom:2px}
+.icon-btn{color:var(--text)}
+.icon-btn .ic{width:21px;height:21px}
+.rail-btn,.icon-btn,.dots,#ctx button,.btn.ghost,.seg button,.tab,.track,.pick,.link{transition:color .12s,background .12s,border-color .12s}
+.rail-btn:hover,.icon-btn:hover,.seg button:hover,.tab:hover,#ctx button:hover,.track:hover,.pick:hover{color:var(--accent)}
+.rail-btn:hover{background:rgba(var(--accent-rgb),.10)}
+.btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
+.seg button.on:hover,.btn:not(.ghost):hover,.send:hover{color:#fff}
+.send:hover{filter:brightness(1.12)}
+.dots:hover{color:var(--accent)}
+.mine .bubble .dots:hover{color:#fff;background:rgba(0,0,0,.55)}
+.bubble .meta .ic{width:12px;height:12px;vertical-align:-2px}
+.bubble .file .ic{width:20px;height:20px}
+.avatar .ic{width:55%;height:55%}
+#ctx .del:hover{color:var(--danger)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tab{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:12px;color:var(--muted);background:var(--card);border:1px solid var(--stroke);font-size:14px}
+.tab.on{color:#fff;border-color:transparent;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.tab.on:hover{color:#fff}
+.sw.custom{position:relative;display:inline-flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;
+  background:conic-gradient(#ff5c5c,#ffd24a,#7cff6b,#4ae0e0,#4aa8ff,#b06bff,#ff6bb5,#ff5c5c)}
+.sw.custom .ic{width:16px;height:16px;filter:drop-shadow(0 0 2px rgba(0,0,0,.7))}
+.sw.custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
+.sw:hover{transform:scale(1.1)}
+.track .ic{width:20px;height:20px}
+.ctrls button{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ctrls button:hover{color:var(--accent)}
+.ctrls .ic{width:26px;height:26px}
