@@ -41,6 +41,9 @@ const IC = {
   smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>',
   mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   film: '<rect x="2" y="2" width="20" height="20" rx="2.2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+  phoneoff: '<path d="M10.7 13.3a16 16 0 0 0 3 2.4l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9"/><line x1="23" y1="1" x2="1" y2="23"/>',
+  micoff: '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V4a3 3 0 0 0-5.9-.7"/><path d="M19 10v2a7 7 0 0 1-.1 1.2M5 10v2a7 7 0 0 0 11.5 5.4"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
 };
 function icons(html) {
@@ -470,8 +473,10 @@ async function startApp() {
   await refresh();
   if (timer) clearInterval(timer);
   timer = setInterval(refresh, 4000);
+  callStartPolling();
 }
 function logout() {
+  callReset();
   setSession(null);
   Object.assign(D, { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false });
   U.chat = null; U.tab = 'chats'; U.selected = new Set(); U.editing = null;
@@ -610,7 +615,8 @@ function renderPane() {
   } else if (ai) {
     head = '<div class="avatar" style="width:40px;height:40px;font-size:20px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div class="title" style="flex:1">' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><button class="icon-btn" data-act="ai-clear" title="' + t('Очистить', 'Clear', 'Leeren') + '">{i:trash}</button>';
   } else {
-    head = avatarHtml(p, 40) + '<div class="title">' + esc(p ? p.nick : '') + '</div>';
+    head = avatarHtml(p, 40) + '<div class="title" style="flex:1">' + esc(p ? p.nick : '') + '</div>' +
+      (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button>' : '');
   }
   setHTML($('#chead'), head);
 
@@ -1218,6 +1224,15 @@ document.addEventListener('click', async e => {
       renderAll(); break;
     }
     case 'logout': logout(); break;
+    case 'call-start': callStart(U.chat); break;
+    case 'call-accept': callAccept(); break;
+    case 'call-decline': callDecline(); break;
+    case 'call-hang': callHang(); break;
+    case 'call-mute': callMute(); break;
+    case 'upd-go': updGo(); break;
+    case 'upd-skip': updHide(); break;
+    case 'upd-desk': updDesk(); break;
+    case 'upd-no': updDone(false); break;
   }
 });
 
@@ -1275,6 +1290,227 @@ document.addEventListener('change', e => {
   if (e.target.id === 'accent-custom') { U.picking = false; S.accent = e.target.value; saveSettings(); renderAll(); return; }
   if (e.target.id === 'p-seek') { const a = aud(); if (a.duration) a.currentTime = a.duration * e.target.value / 1000; }
 });
+
+
+/* ---------- звонки (только голос) ---------- */
+const CALL_OK = typeof RTCPeerConnection !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const ICE = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
+];
+const CALL = { st: 'idle', peer: null, id: '', pc: null, stream: null, ice: [], remote: false, muted: false, secs: 0, last: -1, poll: null, polling: false, tmo: null, tick: null, ring: null, msg: '', chain: Promise.resolve() };
+
+function callUuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+}
+function callStartPolling() {
+  if (!CALL_OK || CALL.poll) return;
+  CALL.last = -1;
+  CALL.poll = setInterval(callPoll, 1000);
+}
+function callReset() {
+  if (CALL.st !== 'idle') callEnd(true, '');
+  if (CALL.poll) { clearInterval(CALL.poll); CALL.poll = null; }
+  CALL.last = -1;
+}
+function callSend(call, peer, type, payload, onFail) {
+  const row = { call_id: call, receiver: peer, type };
+  if (payload) row.payload = payload;
+  CALL.chain = CALL.chain.then(() => ins('call_signals', row)).catch(() => { if (onFail) onFail(); });
+}
+async function callPoll() {
+  if (!session || CALL.polling) return;
+  CALL.polling = true;
+  try {
+    const rows = await sel('call_signals', { receiver: 'eq.' + myId(), id: 'gt.' + CALL.last, order: 'id.asc', limit: '100', select: '*' });
+    for (const r of rows) {
+      if (r.id > CALL.last) CALL.last = r.id;
+      try { await callHandle(r); } catch (e) { }
+    }
+    if (rows.length) del('call_signals', { id: 'in.(' + rows.map(r => r.id).join(',') + ')' }).catch(() => { });
+  } catch (e) { }
+  CALL.polling = false;
+}
+async function callHandle(r) {
+  const p = r.payload || {};
+  if (r.type === 'invite') {
+    if (Date.now() - new Date(r.created_at).getTime() > 40000) return;
+    if (CALL.st !== 'idle') { if (r.call_id !== CALL.id) callSend(r.call_id, r.sender, 'decline'); return; }
+    CALL.id = r.call_id; CALL.peer = r.sender; CALL.st = 'incoming'; CALL.msg = '';
+    callRingStart();
+    clearTimeout(CALL.tmo);
+    CALL.tmo = setTimeout(() => { if (CALL.st === 'incoming') callEnd(false, ''); }, 45000);
+    if (!document.hasFocus()) {
+      try {
+        if (window.nxDesktop) nxDesktop.attention();
+        const pr = D.profiles[r.sender];
+        if ('Notification' in window && Notification.permission === 'granted') new Notification(pr ? pr.nick : 'neirox', { body: t('Входящий звонок', 'Incoming call', 'Eingehender Anruf') });
+      } catch (e) { }
+    }
+    renderCall();
+    return;
+  }
+  if (r.call_id !== CALL.id || CALL.st === 'idle') return;
+  if (r.type === 'accept') {
+    if (CALL.st !== 'outgoing') return;
+    clearTimeout(CALL.tmo);
+    CALL.st = 'connecting'; renderCall();
+    await callMakePc();
+    const offer = await CALL.pc.createOffer();
+    await CALL.pc.setLocalDescription(offer);
+    callSend(CALL.id, CALL.peer, 'offer', { sdp: offer.sdp });
+  } else if (r.type === 'offer') {
+    if (!CALL.pc || !p.sdp) return;
+    await CALL.pc.setRemoteDescription({ type: 'offer', sdp: p.sdp });
+    CALL.remote = true; callFlushIce();
+    const ans = await CALL.pc.createAnswer();
+    await CALL.pc.setLocalDescription(ans);
+    callSend(CALL.id, CALL.peer, 'answer', { sdp: ans.sdp });
+  } else if (r.type === 'answer') {
+    if (!CALL.pc || !p.sdp) return;
+    await CALL.pc.setRemoteDescription({ type: 'answer', sdp: p.sdp });
+    CALL.remote = true; callFlushIce();
+  } else if (r.type === 'ice') {
+    if (!p.sdp) return;
+    const c = { candidate: p.sdp, sdpMid: p.mid || null, sdpMLineIndex: p.idx || 0 };
+    if (CALL.pc && CALL.remote) CALL.pc.addIceCandidate(c).catch(() => { }); else CALL.ice.push(c);
+  } else if (r.type === 'end' || r.type === 'decline') {
+    callEnd(false, '');
+  }
+}
+function callFlushIce() {
+  if (!CALL.pc) return;
+  CALL.ice.forEach(c => CALL.pc.addIceCandidate(c).catch(() => { }));
+  CALL.ice = [];
+}
+async function callGetMic() {
+  CALL.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  CALL.stream.getAudioTracks().forEach(tr => { tr.enabled = !CALL.muted; });
+}
+async function callMakePc() {
+  if (!CALL.stream) await callGetMic();
+  CALL.remote = false; CALL.ice = [];
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  CALL.pc = pc;
+  CALL.stream.getTracks().forEach(tr => pc.addTrack(tr, CALL.stream));
+  pc.onicecandidate = e => {
+    if (e.candidate) callSend(CALL.id, CALL.peer, 'ice', { sdp: e.candidate.candidate, mid: e.candidate.sdpMid || '', idx: e.candidate.sdpMLineIndex || 0 });
+  };
+  pc.ontrack = e => {
+    const a = $('#call-audio');
+    if (a) { a.srcObject = e.streams[0] || new MediaStream([e.track]); a.play().catch(() => { }); }
+  };
+  pc.oniceconnectionstatechange = () => {
+    const st = pc.iceConnectionState;
+    if ((st === 'connected' || st === 'completed') && CALL.st === 'connecting') {
+      clearTimeout(CALL.tmo);
+      CALL.st = 'active'; CALL.secs = 0;
+      clearInterval(CALL.tick);
+      CALL.tick = setInterval(() => { CALL.secs++; const el = $('#call-st'); if (el) el.textContent = callStatus(); }, 1000);
+      renderCall();
+    } else if (st === 'failed') {
+      callEnd(true, t('Нет соединения', 'Connection failed', 'Keine Verbindung'));
+    }
+  };
+}
+async function callStart(peer) {
+  if (!CALL_OK || CALL.st !== 'idle' || !peer || peer === 'ai') return;
+  try { await callGetMic(); } catch (e) { toast(t('Нет доступа к микрофону', 'No access to the microphone', 'Kein Zugriff auf das Mikrofon')); return; }
+  CALL.id = callUuid(); CALL.peer = peer; CALL.st = 'outgoing'; CALL.msg = ''; CALL.muted = false;
+  const mine = CALL.id;
+  callSend(mine, peer, 'invite', null, () => { if (CALL.id === mine && CALL.st === 'outgoing') callEnd(false, t('Не удалось позвонить', 'Could not place the call', 'Anruf fehlgeschlagen')); });
+  clearTimeout(CALL.tmo);
+  CALL.tmo = setTimeout(() => { if (CALL.st === 'outgoing') callEnd(true, t('Нет ответа', 'No answer', 'Keine Antwort')); }, 45000);
+  renderCall();
+}
+async function callAccept() {
+  if (CALL.st !== 'incoming') return;
+  callRingStop();
+  clearTimeout(CALL.tmo);
+  try { await callGetMic(); } catch (e) { toast(t('Нет доступа к микрофону', 'No access to the microphone', 'Kein Zugriff auf das Mikrofon')); callDecline(); return; }
+  CALL.st = 'connecting'; renderCall();
+  await callMakePc();
+  callSend(CALL.id, CALL.peer, 'accept');
+  CALL.tmo = setTimeout(() => { if (CALL.st === 'connecting') callEnd(true, t('Нет соединения', 'Connection failed', 'Keine Verbindung')); }, 30000);
+}
+function callDecline() { if (CALL.st === 'incoming') callEnd(true, '', true); }
+function callHang() { if (CALL.st !== 'idle') callEnd(true, ''); }
+function callMute() {
+  CALL.muted = !CALL.muted;
+  if (CALL.stream) CALL.stream.getAudioTracks().forEach(tr => { tr.enabled = !CALL.muted; });
+  renderCall();
+}
+function callEnd(notify, msg, decline) {
+  if (notify && CALL.peer && CALL.st !== 'idle') callSend(CALL.id, CALL.peer, decline ? 'decline' : 'end');
+  callRingStop();
+  clearTimeout(CALL.tmo); clearInterval(CALL.tick); CALL.tick = null;
+  try { if (CALL.pc) CALL.pc.close(); } catch (e) { }
+  try { if (CALL.stream) CALL.stream.getTracks().forEach(tr => tr.stop()); } catch (e) { }
+  const a = $('#call-audio'); if (a) a.srcObject = null;
+  CALL.pc = null; CALL.stream = null; CALL.ice = []; CALL.remote = false;
+  CALL.st = 'idle'; CALL.peer = null; CALL.secs = 0;
+  renderCall();
+  if (msg) toast(msg);
+}
+function callRingStart() {
+  callRingStop();
+  if (S.sound) beep();
+  CALL.ring = setInterval(() => { if (S.sound) beep(); }, 1500);
+}
+function callRingStop() { if (CALL.ring) { clearInterval(CALL.ring); CALL.ring = null; } }
+function callStatus() {
+  if (CALL.st === 'outgoing') return t('Вызов…', 'Calling…', 'Anruf…');
+  if (CALL.st === 'incoming') return t('Входящий звонок', 'Incoming call', 'Eingehender Anruf');
+  if (CALL.st === 'connecting') return t('Соединение…', 'Connecting…', 'Verbindung…');
+  return Math.floor(CALL.secs / 60) + ':' + String(CALL.secs % 60).padStart(2, '0');
+}
+function renderCall() {
+  const el = $('#call');
+  if (!el) return;
+  if (CALL.st === 'idle') { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  const p = D.profiles[CALL.peer];
+  const btns = CALL.st === 'incoming'
+    ? '<button class="cbtn red" data-act="call-decline" title="' + t('Отклонить', 'Decline', 'Ablehnen') + '">{i:phoneoff}</button><button class="cbtn green" data-act="call-accept" title="' + t('Принять', 'Accept', 'Annehmen') + '">{i:phone}</button>'
+    : '<button class="cbtn ' + (CALL.muted ? 'on' : '') + '" data-act="call-mute" title="' + t('Микрофон', 'Microphone', 'Mikrofon') + '">' + (CALL.muted ? '{i:micoff}' : '{i:mic}') + '</button><button class="cbtn red" data-act="call-hang" title="' + t('Завершить', 'Hang up', 'Auflegen') + '">{i:phoneoff}</button>';
+  el.innerHTML = icons('<div class="call-box">' + avatarHtml(p, 120) + '<div class="call-nick">' + esc(p ? p.nick : '') + '</div><div class="call-st" id="call-st">' + callStatus() + '</div><div class="call-btns">' + btns + '</div></div>');
+  el.classList.remove('hidden');
+}
+
+/* ---------- обновления приложения (Electron) ---------- */
+let UPD = null;
+function updShow(info) {
+  UPD = info;
+  const el = $('#upd'); if (!el) return;
+  el.innerHTML = '<div class="upd-box"><div class="upd-t">' + t('Доступно новое обновление ', 'A new update is available ', 'Neues Update verfügbar ') + esc(info.version) + '</div>' +
+    '<div class="upd-b"><button class="btn sm" data-act="upd-go">' + t('Установить', 'Install', 'Installieren') + '</button><button class="btn sm ghost" data-act="upd-skip">' + t('Не устанавливать', 'Not now', 'Nicht jetzt') + '</button></div></div>';
+  el.classList.remove('hidden');
+}
+function updHide() { const el = $('#upd'); if (el) { el.classList.add('hidden'); el.innerHTML = ''; } }
+async function updGo() {
+  const el = $('#upd'); if (!el || !UPD) return;
+  el.innerHTML = '<div class="upd-box"><div class="upd-t" id="upd-p">' + t('Скачивание…', 'Downloading…', 'Herunterladen…') + ' 0%</div></div>';
+  const r = await nxDesktop.downloadUpdate();
+  updHide();
+  if (!r || r.error) { toast(t('Не удалось скачать обновление', 'Could not download the update', 'Update konnte nicht geladen werden')); return; }
+  openDialog(t('Обновление скачано', 'Update downloaded', 'Update geladen'),
+    '<div class="muted" style="margin-bottom:12px">' + t('Новая версия сохранена в папку «Загрузки». Положить её ещё и на рабочий стол?', 'The new version is saved in Downloads. Also put it on the desktop?', 'Die neue Version liegt in Downloads. Auch auf den Desktop legen?') + '</div>',
+    [['upd-no', t('Нет', 'No', 'Nein'), 'ghost'], ['upd-desk', t('Да, на рабочий стол', 'Yes, on the desktop', 'Ja, auf den Desktop'), '']]);
+}
+async function updDesk() {
+  closeDialog();
+  const r = await nxDesktop.copyToDesktop();
+  if (r && r.error) toast(t('Не удалось скопировать на рабочий стол', 'Could not copy to the desktop', 'Kopieren auf den Desktop fehlgeschlagen'));
+  updDone(true);
+}
+function updDone() {
+  closeDialog();
+  nxDesktop.showDownloaded();
+  toast(t('Закрой приложение и запусти новый файл', 'Close the app and run the new file', 'App schließen und neue Datei starten'));
+}
+if (window.nxDesktop) {
+  nxDesktop.onProgress(p => { const el = $('#upd-p'); if (el) el.textContent = t('Скачивание…', 'Downloading…', 'Herunterladen…') + ' ' + p + '%'; });
+  setTimeout(() => { nxDesktop.checkUpdate().then(info => { if (info) updShow(info); }).catch(() => { }); }, 1500);
+}
 
 /* ---------- старт ---------- */
 applyTheme();

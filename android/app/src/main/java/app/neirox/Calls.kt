@@ -119,7 +119,7 @@ object Calls {
         ctx = c.applicationContext
         scope.launch {
             while (isActive) {
-                if (Store.loggedIn && (Store.appVisible || state != CallState.IDLE)) {
+                if (Store.loggedIn) {
                     try { poll() } catch (e: Exception) { }
                 }
                 delay(if (state == CallState.IDLE) 1500 else 700)
@@ -185,6 +185,7 @@ object Calls {
             state = CallState.INCOMING
             failed = ""
             startRing()
+            if (!Store.appVisible) Notif.incomingCall(ctx, Store.profiles[sender]?.nick ?: "neirox")
             timeoutJob?.cancel()
             timeoutJob = scope.launch { delay(45_000); if (state == CallState.INCOMING) end(false) }
             return
@@ -244,6 +245,7 @@ object Calls {
     fun accept() {
         if (state != CallState.INCOMING) return
         stopRing()
+        Notif.cancelCall(ctx)
         timeoutJob?.cancel()
         state = CallState.CONNECTING
         createPc()
@@ -374,6 +376,10 @@ object Calls {
     private fun end(notify: Boolean, message: String = "", decline: Boolean = false) {
         val peer = peerId
         val call = callId
+        if (!notify && state == CallState.INCOMING && !Store.appVisible) {
+            Notif.message(ctx, "missed", Store.profiles[peer ?: ""]?.nick ?: "neirox", tr("Пропущенный звонок", "Missed call", "Verpasster Anruf"))
+        }
+        Notif.cancelCall(ctx)
         if (notify && peer != null && state != CallState.IDLE) sendSignal(call, peer, if (decline) "decline" else "end")
         stopRing()
         timeoutJob?.cancel()

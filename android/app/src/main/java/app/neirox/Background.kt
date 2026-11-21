@@ -31,6 +31,8 @@ const val ACT_NEXT = "app.neirox.NEXT"
 object Notif {
     const val CH_SERVICE = "service"
     const val CH_MSG = "messages"
+    const val CH_CALL = "calls"
+    const val ID_CALL = 2
     const val ID_SERVICE = 1
 
     fun channels(ctx: Context) {
@@ -41,6 +43,9 @@ object Notif {
         nm.createNotificationChannel(
             NotificationChannel(CH_MSG, tr("Сообщения", "Messages", "Nachrichten"), NotificationManager.IMPORTANCE_HIGH)
         )
+        val call = NotificationChannel(CH_CALL, tr("Звонки", "Calls", "Anrufe"), NotificationManager.IMPORTANCE_HIGH)
+        call.setSound(null, null)
+        nm.createNotificationChannel(call)
     }
 
     private fun openApp(ctx: Context): PendingIntent = PendingIntent.getActivity(
@@ -105,10 +110,49 @@ object Notif {
         }
     }
 
+    fun incomingCall(ctx: Context, nick: String) {
+        val open = PendingIntent.getActivity(
+            ctx, 2,
+            Intent(ctx, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("call", true),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val decline = PendingIntent.getBroadcast(
+            ctx, 3,
+            Intent(ctx, CallActionReceiver::class.java).setAction("app.neirox.CALL_DECLINE"),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val n = NotificationCompat.Builder(ctx, CH_CALL)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle(nick)
+            .setContentText(tr("Входящий звонок", "Incoming call", "Eingehender Anruf"))
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setOngoing(true)
+            .setSilent(true)
+            .setContentIntent(open)
+            .setFullScreenIntent(open, true)
+            .addAction(0, tr("Отклонить", "Decline", "Ablehnen"), decline)
+            .addAction(0, tr("Ответить", "Answer", "Annehmen"), open)
+            .build()
+        try {
+            ctx.getSystemService(NotificationManager::class.java).notify(ID_CALL, n)
+        } catch (e: Exception) {
+        }
+    }
+
+    fun cancelCall(ctx: Context) {
+        try {
+            ctx.getSystemService(NotificationManager::class.java).cancel(ID_CALL)
+        } catch (e: Exception) {
+        }
+    }
+
     fun clearMessages(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         try {
-            for (n in nm.activeNotifications) if (n.id != ID_SERVICE) nm.cancel(n.id)
+            for (n in nm.activeNotifications) if (n.id != ID_SERVICE && n.id != ID_CALL) nm.cancel(n.id)
         } catch (e: Exception) {
         }
     }
@@ -160,5 +204,11 @@ class MediaActionReceiver : BroadcastReceiver() {
             ACT_TOGGLE -> Player.toggle()
             ACT_NEXT -> Player.next()
         }
+    }
+}
+
+class CallActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == "app.neirox.CALL_DECLINE") Calls.decline()
     }
 }
