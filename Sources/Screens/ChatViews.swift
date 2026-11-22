@@ -44,6 +44,8 @@ struct ChatsView: View {
     struct Row: Identifiable { let key: String; let title: String; let profile: Profile?; let chat: Chat?; var id: String { key } }
     @State private var showCreate = false
     @State private var showFind = false
+    @State private var showCode = false
+    @State private var showSearch = false
     @State private var openKey: String?
 
     private var friends: [Row] {
@@ -52,8 +54,27 @@ struct ChatsView: View {
         return list.sorted { a, b in
             let la = store.thread(with: a.key).last?.createdAt ?? .distantPast
             let lb = store.thread(with: b.key).last?.createdAt ?? .distantPast
+            let pa = store.isPinned(a.key)
+            let pb = store.isPinned(b.key)
+            if pa != pb { return pa }
             if la != lb { return la > lb }
             return a.title < b.title
+        }
+    }
+
+    private func titleLine(_ r: Row) -> String {
+        var t: String = r.title
+        if store.isPinned(r.key) { t = "📌 " + t }
+        if store.isMuted(r.key) { t += " 🔕" }
+        return t
+    }
+
+    @ViewBuilder private func rowMenu(_ k: String) -> some View {
+        Button { Task { await store.setPref(k, "pinned", !store.isPinned(k)) } } label: {
+            Label(store.isPinned(k) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften"), systemImage: "pin")
+        }
+        Button { Task { await store.setPref(k, "muted", !store.isMuted(k)) } } label: {
+            Label(store.isMuted(k) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten"), systemImage: "bell.slash")
         }
     }
 
@@ -61,7 +82,7 @@ struct ChatsView: View {
         guard let m = m else { return tr("Нет сообщений", "No messages", "Keine Nachrichten") }
         let prefix = m.sender == store.myId ? tr("Вы: ", "You: ", "Du: ") : (m.chatId != nil ? (store.profiles[m.sender]?.nick ?? "") + ": " : "")
         switch m.kind {
-        case "image": return prefix + tr("📷 Фото", "📷 Photo", "📷 Foto")
+        case "image": return prefix + (m.isSticker ? tr("🏷 Стикер", "🏷 Sticker", "🏷 Sticker") : tr("📷 Фото", "📷 Photo", "📷 Foto"))
         case "file": return prefix + "📎 " + (m.fileName ?? tr("Файл", "File", "Datei"))
         case "album":
             let a = m.attachments ?? []
@@ -113,6 +134,15 @@ struct ChatsView: View {
                         .foregroundColor(Theme.accent)
                         .padding(.horizontal, 4)
 
+                        HStack(spacing: 18) {
+                            Button { showSearch = true } label: { Text("🔎 " + tr("Поиск сообщений", "Search messages", "Nachrichten suchen")) }
+                            Button { showCode = true } label: { Text("🔑 " + tr("Войти по коду", "Join by code", "Per Code")) }
+                            Spacer()
+                        }
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.accent)
+                        .padding(.horizontal, 4)
+
                         ForEach(friends) { p in
                             NavigationLink(destination: ChatView(key: p.key)) {
                                 GlassCard {
@@ -123,7 +153,7 @@ struct ChatsView: View {
                                             Avatar(nick: p.title, url: p.chat?.avatarUrl, size: 46)
                                         }
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(p.title)
+                                            Text(titleLine(p))
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundColor(Theme.text)
                                             Text(preview(store.thread(with: p.key).last))
@@ -139,13 +169,14 @@ struct ChatsView: View {
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, 8)
                                                 .padding(.vertical, 3)
-                                                .background(Theme.accent)
+                                                .background(store.isMuted(p.key) ? Theme.textSecondary : Theme.accent)
                                                 .clipShape(Capsule())
                                         }
                                     }
                                 }
                             }
                             .buttonStyle(.plain)
+                            .contextMenu { rowMenu(p.key) }
                         }
 
                         if friends.isEmpty {
@@ -168,6 +199,8 @@ struct ChatsView: View {
             }
             .sheet(isPresented: $showCreate) { CreateChatSheet { k in showCreate = false; openKey = k } }
             .sheet(isPresented: $showFind) { FindChannelSheet { k in showFind = false; openKey = k } }
+            .sheet(isPresented: $showCode) { JoinCodeSheet { k in showCode = false; openKey = k } }
+            .sheet(isPresented: $showSearch) { SearchSheet(only: nil) { k, id in showSearch = false; store.jumpTo = id; openKey = k } }
             .onChange(of: inbox.pending) { v in
                 if v != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { aiActive = true }
@@ -237,6 +270,8 @@ struct Bubble: View {
     var onEdit: (() -> Void)? = nil
     var onForward: () -> Void = {}
     var onDelete: () -> Void = {}
+    var onPin: (() -> Void)? = nil
+    var pinnedNow: Bool = false
     var quoted: Message? = nil
     var showNick: Bool = false
     var rx: [Reaction] = []
@@ -285,6 +320,9 @@ struct Bubble: View {
                     Button { onCopy() } label: { Label(tr("Копировать", "Copy", "Kopieren"), systemImage: "doc.on.doc") }
                     if let e = onEdit {
                         Button { e() } label: { Label(tr("Изменить", "Edit", "Bearbeiten"), systemImage: "square.and.pencil") }
+                    }
+                    if let pin = onPin {
+                        Button { pin() } label: { Label(pinnedNow ? tr("Открепить", "Unpin", "Lösen") : tr("Закрепить", "Pin", "Anheften"), systemImage: "pin") }
                     }
                     Button { onForward() } label: { Label(tr("Переслать", "Forward", "Weiterleiten"), systemImage: "arrowshape.turn.up.right") }
                     Button(role: .destructive) { onDelete() } label: { Label(tr("Удалить", "Delete", "Löschen"), systemImage: "trash") }
@@ -339,7 +377,7 @@ struct Bubble: View {
 
     @ViewBuilder private var content: some View {
         if m.kind == "image", let p = m.mediaPath {
-            MediaImage(path: p)
+            if m.isSticker { MediaImage(path: p).frame(width: 150, height: 150) } else { MediaImage(path: p) }
         } else if m.kind == "file", let p = m.mediaPath {
             HStack(spacing: 8) {
                 Image(systemName: "doc.fill")
@@ -348,6 +386,8 @@ struct Bubble: View {
             .foregroundColor(mine ? .white : Theme.text)
         } else if m.kind == "album" {
             AlbumView(m: m, mine: mine, selecting: selecting, onToggle: onToggle, onImage: onImage, onVideo: onVideo)
+        } else if isBigEmoji(m.body) {
+            Text(m.body ?? "").font(.system(size: 48))
         } else {
             Text(linkified(m.body ?? "", mine: mine))
                 .foregroundColor(mine ? .white : Theme.text)
@@ -381,6 +421,8 @@ struct ChatView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var pending: [PendingItem] = []
     @State private var showEmoji = false
+    @State private var showStk = false
+    @State private var showSearch = false
     @State private var videoPath: String?
     @StateObject private var recorder = VoiceRecorder()
     @State private var showFiles = false
@@ -416,6 +458,7 @@ struct ChatView: View {
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
                     .onTapGesture { if chat != nil { showInfo = true } }
+                pinBar
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 8) {
@@ -431,7 +474,11 @@ struct ChatView: View {
                     }
                     .onAppear {
                         if let last = thread.last { proxy.scrollTo(last.id, anchor: .bottom) }
+                        if store.jumpTo != nil {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { jump(proxy) }
+                        }
                     }
+                    .onChange(of: store.jumpTo) { _ in jump(proxy) }
                 }
                 if !error.isEmpty { ErrorText(text: error).padding(.horizontal, 14) }
                 if let rt = replyTo, editing == nil {
@@ -460,6 +507,7 @@ struct ChatView: View {
                     PendingTray(items: pending) { p in pending.removeAll { $0.id == p.id } }
                 }
                 if showEmoji { EmojiPanel { text += $0 } }
+                if showStk { StickerPanel(onEmoji: { sendEmojiSticker($0) }, onOwn: { sendOwnSticker($0) }) }
                 inputBar
             }
         }
@@ -477,11 +525,13 @@ struct ChatView: View {
                 }
             } else {
                 if chat != nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItemGroup(placement: .navigationBarTrailing) {
+                        moreMenu
                         Button { showInfo = true } label: { Image(systemName: "info.circle") }
                     }
                 } else {
                     ToolbarItemGroup(placement: .navigationBarTrailing) {
+                        moreMenu
                         Button { Calls.shared.start(peer: key, video: true) } label: { Image(systemName: "video.fill") }
                         Button { Calls.shared.start(peer: key) } label: { Image(systemName: "phone.fill") }
                     }
@@ -489,6 +539,7 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showForward) { forwardSheet }
+        .sheet(isPresented: $showSearch) { SearchSheet(only: key) { _, id in showSearch = false; store.jumpTo = id } }
         .sheet(isPresented: $showInfo) { ChatInfoSheet(key: key) { showInfo = false; dismiss() } }
         .onChange(of: text) { t in if !t.isEmpty { store.sendTyping(to: key) } }
         .confirmationDialog(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?"), isPresented: $showDelete, titleVisibility: .visible) {
@@ -546,6 +597,71 @@ struct ChatView: View {
         }
     }
 
+    private var isAdm: Bool {
+        guard let c = chat else { return false }
+        let r = store.myMember(key)?.role
+        return c.owner == store.myId || r == "admin" || r == "owner"
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Button { showSearch = true } label: { Label(tr("Поиск в чате", "Search in chat", "Im Chat suchen"), systemImage: "magnifyingglass") }
+            Button { Task { await store.setPref(key, "muted", !store.isMuted(key)) } } label: {
+                Label(store.isMuted(key) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten"), systemImage: "bell.slash")
+            }
+            Button { Task { await store.setPref(key, "pinned", !store.isPinned(key)) } } label: {
+                Label(store.isPinned(key) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften"), systemImage: "pin")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+    }
+
+    @ViewBuilder private var pinBar: some View {
+        if let c = chat, let pid = c.pinnedMsg, let pm = thread.first(where: { $0.id == pid }) {
+            HStack(spacing: 8) {
+                Text("📌")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(store.profiles[pm.sender]?.nick ?? "").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
+                    Text(pm.body ?? (pm.isSticker ? "🏷" : "📎")).font(.system(size: 13)).foregroundColor(Theme.textSecondary).lineLimit(1)
+                }
+                Spacer()
+                if isAdm {
+                    Button { Task { await store.pinMessage(c.id, nil) } } label: { Image(systemName: "xmark").foregroundColor(Theme.textSecondary) }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 6)
+            .background(Theme.card)
+            .contentShape(Rectangle())
+            .onTapGesture { store.jumpTo = pid }
+        }
+    }
+
+    private func jump(_ proxy: ScrollViewProxy) {
+        guard let j = store.jumpTo, thread.contains(where: { $0.id == j }) else { return }
+        withAnimation { proxy.scrollTo(j, anchor: .center) }
+        store.jumpTo = nil
+    }
+
+    private func sendEmojiSticker(_ e: String) {
+        let rid = replyTo?.id
+        replyTo = nil
+        showStk = false
+        Task { do { try await store.sendText(e, to: key, reply: rid) } catch { report(error) } }
+    }
+
+    private func sendOwnSticker(_ s: Sticker) {
+        let rid = replyTo?.id
+        replyTo = nil
+        showStk = false
+        Task { do { try await store.sendSticker(s.path, to: key, reply: rid) } catch { report(error) } }
+    }
+
+    private func pinAction(_ m: Message) -> (() -> Void)? {
+        guard isAdm, let c = chat else { return nil }
+        return { Task { await store.pinMessage(c.id, c.pinnedMsg == m.id ? nil : m.id) } }
+    }
+
     @ViewBuilder private func bubbleRow(_ m: Message) -> some View {
         let isMine: Bool = m.sender == store.myId
         let quotedMsg: Message? = m.replyTo.flatMap { rid in thread.first(where: { $0.id == rid }) }
@@ -557,6 +673,8 @@ struct ChatView: View {
                onEdit: canEdit ? { editing = m; text = m.body ?? "" } : nil,
                onForward: { selected = [m.id]; showForward = true },
                onDelete: { selected = [m.id]; showDelete = true },
+               onPin: pinAction(m),
+               pinnedNow: chat?.pinnedMsg == m.id,
                quoted: quotedMsg,
                showNick: chat != nil && !isMine,
                rx: store.reactions(of: m.id),
@@ -607,8 +725,13 @@ struct ChatView: View {
                             Image(systemName: "sparkles").font(.system(size: 20)).foregroundColor(Theme.accent)
                         }
                     }
-                    Button { showEmoji.toggle() } label: {
+                    Button { showEmoji.toggle(); if showEmoji { showStk = false } } label: {
                         Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 20)).foregroundColor(Theme.accent)
+                    }
+                    if editing == nil {
+                        Button { showStk.toggle(); if showStk { showEmoji = false } } label: {
+                            Image(systemName: "star.square").font(.system(size: 20)).foregroundColor(Theme.accent)
+                        }
                     }
                     TextField("", text: $text, prompt: Text(tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
                         .foregroundColor(Theme.text)

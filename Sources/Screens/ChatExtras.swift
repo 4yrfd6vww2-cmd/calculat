@@ -63,6 +63,74 @@ struct EmojiPanel: View {
     }
 }
 
+// MARK: - Стикеры
+
+struct StickerPanel: View {
+    @ObservedObject private var store = Store.shared
+    var onEmoji: (String) -> Void
+    var onOwn: (Sticker) -> Void
+    @State private var addItem: PhotosPickerItem?
+    @State private var err = ""
+
+    static let builtin: [String] = [
+        "😀", "😂", "🥹", "😍", "🥰", "😎", "🤩", "😭", "😡", "🤯", "🥳", "😴", "🤔", "🙄", "😘", "🤗",
+        "👍", "👎", "👏", "🙏", "💪", "🔥", "❤️", "💔", "🎉", "🎂", "☕", "🍕", "🐱", "🐶", "🦄", "🌈",
+        "⭐", "💯", "🚀", "🎁", "🌹", "🤝", "👋", "🫶"
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if !err.isEmpty { Text(err).font(.system(size: 12)).foregroundColor(.red).padding(.top, 4) }
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 62))], spacing: 6) {
+                    PhotosPicker(selection: $addItem, matching: .images) {
+                        Text("＋").font(.system(size: 30)).foregroundColor(Theme.accent).frame(width: 58, height: 58)
+                    }
+                    ForEach(store.stickers) { s in
+                        stickerCell(s)
+                    }
+                    ForEach(StickerPanel.builtin, id: \.self) { e in
+                        Button { onEmoji(e) } label: { Text(e).font(.system(size: 34)) }
+                    }
+                }
+                .padding(.horizontal, 6).padding(.vertical, 4)
+            }
+            .frame(height: 230)
+        }
+        .background(Theme.card)
+        .onChange(of: addItem) { item in
+            guard let item = item else { return }
+            Task { await add(item) }
+        }
+    }
+
+    private func stickerCell(_ s: Sticker) -> some View {
+        MediaImage(path: s.path)
+            .frame(width: 58, height: 58)
+            .onTapGesture { onOwn(s) }
+            .contextMenu {
+                Button(role: .destructive) { Task { await store.deleteSticker(s.id) } } label: {
+                    Label(tr("Удалить", "Delete", "Löschen"), systemImage: "trash")
+                }
+            }
+    }
+
+    @MainActor private func add(_ item: PhotosPickerItem) async {
+        err = ""
+        if let d = try? await item.loadTransferable(type: Data.self) {
+            if d.count > 4 * 1024 * 1024 {
+                err = tr("Стикер больше 4 МБ", "Sticker is larger than 4 MB", "Sticker ist größer als 4 MB")
+            } else {
+                let t = item.supportedContentTypes.first
+                let ext: String = t?.preferredFilenameExtension ?? "png"
+                let mime: String = t?.preferredMIMEType ?? "image/png"
+                do { try await store.addSticker(d, mime: mime, ext: ext) } catch { err = friendlyError((error as? APIError)?.message ?? error.localizedDescription) }
+            }
+        }
+        addItem = nil
+    }
+}
+
 // MARK: - Вложения в очереди
 
 struct MovieFile: Transferable {

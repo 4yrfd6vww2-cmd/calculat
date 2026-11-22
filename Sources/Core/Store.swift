@@ -14,6 +14,10 @@ final class Store: ObservableObject {
     @Published var chats: [Chat] = []
     @Published var members: [Member] = []
     @Published var reactions: [Reaction] = []
+    @Published var prefs: [String: ChatPref] = [:]
+    @Published var stickers: [Sticker] = []
+    @Published var jumpTo: Int?
+    private var stkLoaded = false
     @Published var recoveryEmail: String?
     @Published var loggedIn: Bool = API.shared.isLoggedIn
     @Published var selectedTab = 0
@@ -45,6 +49,9 @@ final class Store: ObservableObject {
         chats = []
         members = []
         reactions = []
+        prefs = [:]
+        stickers = []
+        stkLoaded = false
         recoveryEmail = nil
         knownMessageIds = []
         firstLoadDone = false
@@ -81,6 +88,16 @@ final class Store: ObservableObject {
                     URLQueryItem(name: "id", value: "in.(\(ck.joined(separator: ",")))"), URLQueryItem(name: "select", value: "*")]) {
                     chats = cc
                 }
+            }
+            if let pr: [ChatPref] = try? await API.shared.select("chat_prefs", [URLQueryItem(name: "select", value: "*")]) {
+                var d: [String: ChatPref] = [:]
+                for x in pr { d[x.key] = x }
+                prefs = d
+            }
+            if !stkLoaded, let st: [Sticker] = try? await API.shared.select("my_stickers", [
+                URLQueryItem(name: "select", value: "*"), URLQueryItem(name: "order", value: "id.desc")]) {
+                stickers = st
+                stkLoaded = true
             }
             let msgs: [Message] = try await API.shared.select("messages", [
                 URLQueryItem(name: "select", value: "*"),
@@ -131,7 +148,12 @@ final class Store: ObservableObject {
     private func notifyNew(_ msgs: [Message]) {
         let ids = Set(msgs.map { $0.id })
         if firstLoadDone {
-            let fresh = msgs.filter { !knownMessageIds.contains($0.id) && $0.sender != myId && ($0.receiver == myId || ($0.chatId.map { isMember($0) } ?? false)) }
+            let fresh = msgs.filter { m in
+                if knownMessageIds.contains(m.id) || m.sender == myId { return false }
+                let key: String = m.chatId.map { "c:" + $0 } ?? m.sender
+                if isMuted(key) { return false }
+                return m.receiver == myId || (m.chatId.map { isMember($0) } ?? false)
+            }
             if !fresh.isEmpty && Settings.shared.messageSound {
                 AudioServicesPlaySystemSound(1007)
             }
@@ -231,11 +253,91 @@ final class Store: ObservableObject {
         await refresh()
     }
 
+    // MARK: Prefs / pins / codes / stickers
+
+    func isMuted(_ k: String) -> Bool { prefs[k]?.muted ?? false }
+    func isPinned(_ k: String) -> Bool { prefs[k]?.pinned ?? false }
+
+    func setPref(_ k: String, _ field: String, _ v: Bool) async {
+        let cur = prefs[k]
+        do {
+            if cur != nil {
+                try await API.shared.update("chat_prefs", [
+                    URLQueryItem(name: "user_id", value: "eq.\(myId)"), URLQueryItem(name: "key", value: "eq.\(k)")], [field: v])
+            } else {
+                var row: [String: Any] = ["user_id": myId, "key": k]
+                row[field] = v
+                try await API.shared.insert("chat_prefs", row)
+            }
+            let m: Bool = field == "muted" ? v : (cur?.muted ?? false)
+            let p: Bool = field == "pinned" ? v : (cur?.pinned ?? false)
+            prefs[k] = ChatPref(key: k, muted: m, pinned: p)
+        } catch {
+        }
+    }
+
+    func pinMessage(_ cid: String, _ mid: Int?) async {
+        var v: [String: Any] = [:]
+        if let mid = mid { v["pinned_msg"] = mid } else { v["pinned_msg"] = NSNull() }
+        try? await API.shared.update("chats", [URLQueryItem(name: "id", value: "eq.\(cid)")], v)
+        await refresh()
+    }
+
+    func setDescription(_ cid: String, _ d: String) async throws {
+        var v: [String: Any] = [:]
+        let t = d.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { v["description"] = NSNull() } else { v["description"] = t }
+        try await API.shared.update("chats", [URLQueryItem(name: "id", value: "eq.\(cid)")], v)
+        await refresh()
+    }
+
+    func joinByCode(_ code: String) async throws -> String {
+        let data = try await API.shared.raw("POST", "/rest/v1/rpc/join_by_code", json: ["code": code.trimmingCharacters(in: .whitespaces)])
+        await refresh()
+        let s = String(data: data, encoding: .utf8) ?? ""
+        return s.trimmingCharacters(in: CharacterSet(charactersIn: "\" \n"))
+    }
+
+    func channelCounts(_ ids: [String]) async -> [String: Int] {
+        guard !ids.isEmpty else { return [:] }
+        guard let data = try? await API.shared.raw("POST", "/rest/v1/rpc/channel_counts", json: ["ids": ids]),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [:] }
+        var out: [String: Int] = [:]
+        for o in arr {
+            if let c = o["chat_id"] as? String, let n = o["n"] as? Int { out[c] = n }
+        }
+        return out
+    }
+
+    func addSticker(_ data: Data, mime: String, ext: String) async throws {
+        let path = "\(myId)/stickers/\(UUID().uuidString.lowercased()).\(ext)"
+        try await API.shared.upload(bucket: "chat-media", path: path, data: data, mime: mime)
+        try await API.shared.insert("my_stickers", ["path": path])
+        stkLoaded = false
+        await refresh()
+    }
+
+    func deleteSticker(_ id: Int) async {
+        try? await API.shared.delete("my_stickers", [URLQueryItem(name: "id", value: "eq.\(id)")])
+        stickers = stickers.filter { $0.id != id }
+    }
+
+    func sendSticker(_ path: String, to id: String, reply: Int? = nil) async throws {
+        let ext = (path as NSString).pathExtension
+        var row = tgt(id, ["sender": myId, "kind": "image", "media_path": path, "file_name": "sticker." + (ext.isEmpty ? "png" : ext)])
+        if let r = reply { row["reply_to"] = r }
+        try await API.shared.insert("messages", row)
+        await refresh()
+    }
+
     // MARK: Groups & channels
 
-    func createChat(kind: String, title: String, friends: [String]) async throws -> String {
+    func createChat(kind: String, title: String, friends: [String], desc: String = "") async throws -> String {
         let id = UUID().uuidString.lowercased()
-        try await API.shared.insert("chats", ["id": id, "kind": kind, "title": title, "owner": myId])
+        var row: [String: Any] = ["id": id, "kind": kind, "title": title, "owner": myId]
+        let d = desc.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !d.isEmpty { row["description"] = d }
+        try await API.shared.insert("chats", row)
         for f in friends {
             try? await API.shared.insert("chat_members", ["chat_id": id, "user_id": f, "role": "member"])
         }
@@ -363,7 +465,7 @@ final class Store: ObservableObject {
         for m in list where m.sender == myId {
             try await API.shared.delete("messages", [URLQueryItem(name: "id", value: "eq.\(m.id)")])
             var paths = (m.attachments ?? []).map { $0.path }
-            if let p = m.mediaPath { paths.append(p) }
+            if let p = m.mediaPath, !m.isSticker { paths.append(p) }
             for p in paths {
                 _ = try? await API.shared.raw("DELETE", "/storage/v1/object/chat-media/\(p)")
             }

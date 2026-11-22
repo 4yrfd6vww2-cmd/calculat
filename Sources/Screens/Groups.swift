@@ -7,6 +7,7 @@ struct CreateChatSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var channel = false
     @State private var title = ""
+    @State private var desc = ""
     @State private var picked = Set<String>()
     @State private var error = ""
     @State private var busy = false
@@ -20,6 +21,7 @@ struct CreateChatSheet: View {
                 }
                 .pickerStyle(.segmented)
                 TextField(tr("Название", "Title", "Titel"), text: $title)
+                TextField(tr("Описание (необязательно)", "Description (optional)", "Beschreibung (optional)"), text: $desc)
                 if !channel {
                     Section(tr("Участники из друзей", "Members from friends", "Mitglieder aus Freunden")) {
                         ForEach(store.friendIds.compactMap { store.profiles[$0] }) { p in
@@ -55,7 +57,7 @@ struct CreateChatSheet: View {
             do {
                 let k = try await store.createChat(kind: channel ? "channel" : "group",
                                                    title: title.trimmingCharacters(in: .whitespaces),
-                                                   friends: channel ? [] : Array(picked))
+                                                   friends: channel ? [] : Array(picked), desc: desc)
                 onCreated(k)
             } catch {
                 let m = (error as? APIError)?.message ?? error.localizedDescription
@@ -74,15 +76,21 @@ struct FindChannelSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var q = ""
     @State private var results: [Chat] = []
+    @State private var counts: [String: Int] = [:]
 
     var body: some View {
         NavigationStack {
             List {
                 TextField(tr("Название канала", "Channel title", "Kanaltitel"), text: $q)
-                    .onChange(of: q) { v in Task { results = await store.findChannels(v) } }
+                    .onChange(of: q) { v in Task { results = await store.findChannels(v); counts = await store.channelCounts(results.map { $0.id }) } }
                 ForEach(results) { c in
                     HStack {
-                        Text("📢 " + c.title).onTapGesture { onOpen("c:" + c.id) }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("📢 " + c.title)
+                            Text(subLine(c)).font(.system(size: 12)).foregroundColor(.secondary).lineLimit(2)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { onOpen("c:" + c.id) }
                         Spacer()
                         if store.isMember(c.id) {
                             Image(systemName: "checkmark").foregroundColor(Theme.accent)
@@ -105,6 +113,15 @@ struct FindChannelSheet: View {
     }
 }
 
+extension FindChannelSheet {
+    fileprivate func subLine(_ c: Chat) -> String {
+        var parts: [String] = []
+        if let n = counts[c.id] { parts.append(tr("Подписчиков: ", "Subscribers: ", "Abonnenten: ") + String(n)) }
+        if let d = c.description, !d.isEmpty { parts.append(d) }
+        return parts.joined(separator: " · ")
+    }
+}
+
 struct ChatInfoSheet: View {
     @ObservedObject private var store = Store.shared
     let key: String
@@ -113,6 +130,9 @@ struct ChatInfoSheet: View {
     @State private var nick = ""
     @State private var error = ""
     @State private var avItem: PhotosPickerItem?
+    @State private var editDesc = false
+    @State private var descText = ""
+    @State private var copied = false
 
     var body: some View {
         NavigationStack {
@@ -127,6 +147,31 @@ struct ChatInfoSheet: View {
                             Avatar(nick: c.title, url: c.avatarUrl, size: 56)
                             Text((c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")) + " · \(mem.count)")
                                 .foregroundColor(.secondary)
+                        }
+                        if let d = c.description, !d.isEmpty, !editDesc {
+                            Text(d).font(.system(size: 14))
+                        }
+                        if isAdmin {
+                            if editDesc {
+                                TextField(tr("Описание", "Description", "Beschreibung"), text: $descText)
+                                Button(tr("Сохранить", "Save", "Speichern")) {
+                                    Task { try? await store.setDescription(c.id, descText); editDesc = false }
+                                }
+                            } else {
+                                Button("✏️ " + tr("Описание", "Description", "Beschreibung")) { descText = c.description ?? ""; editDesc = true }
+                            }
+                        }
+                        if let code = c.inviteCode, !code.isEmpty {
+                            HStack {
+                                Text(tr("Код приглашения: ", "Invite code: ", "Einladungscode: ")).foregroundColor(.secondary)
+                                Text(code).fontWeight(.bold)
+                                Spacer()
+                                Button(copied ? tr("Скопировано", "Copied", "Kopiert") : tr("Копировать", "Copy", "Kopieren")) {
+                                    UIPasteboard.general.string = code
+                                    copied = true
+                                }
+                                .buttonStyle(.borderless)
+                            }
                         }
                         if isAdmin {
                             PhotosPicker(selection: $avItem, matching: .images) {
@@ -201,6 +246,97 @@ struct ChatInfoSheet: View {
             } else {
                 error = tr("Пользователь не найден", "User not found", "Nutzer nicht gefunden")
             }
+        }
+    }
+}
+
+struct JoinCodeSheet: View {
+    @ObservedObject private var store = Store.shared
+    var onJoined: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var code = ""
+    @State private var error = ""
+
+    var body: some View {
+        NavigationStack {
+            List {
+                TextField(tr("Код приглашения", "Invite code", "Einladungscode"), text: $code)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 13)) }
+            }
+            .navigationTitle(tr("Войти по коду", "Join by code", "Per Code beitreten"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(tr("Отмена", "Cancel", "Abbrechen")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(tr("Войти", "Join", "Beitreten")) { join() }.disabled(code.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func join() {
+        Task {
+            do {
+                let cid = try await store.joinByCode(code)
+                onJoined("c:" + cid)
+            } catch {
+                let m = (error as? APIError)?.message ?? error.localizedDescription
+                self.error = m.contains("not_found") ? tr("Такого кода нет", "No such code", "Code nicht gefunden") : friendlyError(m)
+            }
+        }
+    }
+}
+
+/// Поиск по загруженным сообщениям (последние ~1000). only — ключ одного чата или nil для всех.
+struct SearchSheet: View {
+    @ObservedObject private var store = Store.shared
+    let only: String?
+    var onPick: (String, Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var q = ""
+
+    private func keyOf(_ m: Message) -> String {
+        if let c = m.chatId { return "c:" + c }
+        return m.sender == store.myId ? (m.receiver ?? "") : m.sender
+    }
+
+    private var found: [Message] {
+        let n = q.trimmingCharacters(in: .whitespaces).lowercased()
+        guard n.count >= 2 else { return [] }
+        let list = store.messages.filter { m in
+            (only == nil || keyOf(m) == only) && (m.body ?? "").lowercased().contains(n)
+        }
+        return Array(list.sorted { $0.createdAt > $1.createdAt }.prefix(50))
+    }
+
+    private func titleOf(_ k: String) -> String {
+        store.chatByKey(k)?.title ?? store.profiles[k]?.nick ?? ""
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                TextField(tr("Что ищем?", "What to find?", "Was suchen?"), text: $q)
+                ForEach(found) { m in
+                    Button {
+                        onPick(keyOf(m), m.id)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(titleOf(keyOf(m)) + " · " + timeFormatter.string(from: m.createdAt))
+                                .font(.system(size: 12)).foregroundColor(Theme.accent)
+                            Text(m.body ?? "").font(.system(size: 14)).lineLimit(2).foregroundColor(.primary)
+                        }
+                    }
+                }
+                if found.isEmpty && q.trimmingCharacters(in: .whitespaces).count >= 2 {
+                    Text(tr("Ничего не найдено", "Nothing found", "Nichts gefunden")).foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle(tr("Поиск по сообщениям", "Search messages", "Nachrichten suchen"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(tr("Закрыть", "Close", "Schließen")) { dismiss() } } }
         }
     }
 }
