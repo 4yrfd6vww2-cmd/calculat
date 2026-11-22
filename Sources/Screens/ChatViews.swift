@@ -120,11 +120,7 @@ struct ChatsView: View {
                                         if let pr = p.profile {
                                             Avatar(nick: pr.nick, url: pr.avatarUrl, size: 46)
                                         } else {
-                                            ZStack {
-                                                Circle().fill(Theme.accentGradient)
-                                                Text(p.chat?.kind == "channel" ? "📢" : "👥").font(.system(size: 22))
-                                            }
-                                            .frame(width: 46, height: 46)
+                                            Avatar(nick: p.title, url: p.chat?.avatarUrl, size: 46)
                                         }
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(p.title)

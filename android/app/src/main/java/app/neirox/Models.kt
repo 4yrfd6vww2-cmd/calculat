@@ -32,13 +32,15 @@ data class Message(
     val replyTo: Long? = null
 )
 
-data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String)
+data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String, val avatarUrl: String? = null) {
+    fun asProfile() = Profile(id, title, avatarUrl, null)
+}
 
 data class Member(val chatId: String, val userId: String, val role: String, val lastRead: Long)
 
 data class Reaction(val messageId: Long, val userId: String, val emoji: String)
 
-fun parseChat(o: JSONObject) = Chat(o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"))
+fun parseChat(o: JSONObject) = Chat(o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"), o.str("avatar_url"))
 
 fun parseMember(o: JSONObject) = Member(o.getString("chat_id"), o.getString("user_id"), o.optString("role", "member"), o.optLong("last_read", 0L))
 

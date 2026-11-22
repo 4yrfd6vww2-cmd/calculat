@@ -335,6 +335,19 @@ object Store {
         refresh()
     }
 
+    suspend fun setRole(cid: String, uid: String, role: String) {
+        Api.update("chat_members?chat_id=eq.$cid&user_id=eq.$uid", JSONObject().put("role", role))
+        refresh()
+    }
+
+    suspend fun setChatAvatar(cid: String, data: ByteArray) {
+        val path = "$myId/chat-$cid.jpg"
+        Api.upload("avatars", path, data, "image/jpeg", upsert = true)
+        val url = Api.publicUrl("avatars", path) + "?v=${System.currentTimeMillis() / 1000}"
+        Api.update("chats?id=eq.$cid", JSONObject().put("avatar_url", url))
+        refresh()
+    }
+
     suspend fun renameChat(cid: String, title: String) {
         Api.update("chats?id=eq.$cid", JSONObject().put("title", title))
         refresh()

@@ -132,10 +132,7 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (r.profile != null) Avatar(r.profile, 48.dp)
-                    else Box(
-                        Modifier.size(48.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Accent2, Accent))),
-                        contentAlignment = Alignment.Center
-                    ) { Text(if (r.chat?.kind == "channel") "📢" else "👥", fontSize = 22.sp) }
+                    else if (r.chat != null) Avatar(r.chat.asProfile(), 48.dp)
                     Column(Modifier.padding(start = 14.dp).weight(1f)) {
                         Text(r.title, color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val who = if (r.chat != null && last != null && last.sender != Store.myId) (Store.profiles[last.sender]?.nick ?: "") + ": " else ""
@@ -504,12 +501,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         } else {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
-                if (chat != null) {
-                    Box(
-                        Modifier.size(38.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Accent2, Accent))),
-                        contentAlignment = Alignment.Center
-                    ) { Text(if (chat.kind == "channel") "📢" else "👥", fontSize = 18.sp) }
-                } else Avatar(friend, 38.dp)
+                if (chat != null) Avatar(chat.asProfile(), 38.dp) else Avatar(friend, 38.dp)
                 val typers = Store.typingIn(friendId)
                 val sub = when {
                     typers.isNotEmpty() -> (if (chat != null) typers.joinToString(", ") { it.nick } + " " else "") + tr("печатает…", "typing…", "tippt …")

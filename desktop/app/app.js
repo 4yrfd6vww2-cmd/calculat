@@ -576,7 +576,7 @@ function preview(m, noPre) {
 }
 function nickOf(id) { const p = D.profiles[id]; return p ? p.nick : '?'; }
 function lastOf(id) { return thread(id).slice(-1)[0]; }
-function chatAvatar(c, size) { return avatarHtml({ nick: c.title }, size); }
+function chatAvatar(c, size) { return avatarHtml({ nick: c.title, avatar_url: c.avatar_url }, size); }
 function renderList() {
   const items = [];
   friendIds().forEach(id => { const p = D.profiles[id]; if (p) items.push({ key: id, title: p.nick, av: avatarHtml(p, 46), tag: '' }); });
@@ -1388,6 +1388,8 @@ document.addEventListener('click', async e => {
     case 'chat-leave': chatLeave(); break;
     case 'chat-del': chatDelete(); break;
     case 'chat-rename': chatRename(); break;
+    case 'chat-av': $('#pick-chat-avatar').click(); break;
+    case 'm-role': memberRole(id, el.dataset.r); break;
     case 'chat-rename-go': chatRenameGo(); break;
     case 'call-accept': callAccept(); break;
     case 'call-decline': callDecline(); break;
@@ -1441,6 +1443,18 @@ $('#pick-avatar').addEventListener('change', async e => {
     await upd('profiles', { id: 'eq.' + myId() }, { avatar_url: publicUrl('avatars', path) + '?v=' + Date.now() });
     await refresh();
   } catch (er) { U.error = friendly(er); renderAll(); }
+});
+$('#pick-chat-avatar').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f || !isKey(U.chat)) return;
+  try {
+    const cid = cidOf(U.chat);
+    const b = await compress(f);
+    const path = myId() + '/chat-' + cid + '.jpg';
+    await uploadFile('avatars', path, b, 'image/jpeg', true);
+    await upd('chats', { id: 'eq.' + cid }, { avatar_url: publicUrl('avatars', path) + '?v=' + Date.now() });
+    await refresh();
+  } catch (er) { toast(friendly(er)); }
 });
 $('#pick-music').addEventListener('change', e => {
   Array.from(e.target.files).forEach(f => P.tracks.push({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f) }));
@@ -1526,17 +1540,19 @@ function openChatInfo() {
   const c = chatByKey(key), me = myMember(key); if (!c) return;
   const mem = D.members[c.id] || [];
   const owner = me && me.role === 'owner';
+  const adm = owner || (me && me.role === 'admin');
   const fr = friendIds().filter(id => !mem.some(x => x.user_id === id)).map(id => D.profiles[id]).filter(Boolean);
   let h = '<div class="muted" style="margin-bottom:8px">' + (c.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + ' · ' + mem.length + '</div>' +
-    '<div class="pickbox">' + mem.map(x => '<div class="pick">' + avatarHtml(D.profiles[x.user_id], 30) + '<div style="flex:1">' + esc(nickOf(x.user_id)) + (x.role === 'owner' ? ' <span class="tag">' + t('создатель', 'owner', 'Besitzer') + '</span>' : '') + '</div>' +
-      (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button>' : '') + '</div>').join('') + '</div>';
+    '<div class="pickbox">' + mem.map(x => '<div class="pick">' + avatarHtml(D.profiles[x.user_id], 30) + '<div style="flex:1">' + esc(nickOf(x.user_id)) + (x.role === 'owner' ? ' <span class="tag">' + t('создатель', 'owner', 'Besitzer') + '</span>' : x.role === 'admin' ? ' <span class="tag">' + t('админ', 'admin', 'Admin') + '</span>' : '') + '</div>' +
+      (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-role" data-id="' + esc(x.user_id) + '" data-r="' + (x.role === 'admin' ? 'member' : 'admin') + '">' + (x.role === 'admin' ? t('Снять админа', 'Remove admin', 'Admin entfernen') : t('Админ', 'Admin', 'Admin')) + '</button> <button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button>' : '') + '</div>').join('') + '</div>';
   if (owner && c.kind === 'group') {
     h += '<div class="muted" style="margin:10px 0 4px">' + t('Добавить', 'Add', 'Hinzufügen') + '</div><div class="pickbox">' +
       (fr.map(p => '<div class="pick" data-act="m-add" data-id="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div style="flex:1">' + esc(p.nick) + '</div><span class="muted">+</span></div>').join('') || '<div class="muted">' + t('Все друзья уже в группе', 'All friends are in the group', 'Alle Freunde sind in der Gruppe') + '</div>') + '</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px"><input class="field" id="d-mnick" placeholder="' + t('Ник', 'Nick', 'Nick') + '"><button class="btn sm" data-act="m-add-nick">' + t('Добавить', 'Add', 'Hinzufügen') + '</button></div>';
   }
   const btns = [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']];
-  if (owner) { btns.push(['chat-rename', t('Переименовать', 'Rename', 'Umbenennen'), 'ghost']); btns.push(['chat-del', t('Удалить', 'Delete', 'Löschen'), 'danger']); }
+  if (adm) { btns.push(['chat-av', t('Аватарка', 'Avatar', 'Avatar'), 'ghost']); btns.push(['chat-rename', t('Переименовать', 'Rename', 'Umbenennen'), 'ghost']); }
+  if (owner) { btns.push(['chat-del', t('Удалить', 'Delete', 'Löschen'), 'danger']); }
   else if (me) btns.push(['chat-leave', c.kind === 'channel' ? t('Отписаться', 'Unsubscribe', 'Abbestellen') : t('Выйти', 'Leave', 'Verlassen'), 'danger']);
   openDialog(c.title, h, btns);
 }
@@ -1547,6 +1563,10 @@ async function memberAdd(uid) {
 }
 async function memberAddNick() {
   try { const ids = await nicksToIds(val('d-mnick')); if (!ids.length) { toast(t('Никого не найдено', 'Nobody found', 'Niemand gefunden')); return; } for (const u of ids) { try { await ins('chat_members', { chat_id: cidOf(U.chat), user_id: u, role: 'member' }); } catch (e) { } } await refresh(); } catch (e) { toast(friendly(e)); }
+  openChatInfo();
+}
+async function memberRole(uid, r) {
+  try { await upd('chat_members', { chat_id: 'eq.' + cidOf(U.chat), user_id: 'eq.' + uid }, { role: r }); await refresh(); } catch (e) { toast(friendly(e)); }
   openChatInfo();
 }
 async function memberKick(uid) {

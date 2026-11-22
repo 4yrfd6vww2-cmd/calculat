@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct CreateChatSheet: View {
     @ObservedObject private var store = Store.shared
@@ -111,6 +112,7 @@ struct ChatInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var nick = ""
     @State private var error = ""
+    @State private var avItem: PhotosPickerItem?
 
     var body: some View {
         NavigationStack {
@@ -121,8 +123,16 @@ struct ChatInfoSheet: View {
                     let isAdmin = isOwner || role == "admin"
                     let mem = store.members.filter { $0.chatId == c.id }
                     Section {
-                        Text((c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")) + " · \(mem.count)")
-                            .foregroundColor(.secondary)
+                        HStack(spacing: 12) {
+                            Avatar(nick: c.title, url: c.avatarUrl, size: 56)
+                            Text((c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")) + " · \(mem.count)")
+                                .foregroundColor(.secondary)
+                        }
+                        if isAdmin {
+                            PhotosPicker(selection: $avItem, matching: .images) {
+                                Text("🖼 " + tr("Сменить аватарку", "Change avatar", "Avatar ändern"))
+                            }
+                        }
                     }
                     if c.kind == "group" && isAdmin {
                         Section(tr("Добавить участника", "Add member", "Mitglied hinzufügen")) {
@@ -143,6 +153,10 @@ struct ChatInfoSheet: View {
                                          + (m.role == "owner" ? " 👑" : (m.role == "admin" ? " ★" : "")))
                                     Spacer()
                                     if isOwner && m.userId != store.myId {
+                                        Button { Task { await store.setRole(c.id, m.userId, m.role == "admin" ? "member" : "admin") } } label: {
+                                            Image(systemName: m.role == "admin" ? "star.fill" : "star")
+                                        }
+                                        .buttonStyle(.borderless)
                                         Button { Task { try? await store.kickMember(c.id, m.userId) } } label: { Image(systemName: "xmark") }
                                             .buttonStyle(.borderless)
                                     }
@@ -161,6 +175,15 @@ struct ChatInfoSheet: View {
                             }
                         }
                     }
+                }
+            }
+            .onChange(of: avItem) { item in
+                guard let item = item, let cid = store.chatByKey(key)?.id else { return }
+                Task {
+                    if let d = try? await item.loadTransferable(type: Data.self), let jpg = compressedJPEG(from: d, maxSide: 800) {
+                        try? await store.setChatAvatar(cid, jpg)
+                    }
+                    avItem = nil
                 }
             }
             .navigationTitle(store.chatByKey(key)?.title ?? "")

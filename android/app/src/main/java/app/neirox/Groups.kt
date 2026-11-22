@@ -131,15 +131,33 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
     var showAdd by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val avPicker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            try {
+                val jpg = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { compressImage(ctx, uri) }
+                if (jpg != null) Store.setChatAvatar(cid, jpg)
+            } catch (e: Exception) { error = friendlyError(e.message ?: "") }
+        }
+    }
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(chat.title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()).heightIn(max = 460.dp)) {
-                Text(
-                    (if (chat.kind == "channel") tr("Канал", "Channel", "Kanal") else tr("Группа", "Group", "Gruppe")) + " · " + mem.size,
-                    color = TextSecondary, fontSize = 13.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(chat.asProfile(), 56.dp)
+                    Text(
+                        (if (chat.kind == "channel") tr("Канал", "Channel", "Kanal") else tr("Группа", "Group", "Gruppe")) + " · " + mem.size,
+                        color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp)
+                    )
+                }
+                if (isAdmin) {
+                    Text(
+                        "🖼 " + tr("Сменить аватарку", "Change avatar", "Avatar ändern"), color = Accent,
+                        modifier = Modifier.clickable { avPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(vertical = 8.dp)
+                    )
+                }
                 if (chat.kind == "group" && isAdmin) {
                     Text(
                         "＋ " + tr("Добавить участника", "Add member", "Mitglied hinzufügen"), color = Accent,
@@ -179,6 +197,12 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                                 color = Txt, modifier = Modifier.padding(start = 10.dp).weight(1f)
                             )
                             if (isOwner && m.userId != Store.myId) {
+                                Text(
+                                    if (m.role == "admin") "★" else "☆", color = Accent, fontSize = 20.sp,
+                                    modifier = Modifier.clickable {
+                                        scope.launch { try { Store.setRole(cid, m.userId, if (m.role == "admin") "member" else "admin") } catch (e: Exception) { } }
+                                    }.padding(8.dp)
+                                )
                                 Text("✕", color = TextSecondary, modifier = Modifier.clickable {
                                     scope.launch { try { Store.kickMember(cid, m.userId) } catch (e: Exception) { } }
                                 }.padding(8.dp))

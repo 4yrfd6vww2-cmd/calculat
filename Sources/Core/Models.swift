@@ -54,6 +54,7 @@ struct Chat: Codable, Identifiable, Hashable {
     var title: String
     var description: String?
     let owner: String
+    var avatarUrl: String?
 }
 
 struct Member: Codable, Hashable {

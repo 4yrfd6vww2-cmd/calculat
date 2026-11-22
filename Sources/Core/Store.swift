@@ -276,6 +276,20 @@ final class Store: ObservableObject {
         await refresh()
     }
 
+    func setRole(_ cid: String, _ uid: String, _ role: String) async {
+        try? await API.shared.update("chat_members", [
+            URLQueryItem(name: "chat_id", value: "eq.\(cid)"), URLQueryItem(name: "user_id", value: "eq.\(uid)")], ["role": role])
+        await refresh()
+    }
+
+    func setChatAvatar(_ cid: String, _ data: Data) async throws {
+        let path = "\(myId)/chat-\(cid).jpg"
+        try await API.shared.upload(bucket: "avatars", path: path, data: data, mime: "image/jpeg", upsert: true)
+        let url = API.shared.publicURL(bucket: "avatars", path: path) + "?v=\(Int(Date().timeIntervalSince1970))"
+        try await API.shared.update("chats", [URLQueryItem(name: "id", value: "eq.\(cid)")], ["avatar_url": url])
+        await refresh()
+    }
+
     func deleteChat(_ cid: String) async throws {
         try await API.shared.delete("chats", [URLQueryItem(name: "id", value: "eq.\(cid)")])
         await refresh()
