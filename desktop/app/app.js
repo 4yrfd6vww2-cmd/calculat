@@ -223,7 +223,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {} };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, stickers: [], stkLoaded: false };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -253,6 +253,8 @@ async function refresh() {
       const rm = {}; rx.forEach(x => { (rm[x.message_id] = rm[x.message_id] || []).push(x); });
       D.reactions = rm;
     } catch (e) { }
+    try { const pr = await sel('chat_prefs', { select: '*' }); const pm = {}; pr.forEach(x => { pm[x.key] = x; }); D.prefs = pm; } catch (e) { }
+    if (!D.stkLoaded) { try { D.stickers = await sel('my_stickers', { select: '*', order: 'id.desc' }); D.stkLoaded = true; } catch (e) { } }
     const ids = new Set();
     D.friendships.forEach(f => { ids.add(f.requester); ids.add(f.addressee); });
     msgs.forEach(m => { if (m.sender) ids.add(m.sender); if (m.receiver) ids.add(m.receiver); });
@@ -275,10 +277,31 @@ async function refresh() {
   markReadIfOpen();
 }
 
+const isMuted = k => !!(D.prefs[k] && D.prefs[k].muted);
+const isPinned = k => !!(D.prefs[k] && D.prefs[k].pinned);
+async function setPref(k, field, v) {
+  const cur = D.prefs[k];
+  try {
+    const o = {}; o[field] = v;
+    if (cur) await upd('chat_prefs', { user_id: 'eq.' + myId(), key: 'eq.' + k }, o);
+    else await ins('chat_prefs', Object.assign({ user_id: myId(), key: k }, o));
+    D.prefs[k] = Object.assign({ key: k }, cur || {}, o);
+  } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+const BIGEMO = /^(?:[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2190-\u2BFF\u00A9\u00AE\u203C-\u3299]|\u200D|\uFE0F|\s)+$/;
+function isBigEmoji(b) {
+  if (!b || b.length > 24 || !BIGEMO.test(b) || !b.trim()) return false;
+  const n = (b.match(/[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2190-\u2BFF\u00A9\u00AE\u203C-\u3299]/g) || []).length;
+  return n >= 1 && n <= 5;
+}
+const isSticker = m => m.kind === 'image' && /^sticker\./.test(m.file_name || '');
+const STK = ['😀', '😂', '🥹', '😍', '🥰', '😎', '🤩', '😭', '😡', '🤯', '🥳', '😴', '🤔', '🙄', '😘', '🤗', '👍', '👎', '👏', '🙏', '💪', '🔥', '❤️', '💔', '🎉', '🎂', '☕', '🍕', '🐱', '🐶', '🦄', '🌈', '⭐', '💯', '🚀', '🎁', '🌹', '🤝', '👋', '🫶'];
+
 function notifyNew(msgs) {
   const ids = new Set(msgs.map(m => m.id));
   if (firstLoadDone) {
-    const fresh = msgs.filter(m => !knownIds.has(m.id) && m.sender !== myId() && (m.receiver === myId() || (m.chat_id && D.members[m.chat_id])));
+    const fresh = msgs.filter(m => !knownIds.has(m.id) && m.sender !== myId() && (m.receiver === myId() || (m.chat_id && D.members[m.chat_id])) && !isMuted(m.chat_id ? 'c:' + m.chat_id : m.sender));
     if (fresh.length) {
       if (S.sound) beep();
       if (!document.hasFocus() && 'Notification' in window) {
@@ -385,7 +408,7 @@ async function deleteForAll(list) {
   for (const m of list) {
     if (m.sender !== myId()) continue;
     await del('messages', { id: 'eq.' + m.id });
-    if (m.media_path) raw('DELETE', '/storage/v1/object/chat-media/' + m.media_path).catch(() => { });
+    if (m.media_path && !isSticker(m)) raw('DELETE', '/storage/v1/object/chat-media/' + m.media_path).catch(() => { });
     attsOf(m).forEach(a => raw('DELETE', '/storage/v1/object/chat-media/' + a.path).catch(() => { }));
   }
   await refresh();
@@ -582,15 +605,16 @@ function renderList() {
   friendIds().forEach(id => { const p = D.profiles[id]; if (p) items.push({ key: id, title: p.nick, av: avatarHtml(p, 46), tag: '' }); });
   myChatKeys().forEach(k => { const c = D.chats[cidOf(k)]; items.push({ key: k, title: c.title, av: chatAvatar(c, 46), tag: c.kind === 'channel' ? t('канал', 'channel', 'Kanal') : '' }); });
   items.forEach(it => { const l = lastOf(it.key); it.last = l; it.at = l ? l.created_at : ''; });
-  items.sort((a, b) => (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
+  items.sort((a, b) => (isPinned(b.key) - isPinned(a.key)) || (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
   let h = '<div class="chat-item ' + (U.chat === 'ai' ? 'on' : '') + '" data-act="open" data-v="ai">' +
     '<div class="avatar" style="width:46px;height:46px;font-size:22px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div>' +
     '<div class="grow" style="min-width:0"><div class="title">' + t('Умный Чат (ИИ)', 'Smart Chat (AI)', 'Smarter Chat (KI)') + '</div><div class="prev">' + t('Вопросы и картинки', 'Questions and images', 'Fragen und Bilder') + '</div></div></div>';
+  h += '<div class="chat-item" data-act="s-open"><div class="avatar" style="width:46px;height:46px;font-size:20px;background:var(--card)">🔍</div><div class="grow" style="min-width:0"><div class="title">' + t('Поиск по сообщениям', 'Search messages', 'Nachrichten suchen') + '</div></div></div>';
   items.forEach(it => {
     const u = unread(it.key);
     const who = isKey(it.key) && it.last && it.last.sender !== myId() ? nickOf(it.last.sender) + ': ' : '';
     h += '<div class="chat-item ' + (U.chat === it.key ? 'on' : '') + '" data-act="open" data-v="' + esc(it.key) + '">' + it.av +
-      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + esc(it.title) + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
+      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + (isPinned(it.key) ? '📌 ' : '') + esc(it.title) + (isMuted(it.key) ? ' 🔕' : '') + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
       (u ? '<span class="unread">' + u + '</span>' : '') + '</div>';
   });
   if (!items.length) h += '<div class="empty">' + t('Добавь друзей на вкладке «Друзья», чтобы начать переписку.', 'Add friends in the Friends tab to start chatting.', 'Füge im Tab „Freunde“ Freunde hinzu, um zu chatten.') + '</div>';
@@ -606,6 +630,7 @@ function buildPane() {
   if (REC.on && REC.to !== U.chat) cancelRec();
   pane.innerHTML = icons(
     '<div class="chead" id="chead"></div>' +
+    '<div id="pinbar"></div>' +
     '<div class="msgs" id="msgs"></div>' +
     '<div id="cerr"></div>' +
     '<div id="banner"></div>' +
@@ -664,13 +689,19 @@ function renderPane() {
     if (key) {
       const cnt = (D.members[cidOf(U.chat)] || []).length;
       head = '<div class="hd-click" data-act="chat-info" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0">' + (ch ? chatAvatar(ch, 40) : '') +
-        '<div style="min-width:0"><div class="title">' + esc(ch ? ch.title : '') + '</div><div class="sub">' + esc(typingLine() || (ch ? (ch.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + (cnt ? ' · ' + cnt : '') : '')) + '</div></div></div>';
+        '<div style="min-width:0"><div class="title">' + esc(ch ? ch.title : '') + '</div><div class="sub">' + esc(typingLine() || (ch ? (ch.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + (cnt ? ' · ' + cnt : '') : '')) + '</div></div></div>' + chatTools();
     } else {
       head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? p.nick : '') + '</div><div class="sub">' + esc(statusLine(p)) + '</div></div>' +
-        (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
+        chatTools() + (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
     }
   }
   setHTML($('#chead'), head);
+  let pb = '';
+  if (!ai && key && ch && ch.pinned_msg) {
+    const pm = D.messages.find(x => x.id === ch.pinned_msg);
+    if (pm) pb = '<div class="pinbar"><span class="grow" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="goto" data-id="' + pm.id + '">📌 <b>' + esc(nickOf(pm.sender)) + '</b> ' + esc(preview(pm, true)) + '</span>' + (myAdmin(U.chat) ? '<button class="pinx" data-act="unpin">✕</button>' : '') + '</div>';
+  }
+  setHTML($('#pinbar'), pb);
 
   const msgs = $('#msgs');
   const atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
@@ -707,7 +738,7 @@ function renderPane() {
   }
   if (ai) setHTML($('#tray'), '');
   const emo = $('#emoji');
-  if (emo) { emo.classList.toggle('hidden', !U.emoji); setHTML(emo, U.emoji ? emojiHtml() : ''); }
+  if (emo) { emo.classList.toggle('hidden', !U.emoji); setHTML(emo, U.emoji ? emojiHtml() : ''); if (U.emoji) hydrateImages(emo); }
   let changed;
   if (ai) {
     if (msgs._kind !== 'ai') { msgs.innerHTML = ''; msgs._rows = null; msgs._kind = 'ai'; msgs._h = undefined; }
@@ -723,6 +754,90 @@ function renderPane() {
   const sb = $('#sendbtn');
   if (sb) sb.innerHTML = icons(U.editing ? '{i:check}' : '{i:send}');
 }
+const myAdmin = k => { const m = myMember(k); return !!m && (m.role === 'owner' || m.role === 'admin'); };
+function chatTools() {
+  const k = U.chat;
+  return '<button class="icon-btn" data-act="s-open" title="' + t('Поиск', 'Search', 'Suche') + '">🔍</button>' +
+    '<button class="icon-btn" data-act="cp-pin" data-id="' + esc(k) + '" title="' + t('Закрепить чат', 'Pin chat', 'Chat anheften') + '">' + (isPinned(k) ? '📌' : '📍') + '</button>' +
+    '<button class="icon-btn" data-act="cp-mute" data-id="' + esc(k) + '" title="' + t('Уведомления', 'Notifications', 'Benachrichtigungen') + '">' + (isMuted(k) ? '🔕' : '🔔') + '</button>';
+}
+function gotoMsg(id) {
+  const box = $('#msgs'); const r = box && box._rows && box._rows[id];
+  if (!r) { toast(t('Сообщение не найдено', 'Message not found', 'Nachricht nicht gefunden')); return; }
+  r.scrollIntoView({ block: 'center' });
+  r.classList.add('flash'); setTimeout(() => r.classList.remove('flash'), 1600);
+}
+function openSearch() {
+  hideCtx();
+  openDialog(t('Поиск по сообщениям', 'Search messages', 'Nachrichten suchen'),
+    '<input class="field" id="d-sq" placeholder="' + t('Что искать', 'What to find', 'Suchbegriff') + '"><div id="d-sr" class="pickbox" style="margin-top:8px;max-height:340px;overflow:auto"></div>',
+    [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
+  setTimeout(() => { const e = $('#d-sq'); if (e) e.focus(); }, 30);
+}
+function doMsgSearch(q) {
+  const box = $('#d-sr'); if (!box) return;
+  q = q.trim().toLowerCase();
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  const res = D.messages.filter(m => (m.body || '').toLowerCase().indexOf(q) >= 0 || (m.file_name || '').toLowerCase().indexOf(q) >= 0).slice(-50).reverse();
+  box.innerHTML = res.length ? res.map(m => {
+    const k = m.chat_id ? 'c:' + m.chat_id : (m.sender === myId() ? m.receiver : m.sender);
+    const c = isKey(k) ? ((D.chats[cidOf(k)] || {}).title || '') : nickOf(k);
+    return '<div class="pick" data-act="s-go" data-id="' + m.id + '" data-v="' + esc(k) + '"><div style="flex:1;min-width:0"><div class="muted" style="font-size:12px">' + esc(c) + ' · ' + esc(nickOf(m.sender)) + ' · ' + esc(new Date(m.created_at).toLocaleDateString()) + '</div><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(preview(m, true)) + '</div></div></div>';
+  }).join('') : '<div class="muted">' + t('Ничего не найдено', 'Nothing found', 'Nichts gefunden') + '</div>';
+}
+function showChatCtx(k, x, y) {
+  const c = $('#ctx');
+  c.innerHTML = icons('<button data-act="cp-pin" data-id="' + esc(k) + '">' + (isPinned(k) ? '📌 ' + t('Открепить', 'Unpin', 'Lösen') : '📍 ' + t('Закрепить', 'Pin', 'Anheften')) + '</button>' +
+    '<button data-act="cp-mute" data-id="' + esc(k) + '">' + (isMuted(k) ? '🔔 ' + t('Включить уведомления', 'Unmute', 'Ton an') : '🔕 ' + t('Выключить уведомления', 'Mute', 'Stumm')) + '</button>');
+  c.classList.remove('hidden');
+  const w = c.offsetWidth, h = c.offsetHeight;
+  c.style.left = Math.max(6, Math.min(x, innerWidth - w - 6)) + 'px';
+  c.style.top = Math.max(6, Math.min(y, innerHeight - h - 6)) + 'px';
+}
+async function msgPin(mid) {
+  if (!isKey(U.chat)) return;
+  try { await upd('chats', { id: 'eq.' + cidOf(U.chat) }, { pinned_msg: mid }); const c = chatByKey(U.chat); if (c) c.pinned_msg = mid; await refresh(); } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+function openJoinCode() {
+  openDialog(t('Войти по коду', 'Join by code', 'Per Code beitreten'), '<input class="field" id="d-code" maxlength="16" placeholder="' + t('Код приглашения', 'Invite code', 'Einladungscode') + '">',
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['join-code-go', t('Войти', 'Join', 'Beitreten'), '']]);
+  setTimeout(() => { const e = $('#d-code'); if (e) e.focus(); }, 30);
+}
+async function joinByCode() {
+  const code = val('d-code').trim(); closeDialog(); if (!code) return;
+  try {
+    const cid = JSON.parse(await raw('POST', '/rest/v1/rpc/join_by_code', { json: { code } }));
+    await refresh();
+    U.tab = 'chats'; U.chat = 'c:' + cid; renderAll();
+  } catch (e) { toast(/not_found/.test(String(e && e.message || e)) ? t('Такого кода нет', 'No such code', 'Code nicht gefunden') : friendly(e)); }
+}
+function chatDesc() {
+  const c = chatByKey(U.chat); if (!c) return;
+  openDialog(t('Описание', 'Description', 'Beschreibung'), '<textarea class="field" id="d-desc" rows="4" maxlength="300">' + esc(c.description || '') + '</textarea>',
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['chat-desc-go', t('Сохранить', 'Save', 'Speichern'), '']]);
+}
+async function chatDescGo() {
+  const v = val('d-desc'); closeDialog();
+  try { await upd('chats', { id: 'eq.' + cidOf(U.chat) }, { description: v || null }); await refresh(); } catch (e) { toast(friendly(e)); }
+}
+async function stkSend(id) {
+  const s = D.stickers.find(x => x.id === id); if (!s || !U.chat || U.chat === 'ai') return;
+  const ext = (s.path.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').slice(0, 5) || 'png';
+  U.emoji = false;
+  try { await ins('messages', Object.assign({ sender: myId(), kind: 'image', media_path: s.path, file_name: 'sticker.' + ext }, tgt(U.chat), replyExtra())); U.replyTo = null; await refresh(); } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+async function stkDel(id) {
+  try { await del('my_stickers', { id: 'eq.' + id }); D.stickers = D.stickers.filter(x => x.id !== id); } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+function stickerPanel() {
+  const tabs = '<div class="emo-tabs">' + EMO.map((g, i) => '<button data-act="emo-cat" data-i="' + i + '">' + g.icon + '</button>').join('') + '<button data-act="emo-cat" data-i="' + EMO.length + '" class="on">⭐</button></div>';
+  const mine = D.stickers.map(s => '<div class="stk-m"><img data-path="' + esc(s.path) + '"' + srcAttr(s.path) + ' data-act="stk-send" data-id="' + s.id + '" alt=""><button class="stk-x" data-act="stk-del" data-id="' + s.id + '">✕</button></div>').join('');
+  return tabs + '<div class="stk-wrap"><div class="muted">' + t('Стикеры', 'Stickers', 'Sticker') + '</div><div class="stk-grid">' + STK.map(e => '<button class="stk-b" data-act="stk-e" data-e="' + e + '">' + e + '</button>').join('') + '</div>' +
+    '<div class="muted" style="margin-top:8px">' + t('Мои стикеры', 'My stickers', 'Meine Sticker') + '</div><div class="stk-grid">' + mine + '<button class="stk-add" data-act="stk-add">＋</button></div></div>';
+}
 function hydrateImages(root) {
   root.querySelectorAll('[data-path]').forEach(el => {
     if (el.getAttribute('src')) return;
@@ -734,7 +849,7 @@ function srcAttr(path, withFull) {
   return c && c.exp > Date.now() ? ' src="' + esc(c.url) + '"' + (withFull ? ' data-full="' + esc(c.url) + '"' : '') : '';
 }
 function msgContentBase(m) {
-  if (m.kind === 'image' && m.media_path) return '<img class="pic" data-path="' + esc(m.media_path) + '"' + srcAttr(m.media_path, true) + ' alt="">';
+  if (m.kind === 'image' && m.media_path) return '<img class="pic' + (isSticker(m) ? ' stk' : '') + '" data-path="' + esc(m.media_path) + '"' + srcAttr(m.media_path, true) + ' alt="">';
   if (m.kind === 'file' && m.media_path) return '<div class="file" data-act="open-file" data-id="' + m.id + '">{i:file} <span>' + esc(m.file_name || 'file') + '</span></div>';
   if (m.kind === 'album') {
     const a = attsOf(m).map((x, i) => ({ x, i }));
@@ -750,6 +865,7 @@ function msgContentBase(m) {
     if (m.body) h += '<div class="cap">' + linkify(m.body) + '</div>';
     return h;
   }
+  if (m.kind === 'text' && isBigEmoji(m.body)) return '<div class="bigemo">' + esc(m.body) + '</div>';
   return linkify(m.body || '');
 }
 function quoteHtml(m) {
@@ -888,8 +1004,9 @@ function trayHtml() {
   }).join('') + '</div>';
 }
 function emojiHtml() {
+  if ((U.emojiCat || 0) === EMO.length) return stickerPanel();
   const c = EMO[U.emojiCat || 0] || EMO[0];
-  return '<div class="emo-tabs">' + EMO.map((g, i) => '<button data-act="emo-cat" data-i="' + i + '" class="' + (i === (U.emojiCat || 0) ? 'on' : '') + '">' + g.icon + '</button>').join('') + '</div>' +
+  return '<div class="emo-tabs">' + EMO.map((g, i) => '<button data-act="emo-cat" data-i="' + i + '" class="' + (i === (U.emojiCat || 0) ? 'on' : '') + '">' + g.icon + '</button>').join('') + '<button data-act="emo-cat" data-i="' + EMO.length + '">⭐</button></div>' +
     '<div class="emo-grid">' + c.list.map(e => '<button data-act="emo" data-e="' + e + '">' + e + '</button>').join('') + '</div>';
 }
 function insertEmoji(e) {
@@ -1057,7 +1174,7 @@ function renderFriends() {
     inc.forEach(f => { const p = D.profiles[f.requester]; if (p) h += rows(p, '<button class="btn sm" data-act="f-accept" data-fid="' + f.id + '">' + t('Принять', 'Accept', 'Annehmen') + '</button><button class="btn sm ghost" data-act="f-remove" data-fid="' + f.id + '">' + t('Отклонить', 'Decline', 'Ablehnen') + '</button>'); });
   }
   h += '<div class="section">' + t('Группы и каналы', 'Groups and channels', 'Gruppen und Kanäle') + '</div>' +
-    '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="new-chat">{i:plus} ' + t('Создать', 'Create', 'Erstellen') + '</button><button class="btn sm ghost" data-act="find-channel">' + t('Найти канал', 'Find a channel', 'Kanal suchen') + '</button></div>';
+    '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="new-chat">{i:plus} ' + t('Создать', 'Create', 'Erstellen') + '</button><button class="btn sm ghost" data-act="find-channel">' + t('Найти канал', 'Find a channel', 'Kanal suchen') + '</button><button class="btn sm ghost" data-act="join-code">' + t('Войти по коду', 'Join by code', 'Per Code beitreten') + '</button></div>';
   h += '<div class="section">' + t('Друзья', 'Friends', 'Freunde') + '</div>';
   const fr = friendIds().map(id => D.profiles[id]).filter(Boolean).sort((a, b) => a.nick.localeCompare(b.nick));
   if (!fr.length) h += '<div class="muted">' + t('Пока нет друзей. Найди человека по нику и отправь заявку.', 'No friends yet. Find someone by nick and send a request.', 'Noch keine Freunde. Suche jemanden per Nick und sende eine Anfrage.') + '</div>';
@@ -1169,6 +1286,7 @@ function showCtx(id, x, y) {
   c.innerHTML = icons(
     '<div class="rxrow">' + RX_LIST.map(e => '<button data-act="rx" data-id="' + id + '" data-e="' + e + '">' + e + '</button>').join('') + '</div>' +
     (canPostTo(U.chat) ? '<button data-act="c-reply" data-id="' + id + '">{i:forward} ' + t('Ответить', 'Reply', 'Antworten') + '</button>' : '') +
+    (isKey(U.chat) && myAdmin(U.chat) ? '<button data-act="c-pin" data-id="' + id + '">📌 ' + t('Закрепить', 'Pin', 'Anheften') + '</button>' : '') +
     '<button data-act="c-copy" data-id="' + id + '">{i:copy} ' + t('Копировать', 'Copy', 'Kopieren') + '</button>' +
     (canEdit ? '<button data-act="c-edit" data-id="' + id + '">{i:edit} ' + t('Изменить', 'Edit', 'Bearbeiten') + '</button>' : '') +
     '<button data-act="c-forward" data-id="' + id + '">{i:forward} ' + t('Переслать', 'Forward', 'Weiterleiten') + '</button>' +
@@ -1377,6 +1495,22 @@ document.addEventListener('click', async e => {
     case 'c-reply': hideCtx(); U.replyTo = Number(id); renderAll(); { const i = $('#inp'); if (i) i.focus(); } break;
     case 'reply-cancel': U.replyTo = null; renderAll(); break;
     case 'new-chat': openCreateChat(); break;
+    case 's-open': openSearch(); break;
+    case 's-go': { const k = el.dataset.v; closeDialog(); U.tab = 'chats'; U.chat = k; renderAll(); setTimeout(() => gotoMsg(Number(id)), 200); break; }
+    case 'goto': gotoMsg(Number(id)); break;
+    case 'cp-pin': hideCtx(); setPref(id, 'pinned', !isPinned(id)); break;
+    case 'cp-mute': hideCtx(); setPref(id, 'muted', !isMuted(id)); break;
+    case 'c-pin': hideCtx(); msgPin(Number(id)); break;
+    case 'unpin': msgPin(null); break;
+    case 'code-copy': copyText(id); break;
+    case 'join-code': openJoinCode(); break;
+    case 'join-code-go': joinByCode(); break;
+    case 'chat-desc': chatDesc(); break;
+    case 'chat-desc-go': chatDescGo(); break;
+    case 'stk-e': { U.emoji = false; const ex = replyExtra(); U.replyTo = null; sendText(el.dataset.e, U.chat, ex).catch(er => toast(friendly(er))); renderAll(); break; }
+    case 'stk-send': stkSend(Number(id)); break;
+    case 'stk-del': stkDel(Number(id)); break;
+    case 'stk-add': $('#pick-sticker').click(); break;
     case 'chat-create': chatCreate(); break;
     case 'find-channel': openFindChannel(); break;
     case 'ch-open': chOpen(id); break;
@@ -1403,6 +1537,8 @@ document.addEventListener('click', async e => {
 });
 
 document.addEventListener('contextmenu', e => {
+  const ci = e.target.closest('.chat-item[data-v]');
+  if (ci && ci.dataset.v !== 'ai') { e.preventDefault(); showChatCtx(ci.dataset.v, e.clientX, e.clientY); return; }
   const b = e.target.closest('.bubble[data-mid]');
   if (!b || U.selected.size) return;
   e.preventDefault();
@@ -1425,6 +1561,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'accent-custom') { U.picking = true; S.accent = e.target.value; applyTheme(); lsSet('s.accent', S.accent); return; }
+  if (e.target.id === 'd-sq') { doMsgSearch(e.target.value); return; }
   if (e.target.id === 'd-chq') { clearTimeout(chqT); chqT = setTimeout(() => findChannels(e.target.value.trim()), 250); return; }
   if (e.target.id === 'f-q') {
     U.query = e.target.value;
@@ -1456,6 +1593,18 @@ $('#pick-chat-avatar').addEventListener('change', async e => {
     await refresh();
   } catch (er) { toast(friendly(er)); }
 });
+$('#pick-sticker').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  if (f.size > 4 * 1024 * 1024) { toast(t('Стикер больше 4 МБ', 'Sticker is larger than 4 MB', 'Sticker ist größer als 4 MB')); return; }
+  try {
+    const ext = (f.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').slice(0, 5) || 'png';
+    const path = myId() + '/stickers/' + crypto.randomUUID() + '.' + ext;
+    await uploadFile('chat-media', path, f, f.type || 'image/png', false);
+    await ins('my_stickers', { path });
+    D.stkLoaded = false; await refresh();
+  } catch (er) { toast(friendly(er)); }
+});
 $('#pick-music').addEventListener('change', e => {
   Array.from(e.target.files).forEach(f => P.tracks.push({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f) }));
   e.target.value = '';
@@ -1478,6 +1627,7 @@ function openCreateChat() {
   openDialog(t('Новый чат', 'New chat', 'Neuer Chat'),
     '<div class="seg" style="margin-bottom:10px"><label><input type="radio" name="ckind" value="group" checked> ' + t('Группа', 'Group', 'Gruppe') + '</label> <label style="margin-left:14px"><input type="radio" name="ckind" value="channel"> ' + t('Канал', 'Channel', 'Kanal') + '</label></div>' +
     '<input class="field" id="d-ctitle" maxlength="60" placeholder="' + t('Название', 'Title', 'Titel') + '">' +
+    '<input class="field" id="d-cdesc" maxlength="300" style="margin-top:8px" placeholder="' + t('Описание (необязательно)', 'Description (optional)', 'Beschreibung (optional)') + '">' +
     '<div class="muted" style="margin:10px 0 4px">' + t('Участники (для группы)', 'Members (for a group)', 'Mitglieder (für Gruppe)') + '</div>' +
     '<div class="pickbox">' + (fr.map(p => '<label class="pick"><input type="checkbox" class="cm" value="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div>' + esc(p.nick) + '</div></label>').join('') || '<div class="muted">' + t('Друзей пока нет', 'No friends yet', 'Noch keine Freunde') + '</div>') + '</div>' +
     '<input class="field" id="d-cnicks" style="margin-top:8px" placeholder="' + t('Или ники через пробел', 'Or nicks separated by spaces', 'Oder Nicks mit Leerzeichen')+ '">',
@@ -1493,13 +1643,14 @@ async function nicksToIds(str) {
 async function chatCreate() {
   const kind = (document.querySelector('input[name="ckind"]:checked') || {}).value || 'group';
   const title = val('d-ctitle');
+  const desc = val('d-cdesc');
   const picked = Array.from(document.querySelectorAll('.cm:checked')).map(x => x.value);
   const nicks = val('d-cnicks');
   closeDialog();
   if (!title) return;
   try {
     const id = crypto.randomUUID();
-    await ins('chats', { id, kind, title });
+    await ins('chats', { id, kind, title, description: desc || null });
     if (kind === 'group') {
       let ids = picked.slice();
       try { (await nicksToIds(nicks)).forEach(x => { if (ids.indexOf(x) < 0) ids.push(x); }); } catch (e) { }
@@ -1520,8 +1671,10 @@ async function findChannels(q) {
   let rows = [];
   try { rows = await sel('chats', Object.assign({ kind: 'eq.channel', select: '*', limit: '30', order: 'created_at.desc' }, q ? { title: 'ilike.*' + q.replace(/[*,()]/g, ' ') + '*' } : {})); } catch (e) { }
   rows.forEach(c => { D.chats[c.id] = Object.assign(D.chats[c.id] || {}, c, { _ext: true }); });
+  let cnt = {};
+  try { if (rows.length) (JSON.parse(await raw('POST', '/rest/v1/rpc/channel_counts', { json: { ids: rows.map(c => c.id) } }))).forEach(x => { cnt[x.chat_id] = x.n; }); } catch (e) { }
   const box = $('#d-chr'); if (!box) return;
-  box.innerHTML = rows.length ? rows.map(c => '<div class="pick" data-act="ch-open" data-id="' + esc(c.id) + '">' + chatAvatar(c, 32) + '<div style="flex:1">' + esc(c.title) + '</div><span class="muted">' + (D.members[c.id] ? t('Открыть', 'Open', 'Öffnen') : t('Подписаться', 'Subscribe', 'Abonnieren')) + '</span></div>').join('') : '<div class="muted">' + t('Ничего не найдено', 'Nothing found', 'Nichts gefunden') + '</div>';
+  box.innerHTML = rows.length ? rows.map(c => '<div class="pick" data-act="ch-open" data-id="' + esc(c.id) + '">' + chatAvatar(c, 32) + '<div style="flex:1;min-width:0"><div>' + esc(c.title) + '</div><div class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc((c.description ? c.description + ' · ' : '') + (cnt[c.id] || 0) + ' ' + t('подписчиков', 'subscribers', 'Abonnenten')) + '</div></div><span class="muted">' + (D.members[c.id] ? t('Открыть', 'Open', 'Öffnen') : t('Подписаться', 'Subscribe', 'Abonnieren')) + '</span></div>').join('') : '<div class="muted">' + t('Ничего не найдено', 'Nothing found', 'Nichts gefunden') + '</div>';
 }
 async function chJoin(cid) {
   try {
@@ -1542,7 +1695,9 @@ function openChatInfo() {
   const owner = me && me.role === 'owner';
   const adm = owner || (me && me.role === 'admin');
   const fr = friendIds().filter(id => !mem.some(x => x.user_id === id)).map(id => D.profiles[id]).filter(Boolean);
-  let h = '<div class="muted" style="margin-bottom:8px">' + (c.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + ' · ' + mem.length + '</div>' +
+  let h = (c.description ? '<div style="margin-bottom:8px">' + esc(c.description) + '</div>' : '') +
+    (c.invite_code ? '<div class="row" style="gap:8px;margin-bottom:8px;align-items:center"><span class="muted">' + t('Код приглашения:', 'Invite code:', 'Einladungscode:') + '</span> <b>' + esc(c.invite_code) + '</b> <button class="btn sm ghost" data-act="code-copy" data-id="' + esc(c.invite_code) + '">' + t('Копировать', 'Copy', 'Kopieren') + '</button></div>' : '') +
+    '<div class="muted" style="margin-bottom:8px">' + (c.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + ' · ' + mem.length + '</div>' +
     '<div class="pickbox">' + mem.map(x => '<div class="pick">' + avatarHtml(D.profiles[x.user_id], 30) + '<div style="flex:1">' + esc(nickOf(x.user_id)) + (x.role === 'owner' ? ' <span class="tag">' + t('создатель', 'owner', 'Besitzer') + '</span>' : x.role === 'admin' ? ' <span class="tag">' + t('админ', 'admin', 'Admin') + '</span>' : '') + '</div>' +
       (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-role" data-id="' + esc(x.user_id) + '" data-r="' + (x.role === 'admin' ? 'member' : 'admin') + '">' + (x.role === 'admin' ? t('Снять админа', 'Remove admin', 'Admin entfernen') : t('Админ', 'Admin', 'Admin')) + '</button> <button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button>' : '') + '</div>').join('') + '</div>';
   if (owner && c.kind === 'group') {
@@ -1551,7 +1706,7 @@ function openChatInfo() {
       '<div style="display:flex;gap:8px;margin-top:8px"><input class="field" id="d-mnick" placeholder="' + t('Ник', 'Nick', 'Nick') + '"><button class="btn sm" data-act="m-add-nick">' + t('Добавить', 'Add', 'Hinzufügen') + '</button></div>';
   }
   const btns = [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']];
-  if (adm) { btns.push(['chat-av', t('Аватарка', 'Avatar', 'Avatar'), 'ghost']); btns.push(['chat-rename', t('Переименовать', 'Rename', 'Umbenennen'), 'ghost']); }
+  if (adm) { btns.push(['chat-av', t('Аватарка', 'Avatar', 'Avatar'), 'ghost']); btns.push(['chat-desc', t('Описание', 'Description', 'Beschreibung'), 'ghost']); btns.push(['chat-rename', t('Переименовать', 'Rename', 'Umbenennen'), 'ghost']); }
   if (owner) { btns.push(['chat-del', t('Удалить', 'Delete', 'Löschen'), 'danger']); }
   else if (me) btns.push(['chat-leave', c.kind === 'channel' ? t('Отписаться', 'Unsubscribe', 'Abbestellen') : t('Выйти', 'Leave', 'Verlassen'), 'danger']);
   openDialog(c.title, h, btns);

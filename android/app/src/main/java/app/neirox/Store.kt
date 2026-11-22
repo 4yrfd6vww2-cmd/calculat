@@ -38,6 +38,13 @@ object Store {
     var members by mutableStateOf<List<Member>>(emptyList())
         private set
     var reactions by mutableStateOf<List<Reaction>>(emptyList())
+
+    var prefs by mutableStateOf<Map<String, ChatPref>>(emptyMap())
+
+    var jumpTo by mutableStateOf<Long?>(null)
+
+    var stickers by mutableStateOf<List<Sticker>>(emptyList())
+    private var stkLoaded = false
         private set
 
     @Volatile
@@ -81,6 +88,9 @@ object Store {
         chats = emptyList()
         members = emptyList()
         reactions = emptyList()
+        prefs = emptyMap()
+        stickers = emptyList()
+        stkLoaded = false
         recoveryEmail = null
         known = emptySet()
         firstLoad = false
@@ -119,6 +129,22 @@ object Store {
                     chats = (0 until cc.length()).map { parseChat(cc.getJSONObject(it)) }
                 } else chats = emptyList()
             } catch (e: ApiError) {
+            }
+            try {
+                val pr = Api.select("chat_prefs?select=*")
+                prefs = (0 until pr.length()).associate {
+                    val o = pr.getJSONObject(it)
+                    o.getString("key") to ChatPref(o.getString("key"), o.optBoolean("muted", false), o.optBoolean("pinned", false))
+                }
+            } catch (e: ApiError) {
+            }
+            if (!stkLoaded) {
+                try {
+                    val st = Api.select("my_stickers?select=*&order=id.desc")
+                    stickers = (0 until st.length()).map { Sticker(st.getJSONObject(it).getLong("id"), st.getJSONObject(it).getString("path")) }
+                    stkLoaded = true
+                } catch (e: ApiError) {
+                }
             }
             val ms = Api.select("messages?select=*&order=created_at.desc&limit=1000")
             val list = (0 until ms.length()).map { parseMessage(ms.getJSONObject(it)) }
@@ -248,7 +274,64 @@ object Store {
     fun isMember(cid: String) = members.any { it.chatId == cid && it.userId == myId }
     fun myMember(k: String): Member? = members.firstOrNull { it.chatId == cidOf(k) && it.userId == myId }
     fun memberCount(k: String) = members.count { it.chatId == cidOf(k) }
-    private fun muted(m: Message) = true
+    fun isMuted(k: String) = prefs[k]?.muted == true
+    fun isPinned(k: String) = prefs[k]?.pinned == true
+    private fun muted(m: Message) = !isMuted(if (m.chatId != null) "c:" + m.chatId else m.sender)
+
+    suspend fun setPref(k: String, field: String, v: Boolean) {
+        val cur = prefs[k]
+        if (cur != null) Api.update("chat_prefs?user_id=eq.$myId&key=eq.$k", JSONObject().put(field, v))
+        else Api.insert("chat_prefs", JSONObject().put("user_id", myId).put("key", k).put(field, v))
+        val n = ChatPref(k, if (field == "muted") v else (cur?.muted ?: false), if (field == "pinned") v else (cur?.pinned ?: false))
+        prefs = prefs + (k to n)
+    }
+
+    suspend fun pinMessage(cid: String, mid: Long?) {
+        Api.update("chats?id=eq.$cid", JSONObject().put("pinned_msg", mid ?: JSONObject.NULL))
+        refresh()
+    }
+
+    suspend fun setDescription(cid: String, d: String) {
+        Api.update("chats?id=eq.$cid", JSONObject().put("description", d.ifBlank { JSONObject.NULL }))
+        refresh()
+    }
+
+    suspend fun joinByCode(code: String): String {
+        val r = Api.request("POST", "/rest/v1/rpc/join_by_code", JSONObject().put("code", code.trim()))
+        refresh()
+        return r.trim().trim('"')
+    }
+
+    suspend fun channelCounts(ids: List<String>): Map<String, Int> {
+        if (ids.isEmpty()) return emptyMap()
+        return try {
+            val a = org.json.JSONArray(Api.request("POST", "/rest/v1/rpc/channel_counts", JSONObject().put("ids", org.json.JSONArray(ids))))
+            (0 until a.length()).associate { a.getJSONObject(it).getString("chat_id") to a.getJSONObject(it).optInt("n") }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    suspend fun addSticker(data: ByteArray, mime: String, ext: String) {
+        val path = "$myId/stickers/${UUID.randomUUID()}.$ext"
+        Api.upload("chat-media", path, data, mime)
+        Api.insert("my_stickers", JSONObject().put("path", path))
+        stkLoaded = false
+        refresh()
+    }
+
+    suspend fun deleteSticker(id: Long) {
+        Api.delete("my_stickers?id=eq.$id")
+        stickers = stickers.filter { it.id != id }
+    }
+
+    suspend fun sendSticker(path: String, to: String, reply: Long? = null) {
+        val ext = path.substringAfterLast('.', "png")
+        val o = tgt(to, JSONObject().put("sender", myId).put("kind", "image").put("media_path", path).put("file_name", "sticker.$ext"))
+        if (reply != null) o.put("reply_to", reply)
+        Api.insert("messages", o)
+        refresh()
+    }
 
     fun canPost(k: String): Boolean {
         val c = chatByKey(k) ?: return true
@@ -289,9 +372,11 @@ object Store {
 
     // Группы и каналы
 
-    suspend fun createChat(kind: String, title: String, friendIds: List<String>): String {
+    suspend fun createChat(kind: String, title: String, friendIds: List<String>, desc: String = ""): String {
         val id = UUID.randomUUID().toString()
-        Api.insert("chats", JSONObject().put("id", id).put("kind", kind).put("title", title).put("owner", myId))
+        val row = JSONObject().put("id", id).put("kind", kind).put("title", title).put("owner", myId)
+        if (desc.isNotBlank()) row.put("description", desc.trim())
+        Api.insert("chats", row)
         for (f in friendIds) {
             try { Api.insert("chat_members", JSONObject().put("chat_id", id).put("user_id", f).put("role", "member")) } catch (e: ApiError) { }
         }
@@ -449,7 +534,7 @@ object Store {
         for (m in list) {
             if (m.sender != myId) continue
             Api.delete("messages?id=eq.${m.id}")
-            val paths = listOfNotNull(m.mediaPath) + m.attachments.map { it.path }
+            val paths = (if (isSticker(m)) emptyList() else listOfNotNull(m.mediaPath)) + m.attachments.map { it.path }
             for (it in paths) {
                 try {
                     Api.request("DELETE", "/storage/v1/object/chat-media/$it")

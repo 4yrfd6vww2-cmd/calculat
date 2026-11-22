@@ -386,3 +386,57 @@ fun VideoDialog(path: String, onClose: () -> Unit) {
         }
     }
 }
+
+private val BUILTIN_STICKERS = listOf(
+    "😀", "😂", "🥹", "😍", "🥰", "😎", "🤩", "😭", "😡", "🤯", "🥳", "😴", "🤔", "🙄", "😘", "🤗",
+    "👍", "👎", "👏", "🙏", "💪", "🔥", "❤️", "💔", "🎉", "🎂", "☕", "🍕", "🐱", "🐶", "🦄", "🌈",
+    "⭐", "💯", "🚀", "🎁", "🌹", "🤝", "👋", "🫶"
+)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun StickerPanel(onEmoji: (String) -> Unit, onOwn: (Sticker) -> Unit, onAdd: () -> Unit, onDelete: (Sticker) -> Unit) {
+    var delFor by remember { mutableStateOf<Sticker?>(null) }
+    Column(Modifier.fillMaxWidth().background(CardBg)) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(64.dp),
+            modifier = Modifier.fillMaxWidth().height(240.dp),
+            contentPadding = PaddingValues(6.dp)
+        ) {
+            item {
+                Text(
+                    "＋", color = Accent, fontSize = 30.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().clickable { onAdd() }.padding(vertical = 14.dp)
+                )
+            }
+            items(Store.stickers, key = { "s" + it.id }) { s ->
+                Box(
+                    Modifier.fillMaxWidth().height(64.dp).padding(3.dp)
+                        .combinedClickable(onClick = { onOwn(s) }, onLongClick = { delFor = s })
+                ) {
+                    RemoteImage(
+                        key = "chat:" + s.path,
+                        loader = { Api.download(Api.signedUrl("chat-media", s.path)) },
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                }
+            }
+            items(BUILTIN_STICKERS) { e ->
+                Text(
+                    e, fontSize = 34.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().clickable { onEmoji(e) }.padding(vertical = 8.dp)
+                )
+            }
+        }
+    }
+    val d = delFor
+    if (d != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { delFor = null },
+            title = { Text(tr("Удалить стикер?", "Delete sticker?", "Sticker löschen?")) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { delFor = null; onDelete(d) }) { Text(tr("Удалить", "Delete", "Löschen")) } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { delFor = null }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
+}

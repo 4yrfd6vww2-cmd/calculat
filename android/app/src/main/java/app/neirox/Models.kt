@@ -32,15 +32,19 @@ data class Message(
     val replyTo: Long? = null
 )
 
-data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String, val avatarUrl: String? = null) {
+data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String, val avatarUrl: String? = null, val inviteCode: String? = null, val pinnedMsg: Long? = null) {
     fun asProfile() = Profile(id, title, avatarUrl, null)
 }
 
 data class Member(val chatId: String, val userId: String, val role: String, val lastRead: Long)
 
+data class ChatPref(val key: String, val muted: Boolean, val pinned: Boolean)
+
+data class Sticker(val id: Long, val path: String)
+
 data class Reaction(val messageId: Long, val userId: String, val emoji: String)
 
-fun parseChat(o: JSONObject) = Chat(o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"), o.str("avatar_url"))
+fun parseChat(o: JSONObject) = Chat(o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"), o.str("avatar_url"), o.str("invite_code"), if (o.isNull("pinned_msg")) null else o.optLong("pinned_msg"))
 
 fun parseMember(o: JSONObject) = Member(o.getString("chat_id"), o.getString("user_id"), o.optString("role", "member"), o.optLong("last_read", 0L))
 
@@ -78,7 +82,7 @@ private fun parseAttachments(o: JSONObject): List<Attachment> {
 fun previewOf(m: Message?): String {
     if (m == null) return tr("Нет сообщений", "No messages", "Keine Nachrichten")
     return when (m.kind) {
-        "image" -> "🖼 " + tr("Фото", "Photo", "Foto")
+        "image" -> if ((m.fileName ?: "").startsWith("sticker.")) "🏷 " + tr("Стикер", "Sticker", "Sticker") else "🖼 " + tr("Фото", "Photo", "Foto")
         "file" -> "📎 " + (m.fileName ?: tr("Файл", "File", "Datei"))
         "album" -> {
             val a = m.attachments
@@ -108,3 +112,22 @@ fun daysSince(iso: String?): Int = try {
 } catch (e: Exception) {
     1
 }
+
+private fun isEmoCp(c: Int) = c in 0x1F000..0x1FFFF || c in 0x2190..0x2BFF || c == 0xA9 || c == 0xAE || c in 0x203C..0x3299
+
+/** Сообщение из 1–5 эмодзи показываем крупно (встроенный стикер). */
+fun isBigEmoji(b: String?): Boolean {
+    if (b == null || b.length > 24 || b.isBlank()) return false
+    var n = 0
+    var i = 0
+    while (i < b.length) {
+        val c = b.codePointAt(i)
+        i += Character.charCount(c)
+        if (c == 0x200D || c == 0xFE0F || Character.isWhitespace(c)) continue
+        if (!isEmoCp(c)) return false
+        n++
+    }
+    return n in 1..5
+}
+
+fun isSticker(m: Message) = m.kind == "image" && (m.fileName ?: "").startsWith("sticker.")

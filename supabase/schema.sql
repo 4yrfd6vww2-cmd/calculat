@@ -334,3 +334,10 @@ revoke all on public.app_secrets from anon, authenticated;
 -- chat_members(chat_id, user_id, role owner|admin|member, last_read bigint, joined_at); функции is_member/member_role/chat_kind/can_post;
 -- messages: receiver nullable, chat_id uuid, reply_to bigint, CHECK (receiver is null) <> (chat_id is null); новые RLS по участникам;
 -- message_reactions(message_id, user_id, emoji) — одна реакция на пользователя; profiles.typing_to/typing_at (+ grants на колонки).
+
+-- 19. Заглушение/закрепы, коды приглашения, стикеры (0.9): применено миграцией prefs_invites_stickers
+-- chat_prefs(user_id, key [uuid друга или "c:<uuid>"], muted, pinned) — хранится в базе, одинаково на всех устройствах;
+-- chats.invite_code (виден участникам), chats.pinned_msg (закреплённое сообщение, меняют админы);
+-- my_stickers(id, user_id, path) — свои стикеры (файлы в chat-media/<uid>/stickers/);
+-- rpc join_by_code(code) -> uuid чата; rpc channel_counts(ids uuid[]) -> [{chat_id, n}] (число подписчиков).
+-- Встроенные стикеры = текст из 1–5 эмодзи; свой стикер = kind 'image' с file_name 'sticker.<ext>'.

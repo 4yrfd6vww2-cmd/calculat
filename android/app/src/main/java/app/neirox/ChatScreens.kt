@@ -80,14 +80,19 @@ private const val MAX_FILE = 50 * 1024 * 1024
 
 private class ChatRow(val key: String, val title: String, val profile: Profile?, val chat: Chat?)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
     val rows = ArrayList<ChatRow>()
     for (id in Store.friendIds) Store.profiles[id]?.let { rows.add(ChatRow(it.id, it.nick, it, null)) }
     for (c in Store.chats) rows.add(ChatRow("c:" + c.id, c.title, null, c))
     val lastOf = { k: String -> Store.thread(k).lastOrNull() }
-    val sorted = rows.sortedByDescending { lastOf(it.key)?.createdAt ?: "" }
+    val sorted = rows.sortedWith(compareByDescending<ChatRow> { Store.isPinned(it.key) }.thenByDescending { lastOf(it.key)?.createdAt ?: "" })
     var showCreate by remember { mutableStateOf(false) }
+    var showCode by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var ctxKey by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var showFind by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
@@ -124,23 +129,45 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     )
                 }
             }
+            item {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 0.dp)) {
+                    Text(
+                        "🔎 " + tr("Поиск сообщений", "Search messages", "Nachrichten suchen"), color = Accent, fontSize = 14.sp,
+                        modifier = Modifier.clickable { showSearch = true }.padding(vertical = 8.dp, horizontal = 4.dp)
+                    )
+                    Text(
+                        "🔑 " + tr("Войти по коду", "Join by code", "Per Code"), color = Accent, fontSize = 14.sp,
+                        modifier = Modifier.padding(start = 16.dp).clickable { showCode = true }.padding(vertical = 8.dp, horizontal = 4.dp)
+                    )
+                }
+            }
             items(sorted, key = { it.key }) { r ->
                 val last = lastOf(r.key)
                 val unread = Store.unread(r.key)
                 Row(
-                    Modifier.fillMaxWidth().clickable { onOpen(r.key) }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(r.key) }, onLongClick = { ctxKey = r.key }).padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (r.profile != null) Avatar(r.profile, 48.dp)
                     else if (r.chat != null) Avatar(r.chat.asProfile(), 48.dp)
                     Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                        Text(r.title, color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text((if (Store.isPinned(r.key)) "📌 " else "") + r.title + (if (Store.isMuted(r.key)) " 🔕" else ""), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val who = if (r.chat != null && last != null && last.sender != Store.myId) (Store.profiles[last.sender]?.nick ?: "") + ": " else ""
                         Text(who + previewOf(last), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    DropdownMenu(expanded = ctxKey == r.key, onDismissRequest = { ctxKey = null }) {
+                        DropdownMenuItem(
+                            text = { Text(if (Store.isPinned(r.key)) tr("Открепить чат", "Unpin chat", "Chat lösen") else tr("Закрепить чат", "Pin chat", "Chat anheften")) },
+                            onClick = { val k = r.key; ctxKey = null; scope.launch { try { Store.setPref(k, "pinned", !Store.isPinned(k)) } catch (e: Exception) { } } }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (Store.isMuted(r.key)) tr("Включить уведомления", "Unmute", "Ton an") else tr("Выключить уведомления", "Mute", "Stummschalten")) },
+                            onClick = { val k = r.key; ctxKey = null; scope.launch { try { Store.setPref(k, "muted", !Store.isMuted(k)) } catch (e: Exception) { } } }
+                        )
+                    }
                     if (unread > 0) {
                         Box(
-                            Modifier.clip(CircleShape).background(Accent).padding(horizontal = 8.dp, vertical = 3.dp),
+                            Modifier.clip(CircleShape).background(if (Store.isMuted(r.key)) TextSecondary else Accent).padding(horizontal = 8.dp, vertical = 3.dp),
                             contentAlignment = Alignment.Center
                         ) { Text("$unread", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                     }
@@ -160,6 +187,8 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
     }
     if (showCreate) CreateChatDialog({ showCreate = false }) { showCreate = false; onOpen(it) }
     if (showFind) FindChannelDialog({ showFind = false }) { showFind = false; onOpen(it) }
+    if (showCode) JoinCodeDialog({ showCode = false }) { showCode = false; onOpen(it) }
+    if (showSearch) SearchDialog(null, { showSearch = false }) { k, id -> showSearch = false; Store.jumpTo = id; onOpen(k) }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -188,6 +217,11 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     var showDelete by remember { mutableStateOf(false) }
     var menuSingle by remember { mutableStateOf(false) }
     var showEmoji by remember { mutableStateOf(false) }
+    var showStk by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var hdrMenu by remember { mutableStateOf(false) }
+    val myRole = Store.myMember(friendId)?.role
+    val isAdm = chat != null && (chat.owner == Store.myId || myRole == "admin" || myRole == "owner")
     val pending = remember { mutableStateListOf<PendingItem>() }
     var video by remember { mutableStateOf<String?>(null) }
     var recording by remember { mutableStateOf(false) }
@@ -217,6 +251,17 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
 
     LaunchedEffect(thread.size) {
         if (thread.isNotEmpty()) listState.scrollToItem(thread.size - 1)
+    }
+    LaunchedEffect(Store.jumpTo, thread.size) {
+        val j = Store.jumpTo
+        if (j != null) {
+            val idx = thread.indexOfFirst { it.id == j }
+            if (idx >= 0) {
+                delay(80)
+                listState.scrollToItem(idx)
+                Store.jumpTo = null
+            }
+        }
     }
     LaunchedEffect(input) {
         if (input.isNotBlank()) Store.sendTyping(friendId)
@@ -299,6 +344,26 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             recording = true
         } else {
             error = tr("Не удалось начать запись", "Could not start recording", "Aufnahme konnte nicht gestartet werden")
+        }
+    }
+
+    val stickerPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            try {
+                val mime = ctx.contentResolver.getType(uri) ?: "image/png"
+                val bytes = withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } }
+                    ?: throw ApiError(tr("Не удалось прочитать файл", "Could not read the file", "Datei konnte nicht gelesen werden"))
+                if (bytes.size > 4 * 1024 * 1024) throw ApiError(tr("Стикер больше 4 МБ", "Sticker is larger than 4 MB", "Sticker ist größer als 4 MB"))
+                val ext = when {
+                    mime.contains("gif") -> "gif"
+                    mime.contains("webp") -> "webp"
+                    mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
+                    else -> "png"
+                }
+                Store.addSticker(bytes, mime, ext)
+            } catch (e: Exception) {
+                error = friendlyError(e.message ?: "")
+            }
         }
     }
 
@@ -518,9 +583,39 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                     Text("🎥", fontSize = 22.sp, modifier = Modifier.clickable { videoCallClick() }.padding(8.dp))
                     Text("📞", fontSize = 22.sp, modifier = Modifier.clickable { callClick() }.padding(8.dp))
                 }
+                Box {
+                    Text("⋮", color = Txt, fontSize = 24.sp, modifier = Modifier.clickable { hdrMenu = true }.padding(horizontal = 10.dp, vertical = 4.dp))
+                    DropdownMenu(expanded = hdrMenu, onDismissRequest = { hdrMenu = false }) {
+                        DropdownMenuItem(text = { Text(tr("Поиск в чате", "Search in chat", "Im Chat suchen")) }, onClick = { hdrMenu = false; showSearch = true })
+                        DropdownMenuItem(
+                            text = { Text(if (Store.isMuted(friendId)) tr("Включить уведомления", "Unmute", "Ton an") else tr("Выключить уведомления", "Mute", "Stummschalten")) },
+                            onClick = { hdrMenu = false; scope.launch { try { Store.setPref(friendId, "muted", !Store.isMuted(friendId)) } catch (e: Exception) { } } }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (Store.isPinned(friendId)) tr("Открепить чат", "Unpin chat", "Chat lösen") else tr("Закрепить чат", "Pin chat", "Chat anheften")) },
+                            onClick = { hdrMenu = false; scope.launch { try { Store.setPref(friendId, "pinned", !Store.isPinned(friendId)) } catch (e: Exception) { } } }
+                        )
+                    }
+                }
             }
         }
 
+        val pm = chat?.pinnedMsg?.let { id -> thread.firstOrNull { it.id == id } }
+        if (pm != null) {
+            Row(
+                Modifier.fillMaxWidth().background(CardBg).clickable { Store.jumpTo = pm.id }.padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("📌", fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(Store.profiles[pm.sender]?.nick ?: "", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(previewOf(pm), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (isAdm) Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable {
+                    scope.launch { try { Store.pinMessage(chat!!.id, null) } catch (e: Exception) { } }
+                }.padding(6.dp))
+            }
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -559,6 +654,10 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                         editing = m
                         input = m.body ?: ""
                     }) else null,
+                    onPin = if (isAdm && chat != null) ({
+                        scope.launch { try { Store.pinMessage(chat.id, if (chat.pinnedMsg == m.id) null else m.id) } catch (e: Exception) { } }
+                    }) else null,
+                    pinnedNow = chat?.pinnedMsg == m.id,
                     onForward = { menuSingle = true; selected = setOf(m.id); showForward = true },
                     onDelete = { menuSingle = true; selected = setOf(m.id); showDelete = true }
                 )
@@ -603,6 +702,24 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
         if (showEmoji) {
             EmojiPanel { input += it }
         }
+        if (showStk) {
+            StickerPanel(
+                onEmoji = { e ->
+                    val rid = replyTo?.id
+                    replyTo = null
+                    showStk = false
+                    scope.launch { try { Store.sendText(e, friendId, rid) } catch (ex: Exception) { error = friendlyError(ex.message ?: "") } }
+                },
+                onOwn = { st ->
+                    val rid = replyTo?.id
+                    replyTo = null
+                    showStk = false
+                    scope.launch { try { Store.sendSticker(st.path, friendId, rid) } catch (ex: Exception) { error = friendlyError(ex.message ?: "") } }
+                },
+                onAdd = { stickerPicker.launch("image/*") },
+                onDelete = { st -> scope.launch { try { Store.deleteSticker(st.id) } catch (ex: Exception) { } } }
+            )
+        }
         if (recording) {
             Row(
                 Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
@@ -645,7 +762,8 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                         }
                     }
                 }
-                Text("😊", fontSize = 26.sp, modifier = Modifier.clickable { showEmoji = !showEmoji }.padding(6.dp))
+                Text("😊", fontSize = 26.sp, modifier = Modifier.clickable { showEmoji = !showEmoji; if (showEmoji) showStk = false }.padding(6.dp))
+                if (editing == null) Text("⭐", fontSize = 24.sp, modifier = Modifier.clickable { showStk = !showStk; if (showStk) showEmoji = false }.padding(4.dp))
                 NxField(
                     input, { input = it }, tr("Сообщение", "Message", "Nachricht"),
                     modifier = Modifier.weight(1f), singleLine = false
@@ -731,6 +849,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
 
     val vd = video
     if (vd != null) VideoDialog(vd) { video = null }
+    if (showSearch) SearchDialog(friendId, { showSearch = false }) { _, id -> showSearch = false; Store.jumpTo = id }
     if (showInfo && chat != null) ChatInfoDialog(friendId, { showInfo = false }) { showInfo = false; onBack() }
 
     val fs = fullscreen
@@ -754,7 +873,8 @@ fun MessageBubble(
     m: Message, mine: Boolean, selected: Boolean, selecting: Boolean,
     quoted: Message?, showNick: Boolean, reactions: List<Reaction>, onReply: () -> Unit, onReact: (String) -> Unit,
     onImage: (String) -> Unit, onVideo: (String) -> Unit, onToggle: () -> Unit,
-    onCopy: () -> Unit, onEdit: (() -> Unit)?, onForward: () -> Unit, onDelete: () -> Unit
+    onCopy: () -> Unit, onEdit: (() -> Unit)?, onForward: () -> Unit, onDelete: () -> Unit,
+    onPin: (() -> Unit)? = null, pinnedNow: Boolean = false
 ) {
     val ctx = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
@@ -815,8 +935,8 @@ fun MessageBubble(
                 RemoteImage(
                     key = "chat:$path",
                     loader = { Api.download(Api.signedUrl("chat-media", path)) },
-                    modifier = Modifier.widthIn(max = 260.dp).height(220.dp).clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
+                    modifier = if (isSticker(m)) Modifier.size(150.dp) else Modifier.widthIn(max = 260.dp).height(220.dp).clip(RoundedCornerShape(12.dp)),
+                    contentScale = if (isSticker(m)) ContentScale.Fit else ContentScale.Crop
                 )
             } else if (m.kind == "file" && path != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -838,7 +958,8 @@ fun MessageBubble(
                     }
                 )
             } else {
-                Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 16.sp)
+                if (m.kind == "text" && isBigEmoji(m.body)) Text(m.body ?: "", fontSize = 48.sp)
+                else Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 16.sp)
             }
             Text(
                 (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt) + if (mine && m.readAt != null) " ✓✓" else "",
@@ -866,6 +987,12 @@ fun MessageBubble(
                 DropdownMenuItem(text = { Text(tr("Копировать", "Copy", "Kopieren")) }, onClick = { menuOpen = false; onCopy() })
                 if (onEdit != null) {
                     DropdownMenuItem(text = { Text(tr("Изменить", "Edit", "Bearbeiten")) }, onClick = { menuOpen = false; onEdit() })
+                }
+                if (onPin != null) {
+                    DropdownMenuItem(
+                        text = { Text(if (pinnedNow) tr("Открепить", "Unpin", "Lösen") else tr("Закрепить", "Pin", "Anheften")) },
+                        onClick = { menuOpen = false; onPin() }
+                    )
                 }
                 DropdownMenuItem(text = { Text(tr("Переслать", "Forward", "Weiterleiten")) }, onClick = { menuOpen = false; onForward() })
                 DropdownMenuItem(text = { Text(tr("Удалить", "Delete", "Löschen"), color = Color(0xFFE5484D)) }, onClick = { menuOpen = false; onDelete() })
