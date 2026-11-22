@@ -72,6 +72,32 @@ struct Reaction: Codable, Hashable {
     var emoji: String
 }
 
+struct Wallet: Codable, Hashable {
+    var balance: Int
+    var earned: Int
+    var streak: Int
+    var level: Int
+    var awarded: Bool?
+}
+
+struct ThemeColor: Codable, Identifiable, Hashable {
+    let id: Int
+    var color: String?
+}
+
+struct BoardRow: Codable, Identifiable, Hashable {
+    let userId: String
+    let nick: String
+    var avatarUrl: String?
+    let earned: Int
+    let level: Int
+    var id: String { userId }
+}
+
+struct LevelRow: Codable { let userId: String; let level: Int }
+
+func levelStr(_ n: Int) -> String { String(format: "%.2f", Double(n) / 100.0) }
+
 struct ChatPref: Codable, Hashable {
     let key: String
     var muted: Bool?

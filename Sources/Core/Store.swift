@@ -18,6 +18,12 @@ final class Store: ObservableObject {
     @Published var stickers: [Sticker] = []
     @Published var jumpTo: Int?
     @Published var alias: [String: String] = [:]
+    @Published var wallet: Wallet?
+    @Published var colors: [ThemeColor] = []
+    @Published var levels: [String: Int] = [:]
+    @Published var board: [BoardRow] = []
+    @Published var noxNotice: String?
+    private var checkedAt = Date.distantPast
     private var stkLoaded = false
     @Published var recoveryEmail: String?
     @Published var loggedIn: Bool = API.shared.isLoggedIn
@@ -52,6 +58,11 @@ final class Store: ObservableObject {
         reactions = []
         prefs = [:]
         alias = [:]
+        wallet = nil
+        colors = []
+        levels = [:]
+        board = []
+        checkedAt = .distantPast
         stickers = []
         stkLoaded = false
         recoveryEmail = nil
@@ -131,6 +142,7 @@ final class Store: ObservableObject {
                 for p in ps { profiles[p.id] = p }
             }
             if let m = me { profiles[m.id] = m }
+            await noxSync(Array(profiles.keys))
 
         } catch {
             if !API.shared.isLoggedIn { logout() }
@@ -261,6 +273,70 @@ final class Store: ObservableObject {
     }
 
     // MARK: Prefs / pins / codes / stickers
+
+    // MARK: nox
+
+    private func rpc<T: Decodable>(_ name: String, _ json: [String: Any] = [:]) async throws -> T {
+        let data = try await API.shared.raw("POST", "/rest/v1/rpc/\(name)", json: json)
+        return try API.decoder.decode(T.self, from: data)
+    }
+
+    private func loadColors() async {
+        if let c: [ThemeColor] = try? await API.shared.select("theme_colors", [
+            URLQueryItem(name: "select", value: "*"), URLQueryItem(name: "order", value: "id.asc")]) {
+            colors = c
+        }
+    }
+
+    private func noxSync(_ ids: [String]) async {
+        if Date().timeIntervalSince(checkedAt) > 30 * 60 {
+            checkedAt = Date()
+            if let w: Wallet = try? await rpc("nox_checkin") {
+                wallet = w
+                if w.awarded == true { noxNotice = tr("+5 nox за 3 дня подряд! ⚡", "+5 nox for 3 days in a row! ⚡", "+5 nox für 3 Tage in Folge! ⚡") }
+            }
+            await loadColors()
+        }
+        var all = Set(ids)
+        all.insert(myId)
+        if let ls: [LevelRow] = try? await API.shared.select("nox_wallets", [
+            URLQueryItem(name: "select", value: "user_id,level"),
+            URLQueryItem(name: "user_id", value: "in.(\(all.joined(separator: ",")))")]) {
+            var d: [String: Int] = [:]
+            for x in ls { d[x.userId] = x.level }
+            levels = d
+        }
+    }
+
+    func levelTag(_ id: String) -> String {
+        let l = levels[id] ?? 0
+        return l > 0 ? " · ★ " + levelStr(l) : ""
+    }
+
+    func noxOpen() async {
+        if let w: Wallet = try? await rpc("nox_me") { wallet = w }
+        if let b: [BoardRow] = try? await rpc("nox_leaderboard") { board = b }
+        await loadColors()
+    }
+
+    func buyColor() async throws -> Int {
+        let data = try await API.shared.raw("POST", "/rest/v1/rpc/nox_buy_color", json: [:])
+        let id = Int((String(data: data, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        await noxOpen()
+        return id
+    }
+
+    func setColor(_ id: Int, _ hex: String) async throws {
+        _ = try await API.shared.raw("POST", "/rest/v1/rpc/nox_set_color", json: ["p_id": id, "p_color": hex])
+        await loadColors()
+    }
+
+    func buyLevel(_ units: Int) async throws {
+        let w: Wallet = try await rpc("nox_buy_level", ["p_units": units])
+        wallet = w
+        await noxOpen()
+        await noxSync(Array(profiles.keys))
+    }
 
     /// Имя контакта: своё, если задано, иначе ник.
     func dname(_ p: Profile?) -> String {

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,14 +88,7 @@ fun SettingsTab() {
         3 -> SubPage(tr("Оформление", "Appearance", "Aussehen"), back) { LookPage() }
         4 -> SubPage(tr("Звуки", "Sounds", "Töne"), back) { SoundPage() }
         5 -> SubPage(tr("Язык", "Language", "Sprache"), back) { LangPage() }
-        6 -> SubPage(tr("Мой nox", "My nox", "Mein nox"), back) {
-            NxCard(
-                tr("Пока что данная механика nox находится в разработке",
-                    "The nox mechanic is still in development",
-                    "Die nox-Mechanik ist noch in Entwicklung"),
-                Txt
-            )
-        }
+        6 -> SubPage(tr("Мой nox", "My nox", "Mein nox"), back) { NoxPage() }
         7 -> SubPage(tr("Статистика", "Statistics", "Statistik"), back) { StatsPage() }
         8 -> SubPage(tr("О приложении", "About", "Über die App"), back) { AboutPage() }
         else -> Column(Modifier.fillMaxSize()) {
@@ -283,7 +278,21 @@ private fun LookPage() {
                     .clickable { Settings.updateAccent(c) }
             )
         }
+        for (tc in Store.colors) {
+            val hex = tc.color ?: continue
+            val c = 0xFF000000L or java.lang.Long.parseLong(hex.removePrefix("#"), 16)
+            val selected = Settings.accent == c
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(c))
+                    .then(if (selected) Modifier.border(3.dp, Txt, CircleShape) else Modifier)
+                    .clickable { Settings.updateAccent(c) }
+            )
+        }
     }
+    Text(tr("Свои цвета открываются за nox: раздел «Мой nox».", "Custom colors are unlocked with nox: see “My nox”.", "Eigene Farben schaltest du mit nox frei: „Mein nox“."), color = TextSecondary, fontSize = 12.sp)
 }
 
 @Composable
@@ -349,5 +358,105 @@ private fun AboutPage() {
         )
         Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = TextSecondary, fontSize = 16.sp)
         Text("v" + versionName(), color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun NoxPage() {
+    val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+    var pickId by remember { mutableStateOf<Long?>(null) }
+    var error by remember { mutableStateOf("") }
+    androidx.compose.runtime.LaunchedEffect(Unit) { try { Store.noxOpen() } catch (e: Exception) { error = friendlyError(e.message ?: "") } }
+    fun act(block: suspend () -> Unit) {
+        error = ""
+        scope.launch {
+            try { block() } catch (e: Exception) {
+                val m = e.message ?: ""
+                error = when {
+                    m.contains("not_enough") -> tr("Не хватает nox", "Not enough nox", "Nicht genug nox")
+                    m.contains("max_level") -> tr("Максимальный уровень", "Maximum level reached", "Maximales Level erreicht")
+                    else -> friendlyError(m)
+                }
+            }
+        }
+    }
+    val w = Store.wallet ?: Wallet(0, 0, 0, 0)
+    NxCard("⚡ ${w.balance} nox\n" + tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + w.earned + "\n" +
+        tr("Серия входов: ", "Login streak: ", "Login-Serie: ") + w.streak + " / 3 · " + tr("за 3 дня подряд +5 nox", "+5 nox for 3 days in a row", "+5 nox für 3 Tage in Folge"), Txt)
+    if (error.isNotEmpty()) NxError(error)
+
+    Text(tr("Свои цвета темы", "Custom theme colors", "Eigene Themenfarben"), color = Txt, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    Text(tr("10 nox за один цвет. Покупки хранятся на сервере.", "10 nox per color. Purchases are stored on the server.", "10 nox pro Farbe. Käufe werden auf dem Server gespeichert."), color = TextSecondary, fontSize = 13.sp)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (tc in Store.colors) {
+            val hex = tc.color
+            if (hex != null) {
+                val c = 0xFF000000L or java.lang.Long.parseLong(hex.removePrefix("#"), 16)
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(Color(c))
+                        .then(if (Settings.accent == c) Modifier.border(3.dp, Txt, CircleShape) else Modifier)
+                        .clickable { Settings.updateAccent(c) }
+                )
+            } else {
+                NxSmallButton(tr("Выбрать цвет", "Pick color", "Farbe wählen"), filled = false) { pickId = tc.id }
+            }
+        }
+    }
+    NxSmallButton(tr("Купить цвет · 10 nox", "Buy a color · 10 nox", "Farbe kaufen · 10 nox"), filled = true) {
+        act { pickId = Store.buyColor() }
+    }
+
+    Text(tr("Уровень: ★ ", "Level: ★ ", "Level: ★ ") + levelStr(w.level) + " / 100.0", color = Txt, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    Text(tr("Виден всем. 0.01 уровня = 1 nox.", "Visible to everyone. 0.01 level = 1 nox.", "Für alle sichtbar. 0.01 Level = 1 nox."), color = TextSecondary, fontSize = 13.sp)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NxSmallButton("+0.01", filled = false) { act { Store.buyLevel(1) } }
+        NxSmallButton("+0.10", filled = false) { act { Store.buyLevel(10) } }
+        NxSmallButton("+1.00", filled = false) { act { Store.buyLevel(100) } }
+    }
+
+    Text(tr("Таблица лидеров", "Leaderboard", "Bestenliste"), color = Txt, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    if (Store.board.isEmpty()) Text(tr("Пока никого нет", "Nobody yet", "Noch niemand"), color = TextSecondary, fontSize = 14.sp)
+    Store.board.forEachIndexed { i, r ->
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardBg).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("${i + 1}", color = TextSecondary, fontSize = 15.sp, modifier = Modifier.width(28.dp))
+            Avatar(Profile(r.userId, r.nick, r.avatarUrl, null), 36.dp)
+            Text(
+                r.nick + (if (r.level > 0) "  ★ " + levelStr(r.level) else ""),
+                color = Txt, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 10.dp).weight(1f)
+            )
+            Text("${r.earned} nox", color = Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+
+    val pid = pickId
+    if (pid != null) {
+        var h by remember { mutableStateOf(270f) }
+        var sat by remember { mutableStateOf(0.6f) }
+        var v by remember { mutableStateOf(1f) }
+        val col = Color.hsv(h, sat, v)
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pickId = null },
+            title = { Text(tr("Свой цвет", "Custom color", "Eigene Farbe")) },
+            text = {
+                Column {
+                    Text(tr("Цвет выбирается один раз, потом он сохранится в палитре.", "You pick the color once, then it stays in your palette.", "Die Farbe wird einmal gewählt und bleibt in deiner Palette."), fontSize = 13.sp)
+                    Box(Modifier.fillMaxWidth().height(56.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(col))
+                    androidx.compose.material3.Slider(h, { h = it }, valueRange = 0f..360f)
+                    androidx.compose.material3.Slider(sat, { sat = it })
+                    androidx.compose.material3.Slider(v, { v = it })
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    val hex = String.format("#%06x", col.toArgb() and 0xFFFFFF)
+                    pickId = null
+                    act { Store.setColor(pid, hex); Settings.updateAccent(0xFF000000L or (col.toArgb().toLong() and 0xFFFFFF)) }
+                }) { Text(tr("Сохранить", "Save", "Speichern")) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pickId = null }) { Text(tr("Позже", "Later", "Später")) } }
+        )
     }
 }

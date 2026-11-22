@@ -431,7 +431,8 @@ struct ChatView: View {
             let kindName: String = c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")
             return kindName + " · " + String(store.memberCount(key))
         }
-        return store.isOnline(friend) ? tr("в сети", "online", "online") : tr("был(а) недавно", "last seen recently", "zuletzt online")
+        let st: String = store.isOnline(friend) ? tr("в сети", "online", "online") : tr("был(а) недавно", "last seen recently", "zuletzt online")
+        return st + store.levelTag(key)
     }
     @State private var text = ""
     @State private var photoItems: [PhotosPickerItem] = []

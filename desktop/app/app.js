@@ -133,6 +133,8 @@ function friendly(e) {
   if (s.includes('invalid login') || s.includes('invalid_credentials')) return t('Неверный ник или пароль', 'Wrong nick or password', 'Nick oder Passwort falsch');
   if (s.includes('nick_taken')) return t('Этот ник уже занят', 'This nick is taken', 'Dieser Nick ist vergeben');
   if (s.includes('email_taken')) return t('Эта почта уже привязана к другому аккаунту', 'This email is already used', 'Diese E-Mail wird bereits verwendet');
+  if (s.includes('not_enough')) return t('Не хватает nox', 'Not enough nox', 'Nicht genug nox');
+  if (s.includes('max_level')) return t('Максимальный уровень', 'Maximum level reached', 'Maximales Level erreicht');
   if (s.includes('bad_nick')) return t('Ник: 3–20 символов, только a–z, цифры и _', 'Nick: 3–20 chars, a–z, digits and _', 'Nick: 3–20 Zeichen, a–z, Ziffern und _');
   if (s.includes('bad_password')) return t('Пароль: минимум 6 символов', 'Password: at least 6 characters', 'Passwort: mindestens 6 Zeichen');
   if (s.includes('bad_code')) return t('Неверный или просроченный код', 'Wrong or expired code', 'Code falsch oder abgelaufen');
@@ -223,7 +225,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, alias: {}, stickers: [], stkLoaded: false };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -266,6 +268,7 @@ async function refresh() {
       ps.forEach(p => { D.profiles[p.id] = p; });
     }
     if (D.me) D.profiles[D.me.id] = D.me;
+    try { await noxSync(Array.from(ids)); } catch (e) { }
     D.loaded = true;
     if (D.email === null) {
       try { const pp = await sel('private_profiles', { user_id: 'eq.' + myId(), select: '*' }); D.email = pp[0] ? pp[0].recovery_email : ''; } catch (e) { }
@@ -598,6 +601,67 @@ function preview(m, noPre) {
   }
   return pre + (m.body || '');
 }
+/* ---------- nox ---------- */
+const rpc = async (name, args) => { const tx = await raw('POST', '/rest/v1/rpc/' + name, { json: args || {} }); return tx ? JSON.parse(tx) : null; };
+const lvlStr = n => ((n || 0) / 100).toFixed(2);
+async function noxSync(ids) {
+  if (!D.checkedAt || Date.now() - D.checkedAt > 30 * 60 * 1000) {
+    D.checkedAt = Date.now();
+    const w = await rpc('nox_checkin'); D.wallet = w;
+    if (w && w.awarded) toast(t('+5 nox за 3 дня подряд! ⚡', '+5 nox for 3 days in a row! ⚡', '+5 nox für 3 Tage in Folge! ⚡'));
+    D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' });
+  }
+  const all = ids.concat([myId()]);
+  if (all.length) {
+    const ls = await sel('nox_wallets', { select: 'user_id,level', user_id: 'in.(' + all.join(',') + ')' });
+    const m = {}; ls.forEach(x => { m[x.user_id] = x.level; }); D.levels = m;
+  }
+}
+async function noxOpen() {
+  try { D.wallet = await rpc('nox_me'); D.board = await rpc('nox_leaderboard'); D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' }); } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+function levelTag(p) { const l = p && D.levels[p.id]; return l ? ' · ★ ' + lvlStr(l) : ''; }
+async function noxBuyColor() {
+  try { const id = await rpc('nox_buy_color'); D.wallet = await rpc('nox_me'); D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' }); renderAll(); noxPick(id); }
+  catch (e) { toast(friendly(e)); }
+}
+function noxPick(id) {
+  U.pickId = id;
+  openDialog(t('Свой цвет', 'Custom color', 'Eigene Farbe'),
+    '<div class="muted" style="margin-bottom:10px">' + t('Цвет можно выбрать один раз, потом он сохранится в палитре.', 'You can pick the color once, then it stays in your palette.', 'Die Farbe kann einmal gewählt werden und bleibt in deiner Palette.') + '</div>' +
+    '<input type="color" id="d-color" value="#9b6bff" style="width:100%;height:56px;border:0;background:none;cursor:pointer">',
+    [['cancel', t('Позже', 'Later', 'Später'), 'ghost'], ['nox-pick-go', t('Сохранить', 'Save', 'Speichern'), '']]);
+}
+async function noxPickGo() {
+  const c = val('d-color'); closeDialog();
+  try { await rpc('nox_set_color', { p_id: U.pickId, p_color: c }); D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' }); S.accent = c; saveSettings(); }
+  catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+async function noxBuyLevel(n) {
+  try { D.wallet = await rpc('nox_buy_level', { p_units: n }); D.board = await rpc('nox_leaderboard'); await noxSync(Object.keys(D.profiles)); }
+  catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+function noxHtml() {
+  const w = D.wallet || { balance: 0, earned: 0, streak: 0, level: 0 };
+  let h = '<div class="card"><div class="title">{i:bolt} ' + t('Мой nox', 'My nox', 'Mein nox') + '</div>' +
+    '<div style="font-size:34px;font-weight:800;margin:6px 0">' + w.balance + ' nox</div>' +
+    '<div class="muted" style="font-size:13px">' + t('Всего заработано: ', 'Total earned: ', 'Insgesamt verdient: ') + w.earned + '</div>' +
+    '<div class="muted" style="font-size:13px;margin-top:4px">' + t('Серия входов: ', 'Login streak: ', 'Login-Serie: ') + w.streak + ' / 3 · ' + t('за 3 дня подряд +5 nox', '+5 nox for 3 days in a row', '+5 nox für 3 Tage in Folge') + '</div></div>';
+  h += '<div class="card"><div class="title">' + t('Свои цвета темы', 'Custom theme colors', 'Eigene Themenfarben') + '</div>' +
+    '<div class="muted" style="font-size:13px;margin:4px 0 8px">' + t('Цена: 10 nox за один цвет. Покупки хранятся на сервере.', 'Price: 10 nox per color. Purchases are stored on the server.', 'Preis: 10 nox pro Farbe. Käufe werden auf dem Server gespeichert.') + '</div><div class="swatches">' +
+    D.colors.map(c => c.color ? '<button class="sw ' + (S.accent.toLowerCase() === c.color ? 'on' : '') + '" style="background:' + c.color + '" data-act="accent" data-v="' + c.color + '"></button>' : '<button class="btn sm ghost" data-act="nox-pick" data-id="' + c.id + '">' + t('Выбрать цвет', 'Pick color', 'Farbe wählen') + '</button>').join('') +
+    '</div><button class="btn sm" style="margin-top:10px" data-act="nox-buy-color">' + t('Купить цвет · 10 nox', 'Buy a color · 10 nox', 'Farbe kaufen · 10 nox') + '</button></div>';
+  h += '<div class="card"><div class="title">' + t('Уровень', 'Level', 'Level') + ': ★ ' + lvlStr(w.level) + ' / 100.0</div>' +
+    '<div class="muted" style="font-size:13px;margin:4px 0 8px">' + t('Виден всем. 0.01 уровня = 1 nox.', 'Visible to everyone. 0.01 level = 1 nox.', 'Für alle sichtbar. 0.01 Level = 1 nox.') + '</div>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm ghost" data-act="nox-lvl" data-n="1">+0.01 · 1 nox</button><button class="btn sm ghost" data-act="nox-lvl" data-n="10">+0.10 · 10 nox</button><button class="btn sm ghost" data-act="nox-lvl" data-n="100">+1.00 · 100 nox</button></div></div>';
+  h += '<div class="card"><div class="title">' + t('Таблица лидеров', 'Leaderboard', 'Bestenliste') + '</div>' +
+    ((D.board && D.board.length) ? D.board.map((r, i) => '<div class="row" style="gap:10px;padding:6px 0">' + '<div style="width:26px;text-align:center" class="muted">' + (i + 1) + '</div>' + avatarHtml({ nick: r.nick, avatar_url: r.avatar_url }, 32) +
+      '<div class="grow" style="flex:1;min-width:0"><b>' + esc(r.nick) + '</b>' + (r.level ? ' <span class="muted">★ ' + lvlStr(r.level) + '</span>' : '') + '</div><div>' + r.earned + ' nox</div></div>').join('') : '<div class="muted">' + t('Пока никого нет', 'Nobody yet', 'Noch niemand') + '</div>') + '</div>';
+  return h;
+}
 function dname(p) { return p ? ((D.alias && D.alias[p.id]) || p.nick) : '?'; }
 function nickOf(id) { const p = D.profiles[id]; return p ? dname(p) : '?'; }
 function lastOf(id) { return thread(id).slice(-1)[0]; }
@@ -693,7 +757,7 @@ function renderPane() {
       head = '<div class="hd-click" data-act="chat-info" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0">' + (ch ? chatAvatar(ch, 40) : '') +
         '<div style="min-width:0"><div class="title">' + esc(ch ? ch.title : '') + '</div><div class="sub">' + esc(typingLine() || (ch ? (ch.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + (cnt ? ' · ' + cnt : '') : '')) + '</div></div></div>' + chatTools();
     } else {
-      head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? dname(p) : '') + '</div><div class="sub">' + esc(statusLine(p)) + '</div></div>' +
+      head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? dname(p) : '') + '</div><div class="sub">' + esc(statusLine(p) + levelTag(p)) + '</div></div>' +
         chatTools() + (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
     }
   }
@@ -1271,18 +1335,17 @@ function renderSettings() {
       (D.email ? '' : '<div class="card row"><div class="grow" style="flex:1">' + t('Почта для восстановления пароля', 'Recovery email', 'Wiederherstellungs-E-Mail') + '</div><button class="btn sm ghost" data-act="email">' + t('Привязать', 'Bind', 'Verknüpfen') + '</button></div>') +
       '<button class="btn ghost" data-act="logout" style="margin-top:10px;align-self:flex-start">{i:logout} ' + t('Выйти из аккаунта', 'Sign out', 'Abmelden') + '</button>';
   } else if (tab === 'look') {
-    const known = ACCENTS.some(c => c.toLowerCase() === S.accent.toLowerCase());
     h += '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Язык', 'Language', 'Sprache') + '</div>' + seg('lang', [['ru', 'Русский'], ['en', 'English'], ['de', 'Deutsch']]) + '</div>' +
       '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Тема', 'Theme', 'Design') + '</div>' + seg('mode', [['dark', t('Тёмная', 'Dark', 'Dunkel')], ['black', t('Чёрная', 'Black', 'Schwarz')], ['light', t('Светлая', 'Light', 'Hell')]]) + '</div>' +
       '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Размер текста', 'Text size', 'Textgröße') + '</div>' + seg('size', [['small', t('Мелкий', 'Small', 'Klein')], ['medium', t('Средний', 'Medium', 'Mittel')], ['large', t('Крупный', 'Large', 'Groß')]]) + '</div>' +
       '<div class="card"><div class="muted" style="margin-bottom:8px">' + t('Цвет свечения', 'Accent color', 'Akzentfarbe') + '</div><div class="swatches">' +
       ACCENTS.map(c => '<button class="sw ' + (S.accent.toLowerCase() === c.toLowerCase() ? 'on' : '') + '" style="background:' + c + '" data-act="accent" data-v="' + c + '"></button>').join('') +
-      '<label class="sw custom ' + (known ? '' : 'on') + '" title="' + t('Свой цвет', 'Custom color', 'Eigene Farbe') + '"><input type="color" id="accent-custom" value="' + esc(S.accent) + '">{i:plus}</label></div>' +
-      '<div class="muted" style="font-size:12px;margin-top:8px">' + t('Кнопка «+» открывает палитру: выбери любой цвет.', 'The “+” button opens a palette: pick any color.', 'Die „+“-Taste öffnet eine Palette: wähle eine beliebige Farbe.') + '</div></div>';
+      D.colors.filter(c => c.color).map(c => '<button class="sw ' + (S.accent.toLowerCase() === c.color ? 'on' : '') + '" style="background:' + c.color + '" data-act="accent" data-v="' + c.color + '"></button>').join('') + '</div>' +
+      '<div class="muted" style="font-size:12px;margin-top:8px">' + t('Свои цвета открываются за nox: вкладка «nox».', 'Custom colors are unlocked with nox: see the “nox” tab.', 'Eigene Farben schaltest du mit nox frei: Tab „nox“.') + '</div></div>';
   } else if (tab === 'notify') {
     h += '<div class="card row"><div class="grow" style="flex:1">' + t('Звук сообщений', 'Message sound', 'Nachrichtenton') + '</div><button class="switch ' + (S.sound ? 'on' : '') + '" data-act="sound"></button></div>';
   } else if (tab === 'nox') {
-    h += '<div class="card"><div class="title">{i:bolt} ' + t('Мой nox', 'My nox', 'Mein nox') + '</div><div class="muted" style="font-size:14px;margin-top:4px">' + t('Пока что данная механика nox находится в разработке', 'The nox mechanic is still in development', 'Die nox-Mechanik ist noch in Entwicklung') + '</div></div>';
+    h += noxHtml();
   } else {
     h += '<div class="card"><div class="title">neirox · ' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><div class="muted" style="margin-top:4px">' + t('Версия', 'Version', 'Version') + ' ' + esc(VERSION) + '</div></div>';
   }
@@ -1485,7 +1548,11 @@ document.addEventListener('click', async e => {
     case 'p-toggle': { const a = aud(); if (!a.src && P.tracks.length) playTrack(0); else if (a.paused) { a.play(); P.playing = true; } else { a.pause(); P.playing = false; } renderAll(); break; }
     case 'p-next': playTrack((P.cur + 1) % Math.max(1, P.tracks.length)); break;
     case 'p-prev': playTrack((P.cur - 1 + P.tracks.length) % Math.max(1, P.tracks.length)); break;
-    case 'set-tab': U.setTab = v; U.error = ''; renderAll(); break;
+    case 'set-tab': U.setTab = v; U.error = ''; renderAll(); if (v === 'nox') noxOpen(); break;
+    case 'nox-buy-color': noxBuyColor(); break;
+    case 'nox-pick': noxPick(Number(id)); break;
+    case 'nox-pick-go': noxPickGo(); break;
+    case 'nox-lvl': noxBuyLevel(Number(el.dataset.n)); break;
     case 'set': S[el.dataset.k] = v; saveSettings(); renderAll(); break;
     case 'accent': S.accent = v; saveSettings(); renderAll(); break;
     case 'sound': S.sound = !S.sound; saveSettings(); renderAll(); break;
@@ -1583,7 +1650,6 @@ document.addEventListener('keydown', e => {
   }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'accent-custom') { U.picking = true; S.accent = e.target.value; applyTheme(); lsSet('s.accent', S.accent); return; }
   if (e.target.id === 'd-sq') { doMsgSearch(e.target.value); return; }
   if (e.target.id === 'd-chq') { clearTimeout(chqT); chqT = setTimeout(() => findChannels(e.target.value.trim()), 250); return; }
   if (e.target.id === 'f-q') {
@@ -1638,7 +1704,6 @@ A_.addEventListener('timeupdate', tickPlayer);
 A_.addEventListener('loadedmetadata', tickPlayer);
 A_.addEventListener('ended', () => { if (P.tracks.length) playTrack((P.cur + 1) % P.tracks.length); });
 document.addEventListener('change', e => {
-  if (e.target.id === 'accent-custom') { U.picking = false; S.accent = e.target.value; saveSettings(); renderAll(); return; }
   if (e.target.id === 'p-seek') { const a = aud(); if (a.duration) a.currentTime = a.duration * e.target.value / 1000; }
 });
 

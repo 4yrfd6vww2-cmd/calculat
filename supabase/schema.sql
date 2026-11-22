@@ -344,3 +344,10 @@ revoke all on public.app_secrets from anon, authenticated;
 
 -- 20. Имена контактов (0.9.1): применено миграцией contact_names
 -- contact_names(user_id, contact_id, name ≤40) — своё имя для друга, видно только владельцу (RLS по user_id), одинаково на всех устройствах.
+
+-- 21. nox, свои цвета темы и уровень (0.10): применено миграцией nox_economy
+-- nox_wallets(user_id, balance, earned, streak, last_login, level 0..10000) — менять можно только через функции (RLS, прямых прав на запись нет;
+--   читать всем можно лишь user_id, earned, level). Функции: nox_me(), nox_checkin() (3 дня подряд = +5 nox, серия сбрасывается; день по Москве),
+--   nox_buy_color() (10 nox → слот цвета), nox_set_color(id, '#rrggbb') (один раз на слот), nox_buy_level(units) (1 nox = 0.01 уровня, максимум 100.00),
+--   nox_leaderboard() (топ‑50 по заработанному).
+-- theme_colors(id, user_id, color null|#rrggbb) — купленные цвета, читает только владелец.

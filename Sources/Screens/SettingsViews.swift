@@ -269,8 +269,24 @@ struct EmailSettings: View {
     }
 }
 
+func hexString(of c: Color) -> String {
+    let u = UIColor(c)
+    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+    u.getRed(&r, green: &g, blue: &b, alpha: &a)
+    let v = (UInt32((r * 255).rounded()) << 16) | (UInt32((g * 255).rounded()) << 8) | UInt32((b * 255).rounded())
+    return "#" + String(format: "%06x", v)
+}
+
 struct LookSettings: View {
     @ObservedObject private var st = Settings.shared
+    @ObservedObject private var store = Store.shared
+
+    private var customColorValues: [UInt32] {
+        store.colors.compactMap { c in
+            guard let h = c.color else { return nil }
+            return UInt32(h.dropFirst(), radix: 16)
+        }
+    }
 
     private func hex(of c: Color) -> UInt32 {
         let u = UIColor(c)
@@ -331,11 +347,19 @@ struct LookSettings: View {
                             }
                         }
                     }
-                    ColorPicker(tr("Свой цвет", "Custom color", "Eigene Farbe"),
-                                selection: Binding(get: { Color(hex: st.accentHex) },
-                                                   set: { st.accentHex = hex(of: $0) }),
-                                supportsOpacity: false)
-                        .foregroundColor(Theme.text)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                        ForEach(customColorValues, id: \.self) { h in
+                            Button { st.accentHex = h } label: {
+                                Circle()
+                                    .fill(Color(hex: h))
+                                    .frame(width: 38, height: 38)
+                                    .overlay(Circle().stroke(Theme.text, lineWidth: st.accentHex == h ? 3 : 0))
+                            }
+                        }
+                    }
+                    Text(tr("Свои цвета открываются за nox: раздел «Мой nox».", "Custom colors are unlocked with nox: see “My nox”.", "Eigene Farben schaltest du mit nox frei: „Mein nox“."))
+                        .font(.system(size: 12)).foregroundColor(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     label(tr("Тема", "Theme", "Design")).padding(.top, 10)
                     HStack(spacing: 8) {
@@ -414,26 +438,161 @@ struct LangSettings: View {
 
 struct NoxView: View {
     @ObservedObject private var st = Settings.shared
+    @ObservedObject private var store = Store.shared
+    @State private var error = ""
+    @State private var pickId: Int?
+    @State private var picked = Color(hex: 0x9B6BFF)
+
+    private func act(_ block: @escaping () async throws -> Void) {
+        error = ""
+        Task {
+            do { try await block() } catch {
+                let m = (error as? APIError)?.message ?? error.localizedDescription
+                if m.contains("not_enough") { self.error = tr("Не хватает nox", "Not enough nox", "Nicht genug nox") }
+                else if m.contains("max_level") { self.error = tr("Максимальный уровень", "Maximum level reached", "Maximales Level erreicht") }
+                else { self.error = friendlyError(m) }
+            }
+        }
+    }
+
+    private func head(_ t: String) -> some View {
+        Text(t).font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func note(_ t: String) -> some View {
+        Text(t).font(.system(size: 13)).foregroundColor(Theme.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func smallButton(_ t: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(t).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text)
+                .padding(.horizontal, 14).frame(height: 38)
+                .background(Theme.card)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private var walletCard: some View {
+        let w = store.wallet ?? Wallet(balance: 0, earned: 0, streak: 0, level: 0)
+        return GlassCard {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("⚡ \(w.balance) nox").font(.system(size: 30, weight: .heavy)).foregroundColor(Theme.text)
+                note(tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + String(w.earned))
+                note(tr("Серия входов: ", "Login streak: ", "Login-Serie: ") + String(w.streak) + " / 3 · " + tr("за 3 дня подряд +5 nox", "+5 nox for 3 days in a row", "+5 nox für 3 Tage in Folge"))
+            }
+        }
+    }
+
+    private var colorsSection: some View {
+        VStack(spacing: 8) {
+            head(tr("Свои цвета темы", "Custom theme colors", "Eigene Themenfarben"))
+            note(tr("10 nox за один цвет. Покупки хранятся на сервере.", "10 nox per color. Purchases are stored on the server.", "10 nox pro Farbe. Käufe werden auf dem Server gespeichert."))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 12) {
+                ForEach(store.colors) { c in
+                    colorCell(c)
+                }
+            }
+            HStack {
+                smallButton(tr("Купить цвет · 10 nox", "Buy a color · 10 nox", "Farbe kaufen · 10 nox")) {
+                    act { pickId = try await store.buyColor() }
+                }
+                Spacer()
+            }
+        }
+    }
+
+    @ViewBuilder private func colorCell(_ c: ThemeColor) -> some View {
+        if let h = c.color, let v = UInt32(h.dropFirst(), radix: 16) {
+            Button { st.accentHex = v } label: {
+                Circle().fill(Color(hex: v)).frame(width: 38, height: 38)
+                    .overlay(Circle().stroke(Theme.text, lineWidth: st.accentHex == v ? 3 : 0))
+            }
+        } else {
+            smallButton(tr("Выбрать цвет", "Pick color", "Farbe wählen")) { picked = Color(hex: 0x9B6BFF); pickId = c.id }
+        }
+    }
+
+    private var levelSection: some View {
+        let w = store.wallet ?? Wallet(balance: 0, earned: 0, streak: 0, level: 0)
+        return VStack(spacing: 8) {
+            head(tr("Уровень: ★ ", "Level: ★ ", "Level: ★ ") + levelStr(w.level) + " / 100.0")
+            note(tr("Виден всем. 0.01 уровня = 1 nox.", "Visible to everyone. 0.01 level = 1 nox.", "Für alle sichtbar. 0.01 Level = 1 nox."))
+            HStack(spacing: 8) {
+                smallButton("+0.01") { act { try await store.buyLevel(1) } }
+                smallButton("+0.10") { act { try await store.buyLevel(10) } }
+                smallButton("+1.00") { act { try await store.buyLevel(100) } }
+                Spacer()
+            }
+        }
+    }
+
+    private func boardRow(_ i: Int, _ r: BoardRow) -> some View {
+        HStack(spacing: 10) {
+            Text(String(i + 1)).foregroundColor(Theme.textSecondary).frame(width: 26)
+            Avatar(nick: r.nick, url: r.avatarUrl, size: 36)
+            Text(r.nick + (r.level > 0 ? "  ★ " + levelStr(r.level) : "")).foregroundColor(Theme.text).font(.system(size: 15, weight: .medium))
+            Spacer()
+            Text(String(r.earned) + " nox").foregroundColor(Theme.accent).font(.system(size: 14, weight: .semibold))
+        }
+        .padding(10)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var boardSection: some View {
+        VStack(spacing: 8) {
+            head(tr("Таблица лидеров", "Leaderboard", "Bestenliste"))
+            if store.board.isEmpty { note(tr("Пока никого нет", "Nobody yet", "Noch niemand")) }
+            ForEach(Array(store.board.enumerated()), id: \.element.id) { pair in
+                boardRow(pair.offset, pair.element)
+            }
+        }
+    }
 
     var body: some View {
         ZStack {
             AppBackground()
-            VStack(spacing: 14) {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(Theme.accentGradient)
-                    .padding(.top, 60)
-                Text(tr("Пока что данная механика nox находится в разработке",
-                        "The nox mechanic is still in development",
-                        "Die nox-Mechanik ist noch in Entwicklung"))
-                    .font(.system(size: 16))
-                    .foregroundColor(Theme.text)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 30)
-                Spacer()
+            ScrollView {
+                VStack(spacing: 18) {
+                    walletCard
+                    if !error.isEmpty { ErrorText(text: error) }
+                    colorsSection
+                    levelSection
+                    boardSection
+                }
+                .padding(16)
             }
         }
         .neonScreen(tr("Мой nox", "My nox", "Mein nox"))
+        .task { await store.noxOpen() }
+        .sheet(isPresented: Binding(get: { pickId != nil }, set: { if !$0 { pickId = nil } })) {
+            NavigationStack {
+                VStack(spacing: 16) {
+                    Text(tr("Цвет выбирается один раз, потом он сохранится в палитре.", "You pick the color once, then it stays in your palette.", "Die Farbe wird einmal gewählt und bleibt in deiner Palette."))
+                        .font(.system(size: 14)).multilineTextAlignment(.center)
+                    ColorPicker(tr("Цвет", "Color", "Farbe"), selection: $picked, supportsOpacity: false)
+                    Spacer()
+                }
+                .padding(20)
+                .navigationTitle(tr("Свой цвет", "Custom color", "Eigene Farbe"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(tr("Позже", "Later", "Später")) { pickId = nil } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(tr("Сохранить", "Save", "Speichern")) {
+                            guard let id = pickId else { return }
+                            let hex = hexString(of: picked)
+                            pickId = nil
+                            act {
+                                try await store.setColor(id, hex)
+                                if let v = UInt32(hex.dropFirst(), radix: 16) { st.accentHex = v }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

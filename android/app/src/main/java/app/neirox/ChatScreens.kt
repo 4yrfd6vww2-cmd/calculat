@@ -578,7 +578,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 val sub = when {
                     typers.isNotEmpty() -> (if (chat != null) typers.joinToString(", ") { Store.dname(it) } + " " else "") + tr("печатает…", "typing…", "tippt …")
                     chat != null -> (if (chat.kind == "channel") tr("Канал", "Channel", "Kanal") else tr("Группа", "Group", "Gruppe")) + " · " + Store.memberCount(friendId)
-                    else -> Store.statusLine(friend)
+                    else -> Store.statusLine(friend) + Store.levelTag(friendId)
                 }
                 Column(
                     Modifier.padding(start = 10.dp).weight(1f).then(if (chat != null) Modifier.clickable { showInfo = true } else Modifier)

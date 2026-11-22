@@ -45,6 +45,12 @@ object Store {
 
     var alias by mutableStateOf<Map<String, String>>(emptyMap())
 
+    var wallet by mutableStateOf<Wallet?>(null)
+    var colors by mutableStateOf<List<ThemeColor>>(emptyList())
+    var levels by mutableStateOf<Map<String, Int>>(emptyMap())
+    var board by mutableStateOf<List<BoardRow>>(emptyList())
+    private var checkedAt = 0L
+
     var stickers by mutableStateOf<List<Sticker>>(emptyList())
     private var stkLoaded = false
         private set
@@ -92,6 +98,11 @@ object Store {
         reactions = emptyList()
         prefs = emptyMap()
         alias = emptyMap()
+        wallet = null
+        colors = emptyList()
+        levels = emptyMap()
+        board = emptyList()
+        checkedAt = 0L
         stickers = emptyList()
         stkLoaded = false
         recoveryEmail = null
@@ -184,6 +195,7 @@ object Store {
             }
             me?.let { map[it.id] = it }
             profiles = map
+            try { noxSync(map.keys.toList()) } catch (e: Exception) { }
         } catch (e: ApiError) {
             if (!Api.isLoggedIn() && loggedIn) {
                 logout()
@@ -282,6 +294,64 @@ object Store {
     fun isMember(cid: String) = members.any { it.chatId == cid && it.userId == myId }
     fun myMember(k: String): Member? = members.firstOrNull { it.chatId == cidOf(k) && it.userId == myId }
     fun memberCount(k: String) = members.count { it.chatId == cidOf(k) }
+    // nox
+
+    private suspend fun loadColors() {
+        val a = Api.select("theme_colors?select=*&order=id.asc")
+        colors = (0 until a.length()).map { ThemeColor(a.getJSONObject(it).getLong("id"), if (a.getJSONObject(it).isNull("color")) null else a.getJSONObject(it).getString("color")) }
+    }
+
+    private suspend fun noxSync(ids: List<String>) {
+        if (checkedAt == 0L || System.currentTimeMillis() - checkedAt > 30 * 60 * 1000) {
+            checkedAt = System.currentTimeMillis()
+            val o = JSONObject(Api.request("POST", "/rest/v1/rpc/nox_checkin", JSONObject()))
+            wallet = parseWallet(o)
+            if (o.optBoolean("awarded")) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(appCtx, tr("+5 nox за 3 дня подряд! ⚡", "+5 nox for 3 days in a row! ⚡", "+5 nox für 3 Tage in Folge! ⚡"), android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            loadColors()
+        }
+        val all = (ids + myId).distinct()
+        if (all.isNotEmpty()) {
+            val a = Api.select("nox_wallets?select=user_id,level&user_id=in.(${all.joinToString(",")})")
+            levels = (0 until a.length()).associate { a.getJSONObject(it).getString("user_id") to a.getJSONObject(it).optInt("level") }
+        }
+    }
+
+    fun levelTag(id: String): String {
+        val l = levels[id] ?: 0
+        return if (l > 0) " · ★ " + levelStr(l) else ""
+    }
+
+    suspend fun noxOpen() {
+        wallet = parseWallet(JSONObject(Api.request("POST", "/rest/v1/rpc/nox_me", JSONObject())))
+        val b = org.json.JSONArray(Api.request("POST", "/rest/v1/rpc/nox_leaderboard", JSONObject()))
+        board = (0 until b.length()).map {
+            val o = b.getJSONObject(it)
+            BoardRow(o.getString("user_id"), o.optString("nick", ""), if (o.isNull("avatar_url")) null else o.optString("avatar_url"), o.optInt("earned"), o.optInt("level"))
+        }
+        loadColors()
+    }
+
+    suspend fun buyColor(): Long {
+        val id = Api.request("POST", "/rest/v1/rpc/nox_buy_color", JSONObject()).trim().toLong()
+        noxOpen()
+        return id
+    }
+
+    suspend fun setColor(id: Long, hex: String) {
+        Api.request("POST", "/rest/v1/rpc/nox_set_color", JSONObject().put("p_id", id).put("p_color", hex))
+        loadColors()
+    }
+
+    suspend fun buyLevel(units: Int) {
+        wallet = parseWallet(JSONObject(Api.request("POST", "/rest/v1/rpc/nox_buy_level", JSONObject().put("p_units", units))))
+        noxOpen()
+        try { noxSync(profiles.keys.toList()) } catch (e: Exception) { }
+    }
+
     /** Имя контакта: своё, если задано, иначе ник. */
     fun dname(p: Profile?): String = if (p == null) "" else (alias[p.id] ?: p.nick)
     fun dname(id: String): String = dname(profiles[id])

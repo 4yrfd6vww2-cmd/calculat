@@ -26,8 +26,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@22.3.27
-          npx electron-builder --win portable --x64 --config.extraMetadata.version=0.5.1 --publish never
-          npx electron-builder --win portable --ia32 --config.win.artifactName='Neirox-Windows-32.${ext}' --config.extraMetadata.version=0.5.1 --publish never
+          npx electron-builder --win portable --x64 --config.extraMetadata.version=0.6.0 --publish never
+          npx electron-builder --win portable --ia32 --config.win.artifactName='Neirox-Windows-32.${ext}' --config.extraMetadata.version=0.6.0 --publish never
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
@@ -50,7 +50,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@33.2.1
-          npx electron-builder --mac dir --universal --config.extraMetadata.version=0.9.1 --publish never
+          npx electron-builder --mac dir --universal --config.extraMetadata.version=0.10.0 --publish never
           find dist -maxdepth 2 | head -20
       - name: Sign ad-hoc and make DMG
         working-directory: desktop
@@ -80,7 +80,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@33.2.1
-          npx electron-builder --linux AppImage --x64 --config.extraMetadata.version=0.5.1 --publish never
+          npx electron-builder --linux AppImage --x64 --config.extraMetadata.version=0.6.0 --publish never
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
@@ -99,7 +99,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-${{ github.run_number }}
-          name: Neirox Desktop ${{ github.run_number }} (0.5.1 pc build, 0.9.1 mac build)
+          name: Neirox Desktop ${{ github.run_number }} (0.6 pc build, 0.10 mac build)
           files: |
             out/win/Neirox-Windows.exe
             out/win/Neirox-Windows-32.exe

@@ -67,6 +67,11 @@ struct MainTabs: View {
                 .tag(3)
         }
         .tint(Theme.accent)
+        .alert(tr("nox", "nox", "nox"), isPresented: Binding(get: { store.noxNotice != nil }, set: { if !$0 { store.noxNotice = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(store.noxNotice ?? "")
+        }
         .onAppear { if #unavailable(iOS 26) { applyTabBarStyle() } }
         .onChange(of: st.accentHex) { _ in if #unavailable(iOS 26) { applyTabBarStyle() } }
         .onChange(of: st.mode) { _ in if #unavailable(iOS 26) { applyTabBarStyle() } }

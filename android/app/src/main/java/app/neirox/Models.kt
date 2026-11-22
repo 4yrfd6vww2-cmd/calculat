@@ -38,6 +38,16 @@ data class Chat(val id: String, val kind: String, val title: String, val descrip
 
 data class Member(val chatId: String, val userId: String, val role: String, val lastRead: Long)
 
+data class Wallet(val balance: Int, val earned: Int, val streak: Int, val level: Int)
+
+data class ThemeColor(val id: Long, val color: String?)
+
+data class BoardRow(val userId: String, val nick: String, val avatarUrl: String?, val earned: Int, val level: Int)
+
+fun parseWallet(o: JSONObject) = Wallet(o.optInt("balance"), o.optInt("earned"), o.optInt("streak"), o.optInt("level"))
+
+fun levelStr(n: Int): String = String.format(java.util.Locale.US, "%.2f", n / 100.0)
+
 data class ChatPref(val key: String, val muted: Boolean, val pinned: Boolean)
 
 data class Sticker(val id: Long, val path: String)
