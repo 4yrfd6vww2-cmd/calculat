@@ -84,7 +84,10 @@ function newer(a, b) {
 
 ipcMain.handle('update-check', async () => {
   try {
-    const key = process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux';
+    const legacy = /^0\.0\./.test(app.getVersion());
+    const key = legacy
+      ? (process.platform === 'darwin' ? 'legacy_mac' : process.arch === 'ia32' ? 'legacy_linux32' : 'legacy_linux')
+      : (process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux');
     const info = JSON.parse((await fetchBuffer(VERSION_URL + '?t=' + Date.now())).toString('utf8'));
     const e = info[key];
     if (!e) return null;
