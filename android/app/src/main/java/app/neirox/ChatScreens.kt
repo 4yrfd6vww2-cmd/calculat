@@ -23,6 +23,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,7 +89,7 @@ private class ChatRow(val key: String, val title: String, val profile: Profile?,
 @Composable
 fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
     val rows = ArrayList<ChatRow>()
-    for (id in Store.friendIds) Store.profiles[id]?.let { rows.add(ChatRow(it.id, it.nick, it, null)) }
+    for (id in Store.friendIds) Store.profiles[id]?.let { rows.add(ChatRow(it.id, Store.dname(it), it, null)) }
     for (c in Store.chats) rows.add(ChatRow("c:" + c.id, c.title, null, c))
     val lastOf = { k: String -> Store.thread(k).lastOrNull() }
     val sorted = rows.sortedWith(compareByDescending<ChatRow> { Store.isPinned(it.key) }.thenByDescending { lastOf(it.key)?.createdAt ?: "" })
@@ -152,7 +157,7 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     else if (r.chat != null) Avatar(r.chat.asProfile(), 48.dp)
                     Column(Modifier.padding(start = 14.dp).weight(1f)) {
                         Text((if (Store.isPinned(r.key)) "📌 " else "") + r.title + (if (Store.isMuted(r.key)) " 🔕" else ""), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val who = if (r.chat != null && last != null && last.sender != Store.myId) (Store.profiles[last.sender]?.nick ?: "") + ": " else ""
+                        val who = if (r.chat != null && last != null && last.sender != Store.myId) Store.dname(last.sender) + ": " else ""
                         Text(who + previewOf(last), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     DropdownMenu(expanded = ctxKey == r.key, onDismissRequest = { ctxKey = null }) {
@@ -220,6 +225,8 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     var showStk by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var hdrMenu by remember { mutableStateOf(false) }
+    var showName by remember { mutableStateOf(false) }
+    var nameText by remember { mutableStateOf("") }
     val myRole = Store.myMember(friendId)?.role
     val isAdm = chat != null && (chat.owner == Store.myId || myRole == "admin" || myRole == "owner")
     val pending = remember { mutableStateListOf<PendingItem>() }
@@ -569,14 +576,14 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 if (chat != null) Avatar(chat.asProfile(), 38.dp) else Avatar(friend, 38.dp)
                 val typers = Store.typingIn(friendId)
                 val sub = when {
-                    typers.isNotEmpty() -> (if (chat != null) typers.joinToString(", ") { it.nick } + " " else "") + tr("печатает…", "typing…", "tippt …")
+                    typers.isNotEmpty() -> (if (chat != null) typers.joinToString(", ") { Store.dname(it) } + " " else "") + tr("печатает…", "typing…", "tippt …")
                     chat != null -> (if (chat.kind == "channel") tr("Канал", "Channel", "Kanal") else tr("Группа", "Group", "Gruppe")) + " · " + Store.memberCount(friendId)
                     else -> Store.statusLine(friend)
                 }
                 Column(
                     Modifier.padding(start = 10.dp).weight(1f).then(if (chat != null) Modifier.clickable { showInfo = true } else Modifier)
                 ) {
-                    Text(chat?.title ?: friend?.nick ?: "", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(chat?.title ?: Store.dname(friend), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(sub, color = if (typers.isNotEmpty() || (chat == null && Store.isOnline(friend))) Accent else TextSecondary, fontSize = 12.sp)
                 }
                 if (chat == null) {
@@ -587,6 +594,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                     Text("⋮", color = Txt, fontSize = 24.sp, modifier = Modifier.clickable { hdrMenu = true }.padding(horizontal = 10.dp, vertical = 4.dp))
                     DropdownMenu(expanded = hdrMenu, onDismissRequest = { hdrMenu = false }) {
                         DropdownMenuItem(text = { Text(tr("Поиск в чате", "Search in chat", "Im Chat suchen")) }, onClick = { hdrMenu = false; showSearch = true })
+                        if (chat == null) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Имя контакта", "Contact name", "Kontaktname")) },
+                                onClick = { hdrMenu = false; nameText = Store.alias[friendId] ?: ""; showName = true }
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(if (Store.isMuted(friendId)) tr("Включить уведомления", "Unmute", "Ton an") else tr("Выключить уведомления", "Mute", "Stummschalten")) },
                             onClick = { hdrMenu = false; scope.launch { try { Store.setPref(friendId, "muted", !Store.isMuted(friendId)) } catch (e: Exception) { } } }
@@ -608,7 +621,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             ) {
                 Text("📌", fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(Store.profiles[pm.sender]?.nick ?: "", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(Store.dname(pm.sender), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text(previewOf(pm), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (isAdm) Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable {
@@ -680,7 +693,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("↩ " + (Store.profiles[rt.sender]?.nick ?: if (rt.sender == Store.myId) tr("Вы", "You", "Du") else ""), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("↩ " + (if (rt.sender == Store.myId) tr("Вы", "You", "Du") else Store.dname(rt.sender)), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text(previewOf(rt), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable { replyTo = null }.padding(6.dp))
@@ -816,7 +829,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Avatar(p, 36.dp)
-                            Text(p.nick, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
+                            Text(Store.dname(p), fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
                         }
                     }
                 }
@@ -849,6 +862,25 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
 
     val vd = video
     if (vd != null) VideoDialog(vd) { video = null }
+    if (showName) {
+        AlertDialog(
+            onDismissRequest = { showName = false },
+            title = { Text(tr("Имя контакта", "Contact name", "Kontaktname")) },
+            text = {
+                Column {
+                    Text(tr("Ник: ", "Nick: ", "Nick: ") + (friend?.nick ?: "") + ". " + tr("Видно только вам.", "Only you can see it.", "Nur für dich sichtbar."), color = TextSecondary, fontSize = 13.sp)
+                    NxField(nameText, { if (it.length <= 40) nameText = it }, tr("Например: папа, начальник", "E.g. dad, boss", "z. B. Papa, Chef"))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showName = false
+                    scope.launch { try { Store.setAlias(friendId, nameText) } catch (e: Exception) { error = friendlyError(e.message ?: "") } }
+                }) { Text(tr("Сохранить", "Save", "Speichern")) }
+            },
+            dismissButton = { TextButton(onClick = { showName = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
     if (showSearch) SearchDialog(friendId, { showSearch = false }) { _, id -> showSearch = false; Store.jumpTo = id }
     if (showInfo && chat != null) ChatInfoDialog(friendId, { showInfo = false }) { showInfo = false; onBack() }
 
@@ -879,9 +911,24 @@ fun MessageBubble(
     val ctx = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var dragX by remember { mutableStateOf(0f) }
     Row(
         Modifier
             .fillMaxWidth()
+            .offset { IntOffset(dragX.roundToInt(), 0) }
+            .pointerInput(selecting) {
+                if (!selecting) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = { if (dragX > 110f) onReply(); dragX = 0f },
+                        onDragCancel = { dragX = 0f }
+                    ) { change, d ->
+                        if (dragX + d >= 0f) {
+                            change.consume()
+                            dragX = (dragX + d).coerceAtMost(160f)
+                        }
+                    }
+                }
+            }
             .background(if (selected) Accent.copy(alpha = 0.18f) else Color.Transparent)
             .padding(vertical = 2.dp),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
@@ -915,7 +962,7 @@ fun MessageBubble(
         ) {
             val textColor = if (mine) Color.White else Txt
             if (showNick) {
-                Text(Store.profiles[m.sender]?.nick ?: "", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(Store.dname(m.sender), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
             if (m.replyTo != null) {
                 Column(
@@ -924,7 +971,7 @@ fun MessageBubble(
                 ) {
                     Text(
                         if (quoted == null) tr("Сообщение удалено", "Message deleted", "Nachricht gelöscht")
-                        else (if (quoted.sender == Store.myId) tr("Вы", "You", "Du") else Store.profiles[quoted.sender]?.nick ?: ""),
+                        else (if (quoted.sender == Store.myId) tr("Вы", "You", "Du") else Store.dname(quoted.sender)),
                         color = textColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
                     )
                     if (quoted != null) Text(previewOf(quoted), color = textColor.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

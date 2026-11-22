@@ -17,6 +17,7 @@ final class Store: ObservableObject {
     @Published var prefs: [String: ChatPref] = [:]
     @Published var stickers: [Sticker] = []
     @Published var jumpTo: Int?
+    @Published var alias: [String: String] = [:]
     private var stkLoaded = false
     @Published var recoveryEmail: String?
     @Published var loggedIn: Bool = API.shared.isLoggedIn
@@ -50,6 +51,7 @@ final class Store: ObservableObject {
         members = []
         reactions = []
         prefs = [:]
+        alias = [:]
         stickers = []
         stkLoaded = false
         recoveryEmail = nil
@@ -88,6 +90,11 @@ final class Store: ObservableObject {
                     URLQueryItem(name: "id", value: "in.(\(ck.joined(separator: ",")))"), URLQueryItem(name: "select", value: "*")]) {
                     chats = cc
                 }
+            }
+            if let cn: [ContactName] = try? await API.shared.select("contact_names", [URLQueryItem(name: "select", value: "*")]) {
+                var d: [String: String] = [:]
+                for x in cn { d[x.contactId] = x.name }
+                alias = d
             }
             if let pr: [ChatPref] = try? await API.shared.select("chat_prefs", [URLQueryItem(name: "select", value: "*")]) {
                 var d: [String: ChatPref] = [:]
@@ -254,6 +261,29 @@ final class Store: ObservableObject {
     }
 
     // MARK: Prefs / pins / codes / stickers
+
+    /// Имя контакта: своё, если задано, иначе ник.
+    func dname(_ p: Profile?) -> String {
+        guard let p = p else { return "" }
+        return alias[p.id] ?? p.nick
+    }
+    func dnameId(_ id: String) -> String { dname(profiles[id]) }
+
+    func setAlias(_ id: String, _ name: String) async {
+        let v = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let q = [URLQueryItem(name: "user_id", value: "eq.\(myId)"), URLQueryItem(name: "contact_id", value: "eq.\(id)")]
+        do {
+            if v.isEmpty {
+                try await API.shared.delete("contact_names", q)
+                alias[id] = nil
+            } else {
+                if alias[id] != nil { try await API.shared.update("contact_names", q, ["name": v]) }
+                else { try await API.shared.insert("contact_names", ["user_id": myId, "contact_id": id, "name": v]) }
+                alias[id] = v
+            }
+        } catch {
+        }
+    }
 
     func isMuted(_ k: String) -> Bool { prefs[k]?.muted ?? false }
     func isPinned(_ k: String) -> Bool { prefs[k]?.pinned ?? false }

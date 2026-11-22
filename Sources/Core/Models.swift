@@ -78,6 +78,11 @@ struct ChatPref: Codable, Hashable {
     var pinned: Bool?
 }
 
+struct ContactName: Codable, Hashable {
+    let contactId: String
+    let name: String
+}
+
 struct Sticker: Codable, Identifiable, Hashable {
     let id: Int
     let path: String

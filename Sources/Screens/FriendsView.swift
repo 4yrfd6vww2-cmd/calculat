@@ -20,7 +20,7 @@ struct FriendsView: View {
         GlassCard {
             HStack(spacing: 12) {
                 Avatar(nick: p.nick, url: p.avatarUrl, size: 42)
-                Text(p.nick)
+                Text(Store.shared.dname(p) + (Store.shared.alias[p.id] != nil ? " (" + p.nick + ")" : ""))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Theme.text)
                 Spacer()

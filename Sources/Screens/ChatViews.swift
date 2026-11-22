@@ -49,7 +49,7 @@ struct ChatsView: View {
     @State private var openKey: String?
 
     private var friends: [Row] {
-        var list: [Row] = store.friendIds.compactMap { store.profiles[$0] }.map { Row(key: $0.id, title: $0.nick, profile: $0, chat: nil) }
+        var list: [Row] = store.friendIds.compactMap { store.profiles[$0] }.map { Row(key: $0.id, title: store.dname($0), profile: $0, chat: nil) }
         list += store.chats.map { Row(key: "c:" + $0.id, title: $0.title, profile: nil, chat: $0) }
         return list.sorted { a, b in
             let la = store.thread(with: a.key).last?.createdAt ?? .distantPast
@@ -80,7 +80,7 @@ struct ChatsView: View {
 
     private func preview(_ m: Message?) -> String {
         guard let m = m else { return tr("Нет сообщений", "No messages", "Keine Nachrichten") }
-        let prefix = m.sender == store.myId ? tr("Вы: ", "You: ", "Du: ") : (m.chatId != nil ? (store.profiles[m.sender]?.nick ?? "") + ": " : "")
+        let prefix = m.sender == store.myId ? tr("Вы: ", "You: ", "Du: ") : (m.chatId != nil ? store.dnameId(m.sender) + ": " : "")
         switch m.kind {
         case "image": return prefix + (m.isSticker ? tr("🏷 Стикер", "🏷 Sticker", "🏷 Sticker") : tr("📷 Фото", "📷 Photo", "📷 Foto"))
         case "file": return prefix + "📎 " + (m.fileName ?? tr("Файл", "File", "Datei"))
@@ -279,13 +279,14 @@ struct Bubble: View {
     var onReact: (String) -> Void = { _ in }
     @Environment(\.openURL) private var openURL
     private let store = Store.shared
+    @State private var dragX: CGFloat = 0
 
     var body: some View {
         HStack {
             if mine { Spacer(minLength: 50) }
             VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                 if showNick {
-                    Text(store.profiles[m.sender]?.nick ?? "").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
+                    Text(store.dnameId(m.sender)).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
                 }
                 if m.replyTo != nil { quoteView }
                 content
@@ -333,12 +334,27 @@ struct Bubble: View {
         }
         .padding(.vertical, 2)
         .background(selected ? Theme.accent.opacity(0.2) : Color.clear)
+        .offset(x: dragX)
+        .simultaneousGesture(swipeGesture)
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 25)
+            .onChanged { v in
+                guard !selecting else { return }
+                let w = v.translation.width
+                if w > 0 && w > abs(v.translation.height) * 1.5 { dragX = min(w, 80) }
+            }
+            .onEnded { _ in
+                if dragX > 55 { onReply() }
+                withAnimation { dragX = 0 }
+            }
     }
 
     private var quoteName: String {
         guard let q = quoted else { return tr("Сообщение удалено", "Message deleted", "Nachricht gelöscht") }
         if q.sender == store.myId { return tr("Вы", "You", "Du") }
-        return store.profiles[q.sender]?.nick ?? ""
+        return store.dnameId(q.sender)
     }
 
     private var quoteView: some View {
@@ -408,7 +424,7 @@ struct ChatView: View {
     private var subtitle: String {
         let t = store.typingIn(key)
         if !t.isEmpty {
-            let who: String = chat != nil ? t.map { $0.nick }.joined(separator: ", ") + " " : ""
+            let who: String = chat != nil ? t.map { store.dname($0) }.joined(separator: ", ") + " " : ""
             return who + tr("печатает…", "typing…", "tippt …")
         }
         if let c = chat {
@@ -423,6 +439,8 @@ struct ChatView: View {
     @State private var showEmoji = false
     @State private var showStk = false
     @State private var showSearch = false
+    @State private var showName = false
+    @State private var nameText = ""
     @State private var videoPath: String?
     @StateObject private var recorder = VoiceRecorder()
     @State private var showFiles = false
@@ -484,7 +502,7 @@ struct ChatView: View {
                 if let rt = replyTo, editing == nil {
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("↩ " + (rt.sender == store.myId ? tr("Вы", "You", "Du") : (store.profiles[rt.sender]?.nick ?? "")))
+                            Text("↩ " + (rt.sender == store.myId ? tr("Вы", "You", "Du") : store.dnameId(rt.sender)))
                                 .font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
                             Text(rt.body ?? (rt.kind == "image" ? "📷" : "📎")).font(.system(size: 13)).foregroundColor(Theme.textSecondary).lineLimit(1)
                         }
@@ -511,7 +529,7 @@ struct ChatView: View {
                 inputBar
             }
         }
-        .neonScreen(chat?.title ?? friend.nick)
+        .neonScreen(chat?.title ?? store.dname(friend))
         .toolbar {
             if !selected.isEmpty {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -539,6 +557,13 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showForward) { forwardSheet }
+        .alert(tr("Имя контакта", "Contact name", "Kontaktname"), isPresented: $showName) {
+            TextField(tr("Например: папа, начальник", "E.g. dad, boss", "z. B. Papa, Chef"), text: $nameText)
+            Button(tr("Сохранить", "Save", "Speichern")) { Task { await store.setAlias(key, String(nameText.prefix(40))) } }
+            Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) {}
+        } message: {
+            Text(tr("Видно только вам. Ник: ", "Only you can see it. Nick: ", "Nur für dich sichtbar. Nick: ") + friend.nick)
+        }
         .sheet(isPresented: $showSearch) { SearchSheet(only: key) { _, id in showSearch = false; store.jumpTo = id } }
         .sheet(isPresented: $showInfo) { ChatInfoSheet(key: key) { showInfo = false; dismiss() } }
         .onChange(of: text) { t in if !t.isEmpty { store.sendTyping(to: key) } }
@@ -606,6 +631,11 @@ struct ChatView: View {
     private var moreMenu: some View {
         Menu {
             Button { showSearch = true } label: { Label(tr("Поиск в чате", "Search in chat", "Im Chat suchen"), systemImage: "magnifyingglass") }
+            if chat == nil {
+                Button { nameText = store.alias[key] ?? ""; showName = true } label: {
+                    Label(tr("Имя контакта", "Contact name", "Kontaktname"), systemImage: "pencil")
+                }
+            }
             Button { Task { await store.setPref(key, "muted", !store.isMuted(key)) } } label: {
                 Label(store.isMuted(key) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten"), systemImage: "bell.slash")
             }
@@ -622,7 +652,7 @@ struct ChatView: View {
             HStack(spacing: 8) {
                 Text("📌")
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(store.profiles[pm.sender]?.nick ?? "").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
+                    Text(store.dnameId(pm.sender)).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
                     Text(pm.body ?? (pm.isSticker ? "🏷" : "📎")).font(.system(size: 13)).foregroundColor(Theme.textSecondary).lineLimit(1)
                 }
                 Spacer()
@@ -937,7 +967,7 @@ struct ChatView: View {
                 }
                 ForEach(store.friendIds.compactMap { store.profiles[$0] }) { p in
                     Button { forwardTo(p.id) } label: {
-                        HStack(spacing: 12) { Avatar(nick: p.nick, url: p.avatarUrl, size: 36); Text(p.nick) }
+                        HStack(spacing: 12) { Avatar(nick: p.nick, url: p.avatarUrl, size: 36); Text(store.dname(p)) }
                     }
                 }
             }

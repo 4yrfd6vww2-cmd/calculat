@@ -213,7 +213,7 @@ object Calls {
             state = CallState.INCOMING
             failed = ""
             startRing()
-            if (!Store.appVisible) Notif.incomingCall(ctx, Store.profiles[sender]?.nick ?: "neirox")
+            if (!Store.appVisible) Notif.incomingCall(ctx, Store.profiles[sender]?.let { Store.dname(it) } ?: "neirox")
             timeoutJob?.cancel()
             timeoutJob = scope.launch { delay(45_000); if (state == CallState.INCOMING) end(false) }
             return
@@ -445,7 +445,7 @@ object Calls {
         val peer = peerId
         val call = callId
         if (!notify && state == CallState.INCOMING && !Store.appVisible) {
-            Notif.message(ctx, "missed", Store.profiles[peer ?: ""]?.nick ?: "neirox", tr("Пропущенный звонок", "Missed call", "Verpasster Anruf"))
+            Notif.message(ctx, "missed", Store.profiles[peer ?: ""]?.let { Store.dname(it) } ?: "neirox", tr("Пропущенный звонок", "Missed call", "Verpasster Anruf"))
         }
         Notif.cancelCall(ctx)
         if (notify && peer != null && state != CallState.IDLE) sendSignal(call, peer, if (decline) "decline" else "end")
@@ -535,7 +535,7 @@ fun CallScreen() {
             Spacer(Modifier.height(if (rv != null) 20.dp else 80.dp))
             if (rv == null) Avatar(peer, 120.dp)
             Spacer(Modifier.height(20.dp))
-            Text(peer?.nick ?: "", color = Txt, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            Text(Store.dname(peer), color = Txt, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Text(status, color = TextSecondary, fontSize = 17.sp)
             Box(Modifier.weight(1f))

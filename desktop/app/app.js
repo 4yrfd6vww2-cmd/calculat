@@ -223,7 +223,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, stickers: [], stkLoaded: false };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, alias: {}, stickers: [], stkLoaded: false };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -253,6 +253,7 @@ async function refresh() {
       const rm = {}; rx.forEach(x => { (rm[x.message_id] = rm[x.message_id] || []).push(x); });
       D.reactions = rm;
     } catch (e) { }
+    try { const cn = await sel('contact_names', { select: '*' }); const am = {}; cn.forEach(x => { am[x.contact_id] = x.name; }); D.alias = am; } catch (e) { }
     try { const pr = await sel('chat_prefs', { select: '*' }); const pm = {}; pr.forEach(x => { pm[x.key] = x; }); D.prefs = pm; } catch (e) { }
     if (!D.stkLoaded) { try { D.stickers = await sel('my_stickers', { select: '*', order: 'id.desc' }); D.stkLoaded = true; } catch (e) { } }
     const ids = new Set();
@@ -308,7 +309,7 @@ function notifyNew(msgs) {
         try {
           const p = D.profiles[fresh[0].sender];
           const body = preview(fresh[0]);
-          if (Notification.permission === 'granted') new Notification(p ? p.nick : 'neirox', { body });
+          if (Notification.permission === 'granted') new Notification(p ? dname(p) : 'neirox', { body });
           else if (Notification.permission === 'default') Notification.requestPermission();
         } catch (e) { }
       }
@@ -597,12 +598,13 @@ function preview(m, noPre) {
   }
   return pre + (m.body || '');
 }
-function nickOf(id) { const p = D.profiles[id]; return p ? p.nick : '?'; }
+function dname(p) { return p ? ((D.alias && D.alias[p.id]) || p.nick) : '?'; }
+function nickOf(id) { const p = D.profiles[id]; return p ? dname(p) : '?'; }
 function lastOf(id) { return thread(id).slice(-1)[0]; }
 function chatAvatar(c, size) { return avatarHtml({ nick: c.title, avatar_url: c.avatar_url }, size); }
 function renderList() {
   const items = [];
-  friendIds().forEach(id => { const p = D.profiles[id]; if (p) items.push({ key: id, title: p.nick, av: avatarHtml(p, 46), tag: '' }); });
+  friendIds().forEach(id => { const p = D.profiles[id]; if (p) items.push({ key: id, title: dname(p), av: avatarHtml(p, 46), tag: '' }); });
   myChatKeys().forEach(k => { const c = D.chats[cidOf(k)]; items.push({ key: k, title: c.title, av: chatAvatar(c, 46), tag: c.kind === 'channel' ? t('канал', 'channel', 'Kanal') : '' }); });
   items.forEach(it => { const l = lastOf(it.key); it.last = l; it.at = l ? l.created_at : ''; });
   items.sort((a, b) => (isPinned(b.key) - isPinned(a.key)) || (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
@@ -691,7 +693,7 @@ function renderPane() {
       head = '<div class="hd-click" data-act="chat-info" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0">' + (ch ? chatAvatar(ch, 40) : '') +
         '<div style="min-width:0"><div class="title">' + esc(ch ? ch.title : '') + '</div><div class="sub">' + esc(typingLine() || (ch ? (ch.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + (cnt ? ' · ' + cnt : '') : '')) + '</div></div></div>' + chatTools();
     } else {
-      head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? p.nick : '') + '</div><div class="sub">' + esc(statusLine(p)) + '</div></div>' +
+      head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? dname(p) : '') + '</div><div class="sub">' + esc(statusLine(p)) + '</div></div>' +
         chatTools() + (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
     }
   }
@@ -758,6 +760,7 @@ const myAdmin = k => { const m = myMember(k); return !!m && (m.role === 'owner' 
 function chatTools() {
   const k = U.chat;
   return '<button class="icon-btn" data-act="s-open" title="' + t('Поиск', 'Search', 'Suche') + '">🔍</button>' +
+    (isKey(k) ? '' : '<button class="icon-btn" data-act="cname" data-id="' + esc(k) + '" title="' + t('Имя контакта', 'Contact name', 'Kontaktname') + '">✏️</button>') +
     '<button class="icon-btn" data-act="cp-pin" data-id="' + esc(k) + '" title="' + t('Закрепить чат', 'Pin chat', 'Chat anheften') + '">' + (isPinned(k) ? '📌' : '📍') + '</button>' +
     '<button class="icon-btn" data-act="cp-mute" data-id="' + esc(k) + '" title="' + t('Уведомления', 'Notifications', 'Benachrichtigungen') + '">' + (isMuted(k) ? '🔕' : '🔔') + '</button>';
 }
@@ -811,6 +814,24 @@ async function joinByCode() {
     await refresh();
     U.tab = 'chats'; U.chat = 'c:' + cid; renderAll();
   } catch (e) { toast(/not_found/.test(String(e && e.message || e)) ? t('Такого кода нет', 'No such code', 'Code nicht gefunden') : friendly(e)); }
+}
+function contactName(id) {
+  const p = D.profiles[id]; if (!p) return;
+  U.cnameId = id;
+  openDialog(t('Имя контакта', 'Contact name', 'Kontaktname'),
+    '<div class="muted" style="margin-bottom:8px">' + t('Ник: ', 'Nick: ', 'Nick: ') + esc(p.nick) + '. ' + t('Видно только вам.', 'Only you can see it.', 'Nur für dich sichtbar.') + '</div>' +
+    '<input class="field" id="d-cname" maxlength="40" placeholder="' + t('Например: папа, начальник', 'E.g. dad, boss', 'z. B. Papa, Chef') + '" value="' + esc((D.alias && D.alias[id]) || '') + '">',
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['cname-go', t('Сохранить', 'Save', 'Speichern'), '']]);
+  setTimeout(() => { const e = $('#d-cname'); if (e) e.focus(); }, 30);
+}
+async function contactNameGo() {
+  const id = U.cnameId; const v = val('d-cname').trim(); closeDialog();
+  try {
+    if (!v) { await del('contact_names', { user_id: 'eq.' + myId(), contact_id: 'eq.' + id }); delete D.alias[id]; }
+    else if (D.alias[id] !== undefined) { await upd('contact_names', { user_id: 'eq.' + myId(), contact_id: 'eq.' + id }, { name: v }); D.alias[id] = v; }
+    else { await ins('contact_names', { user_id: myId(), contact_id: id, name: v }); D.alias[id] = v; }
+  } catch (e) { toast(friendly(e)); }
+  renderAll();
 }
 function chatDesc() {
   const c = chatByKey(U.chat); if (!c) return;
@@ -1155,7 +1176,7 @@ let searchT = null;
 function renderFriends() {
   const page = $('#page');
   const focus = document.activeElement && document.activeElement.id === 'f-q';
-  const rows = (p, right) => '<div class="card row">' + avatarHtml(p, 42) + '<div class="title grow" style="flex:1">' + esc(p.nick) + '</div>' + right + '</div>';
+  const rows = (p, right) => '<div class="card row">' + avatarHtml(p, 42) + '<div class="title grow" style="flex:1">' + esc(dname(p)) + (D.alias && D.alias[p.id] ? ' <span class="muted">(' + esc(p.nick) + ')</span>' : '') + '</div>' + right + '</div>';
   let h = '<h2>' + t('Друзья', 'Friends', 'Freunde') + '</h2>' +
     '<input class="field" id="f-q" placeholder="' + t('Найти по нику', 'Search by nick', 'Nach Nick suchen') + '" value="' + esc(U.query) + '">' +
     (U.error ? '<div class="err">' + esc(U.error) + '</div>' : '');
@@ -1324,7 +1345,7 @@ function openForward(list) {
   window._fwd = list;
   openDialog(t('Переслать', 'Forward', 'Weiterleiten'),
     '<div class="pick" data-act="fwd-ai"><div class="avatar" style="width:36px;height:36px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div>' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div></div>' +
-    friends.map(p => '<div class="pick" data-act="fwd-to" data-id="' + esc(p.id) + '">' + avatarHtml(p, 36) + '<div>' + esc(p.nick) + '</div></div>').join('') +
+    friends.map(p => '<div class="pick" data-act="fwd-to" data-id="' + esc(p.id) + '">' + avatarHtml(p, 36) + '<div>' + esc(dname(p)) + '</div></div>').join('') +
     myChatKeys().filter(canPostTo).map(k => '<div class="pick" data-act="fwd-to" data-id="' + esc(k) + '">' + chatAvatar(D.chats[cidOf(k)], 36) + '<div>' + esc(D.chats[cidOf(k)].title) + '</div></div>').join(''),
     [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost']]);
 }
@@ -1505,6 +1526,8 @@ document.addEventListener('click', async e => {
     case 'code-copy': copyText(id); break;
     case 'join-code': openJoinCode(); break;
     case 'join-code-go': joinByCode(); break;
+    case 'cname': contactName(id); break;
+    case 'cname-go': contactNameGo(); break;
     case 'chat-desc': chatDesc(); break;
     case 'chat-desc-go': chatDescGo(); break;
     case 'stk-e': { U.emoji = false; const ex = replyExtra(); U.replyTo = null; sendText(el.dataset.e, U.chat, ex).catch(er => toast(friendly(er))); renderAll(); break; }
@@ -1629,7 +1652,7 @@ function openCreateChat() {
     '<input class="field" id="d-ctitle" maxlength="60" placeholder="' + t('Название', 'Title', 'Titel') + '">' +
     '<input class="field" id="d-cdesc" maxlength="300" style="margin-top:8px" placeholder="' + t('Описание (необязательно)', 'Description (optional)', 'Beschreibung (optional)') + '">' +
     '<div class="muted" style="margin:10px 0 4px">' + t('Участники (для группы)', 'Members (for a group)', 'Mitglieder (für Gruppe)') + '</div>' +
-    '<div class="pickbox">' + (fr.map(p => '<label class="pick"><input type="checkbox" class="cm" value="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div>' + esc(p.nick) + '</div></label>').join('') || '<div class="muted">' + t('Друзей пока нет', 'No friends yet', 'Noch keine Freunde') + '</div>') + '</div>' +
+    '<div class="pickbox">' + (fr.map(p => '<label class="pick"><input type="checkbox" class="cm" value="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div>' + esc(dname(p)) + '</div></label>').join('') || '<div class="muted">' + t('Друзей пока нет', 'No friends yet', 'Noch keine Freunde') + '</div>') + '</div>' +
     '<input class="field" id="d-cnicks" style="margin-top:8px" placeholder="' + t('Или ники через пробел', 'Or nicks separated by spaces', 'Oder Nicks mit Leerzeichen')+ '">',
     [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['chat-create', t('Создать', 'Create', 'Erstellen'), '']]);
 }
@@ -1702,7 +1725,7 @@ function openChatInfo() {
       (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-role" data-id="' + esc(x.user_id) + '" data-r="' + (x.role === 'admin' ? 'member' : 'admin') + '">' + (x.role === 'admin' ? t('Снять админа', 'Remove admin', 'Admin entfernen') : t('Админ', 'Admin', 'Admin')) + '</button> <button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button>' : '') + '</div>').join('') + '</div>';
   if (owner && c.kind === 'group') {
     h += '<div class="muted" style="margin:10px 0 4px">' + t('Добавить', 'Add', 'Hinzufügen') + '</div><div class="pickbox">' +
-      (fr.map(p => '<div class="pick" data-act="m-add" data-id="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div style="flex:1">' + esc(p.nick) + '</div><span class="muted">+</span></div>').join('') || '<div class="muted">' + t('Все друзья уже в группе', 'All friends are in the group', 'Alle Freunde sind in der Gruppe') + '</div>') + '</div>' +
+      (fr.map(p => '<div class="pick" data-act="m-add" data-id="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div style="flex:1">' + esc(dname(p)) + '</div><span class="muted">+</span></div>').join('') || '<div class="muted">' + t('Все друзья уже в группе', 'All friends are in the group', 'Alle Freunde sind in der Gruppe') + '</div>') + '</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px"><input class="field" id="d-mnick" placeholder="' + t('Ник', 'Nick', 'Nick') + '"><button class="btn sm" data-act="m-add-nick">' + t('Добавить', 'Add', 'Hinzufügen') + '</button></div>';
   }
   const btns = [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']];
@@ -1800,7 +1823,7 @@ async function callHandle(r) {
       try {
         if (window.nxDesktop) nxDesktop.attention();
         const pr = D.profiles[r.sender];
-        if ('Notification' in window && Notification.permission === 'granted') new Notification(pr ? pr.nick : 'neirox', { body: t('Входящий звонок', 'Incoming call', 'Eingehender Anruf') });
+        if ('Notification' in window && Notification.permission === 'granted') new Notification(pr ? dname(pr) : 'neirox', { body: t('Входящий звонок', 'Incoming call', 'Eingehender Anruf') });
       } catch (e) { }
     }
     renderCall();
@@ -1947,7 +1970,7 @@ function renderCall() {
       (CALL.video ? '<button class="cbtn ' + (CALL.camOff ? 'on' : '') + '" data-act="call-cam" title="' + t('Камера', 'Camera', 'Kamera') + '">' + (CALL.camOff ? '{i:videooff}' : '{i:video}') + '</button>' : '') +
       '<button class="cbtn red" data-act="call-hang" title="' + t('Завершить', 'Hang up', 'Auflegen') + '">{i:phoneoff}</button>';
   const vid = CALL.video && CALL.st !== 'incoming' ? '<video id="call-rv" class="call-rv" autoplay playsinline muted></video><video id="call-lv" class="call-lv" autoplay playsinline muted></video>' : '';
-  el.innerHTML = icons(vid + '<div class="call-box' + (vid ? ' over' : '') + '">' + (vid ? '' : avatarHtml(p, 120)) + '<div class="call-nick">' + esc(p ? p.nick : '') + '</div><div class="call-st" id="call-st">' + callStatus() + '</div><div class="call-btns">' + btns + '</div></div>');
+  el.innerHTML = icons(vid + '<div class="call-box' + (vid ? ' over' : '') + '">' + (vid ? '' : avatarHtml(p, 120)) + '<div class="call-nick">' + esc(p ? dname(p) : '') + '</div><div class="call-st" id="call-st">' + callStatus() + '</div><div class="call-btns">' + btns + '</div></div>');
   el.classList.remove('hidden');
   callAttachVideo();
 }

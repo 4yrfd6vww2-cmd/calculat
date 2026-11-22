@@ -31,7 +31,7 @@ struct CreateChatSheet: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: picked.contains(p.id) ? "checkmark.circle.fill" : "circle")
                                     Avatar(nick: p.nick, url: p.avatarUrl, size: 32)
-                                    Text(p.nick)
+                                    Text(store.dname(p))
                                 }
                             }
                         }
@@ -183,7 +183,7 @@ struct ChatInfoSheet: View {
                         Section(tr("Добавить участника", "Add member", "Mitglied hinzufügen")) {
                             let have = Set(mem.map { $0.userId })
                             ForEach(store.friendIds.filter { !have.contains($0) }.compactMap { store.profiles[$0] }) { p in
-                                Button("＋ " + p.nick) { Task { try? await store.addMember(c.id, p.id) } }
+                                Button("＋ " + store.dname(p)) { Task { try? await store.addMember(c.id, p.id) } }
                             }
                             TextField(tr("Или ник", "Or nick", "Oder Nick"), text: $nick).autocapitalization(.none)
                             Button(tr("Добавить по нику", "Add by nick", "Per Nick hinzufügen")) { addByNick(c.id) }
@@ -194,7 +194,7 @@ struct ChatInfoSheet: View {
                         Section(tr("Участники", "Members", "Mitglieder")) {
                             ForEach(mem, id: \.userId) { m in
                                 HStack {
-                                    Text((m.userId == store.myId ? tr("Вы", "You", "Du") : (store.profiles[m.userId]?.nick ?? ""))
+                                    Text((m.userId == store.myId ? tr("Вы", "You", "Du") : store.dnameId(m.userId))
                                          + (m.role == "owner" ? " 👑" : (m.role == "admin" ? " ★" : "")))
                                     Spacer()
                                     if isOwner && m.userId != store.myId {
@@ -312,7 +312,7 @@ struct SearchSheet: View {
     }
 
     private func titleOf(_ k: String) -> String {
-        store.chatByKey(k)?.title ?? store.profiles[k]?.nick ?? ""
+        store.chatByKey(k)?.title ?? store.dnameId(k)
     }
 
     var body: some View {

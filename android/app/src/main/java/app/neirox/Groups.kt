@@ -62,7 +62,7 @@ fun CreateChatDialog(onClose: () -> Unit, onCreated: (String) -> Unit) {
                         ) {
                             Text(if (id in picked) "☑" else "☐", fontSize = 20.sp, color = Accent, modifier = Modifier.padding(end = 10.dp))
                             Avatar(p, 32.dp)
-                            Text(p.nick, color = Txt, modifier = Modifier.padding(start = 10.dp))
+                            Text(Store.dname(p), color = Txt, modifier = Modifier.padding(start = 10.dp))
                         }
                     }
                 }
@@ -208,7 +208,7 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                         for (id in Store.friendIds.filter { it !in have }) {
                             val p = Store.profiles[id] ?: continue
                             Text(
-                                "＋ " + p.nick, color = Txt,
+                                "＋ " + Store.dname(p), color = Txt,
                                 modifier = Modifier.fillMaxWidth().clickable { scope.launch { try { Store.addMember(cid, id) } catch (e: Exception) { error = friendlyError(e.message ?: "") } } }.padding(vertical = 6.dp)
                             )
                         }
@@ -232,7 +232,7 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                         Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(p, 32.dp)
                             Text(
-                                (if (m.userId == Store.myId) tr("Вы", "You", "Du") else p?.nick ?: "") +
+                                (if (m.userId == Store.myId) tr("Вы", "You", "Du") else Store.dname(p)) +
                                     (if (m.role == "owner") " 👑" else if (m.role == "admin") " ★" else ""),
                                 color = Txt, modifier = Modifier.padding(start = 10.dp).weight(1f)
                             )
@@ -311,7 +311,7 @@ fun SearchDialog(only: String?, onClose: () -> Unit, onPick: (String, Long) -> U
                 NxField(q, { q = it }, tr("Что ищем?", "What to find?", "Was suchen?"))
                 for (m in found) {
                     val k = keyOf(m)
-                    val title = Store.chatByKey(k)?.title ?: Store.profiles[k]?.nick ?: ""
+                    val title = Store.chatByKey(k)?.title ?: Store.dname(k)
                     Column(Modifier.fillMaxWidth().clickable { onPick(k, m.id) }.padding(vertical = 8.dp)) {
                         Text(title + " · " + timeOf(m.createdAt), color = Accent, fontSize = 12.sp)
                         Text(m.body ?: "", color = Txt, fontSize = 14.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)

@@ -43,6 +43,8 @@ object Store {
 
     var jumpTo by mutableStateOf<Long?>(null)
 
+    var alias by mutableStateOf<Map<String, String>>(emptyMap())
+
     var stickers by mutableStateOf<List<Sticker>>(emptyList())
     private var stkLoaded = false
         private set
@@ -89,6 +91,7 @@ object Store {
         members = emptyList()
         reactions = emptyList()
         prefs = emptyMap()
+        alias = emptyMap()
         stickers = emptyList()
         stkLoaded = false
         recoveryEmail = null
@@ -128,6 +131,11 @@ object Store {
                     val cc = Api.select("chats?id=in.(${ck.joinToString(",")})&select=*")
                     chats = (0 until cc.length()).map { parseChat(cc.getJSONObject(it)) }
                 } else chats = emptyList()
+            } catch (e: ApiError) {
+            }
+            try {
+                val cn = Api.select("contact_names?select=*")
+                alias = (0 until cn.length()).associate { cn.getJSONObject(it).getString("contact_id") to cn.getJSONObject(it).getString("name") }
             } catch (e: ApiError) {
             }
             try {
@@ -214,7 +222,7 @@ object Store {
                     for ((key, group) in fresh.groupBy { if (it.chatId != null) "c:" + it.chatId else it.sender }) {
                         val last = group.maxByOrNull { it.createdAt } ?: continue
                         val sender = key
-                        val title = if (last.chatId != null) (chatByKey(key)?.title ?: "neirox") else (profiles[last.sender]?.nick ?: "neirox")
+                        val title = if (last.chatId != null) (chatByKey(key)?.title ?: "neirox") else (profiles[last.sender]?.let { dname(it) } ?: "neirox")
                         val preview = previewOf(last)
                         val text = if (group.size > 1) {
                             tr("Новых: ${group.size}. ", "New: ${group.size}. ", "Neu: ${group.size}. ") + preview
@@ -274,6 +282,22 @@ object Store {
     fun isMember(cid: String) = members.any { it.chatId == cid && it.userId == myId }
     fun myMember(k: String): Member? = members.firstOrNull { it.chatId == cidOf(k) && it.userId == myId }
     fun memberCount(k: String) = members.count { it.chatId == cidOf(k) }
+    /** Имя контакта: своё, если задано, иначе ник. */
+    fun dname(p: Profile?): String = if (p == null) "" else (alias[p.id] ?: p.nick)
+    fun dname(id: String): String = dname(profiles[id])
+
+    suspend fun setAlias(id: String, name: String) {
+        val v = name.trim()
+        if (v.isEmpty()) {
+            Api.delete("contact_names?user_id=eq.$myId&contact_id=eq.$id")
+            alias = alias - id
+        } else {
+            if (alias.containsKey(id)) Api.update("contact_names?user_id=eq.$myId&contact_id=eq.$id", JSONObject().put("name", v))
+            else Api.insert("contact_names", JSONObject().put("user_id", myId).put("contact_id", id).put("name", v))
+            alias = alias + (id to v)
+        }
+    }
+
     fun isMuted(k: String) = prefs[k]?.muted == true
     fun isPinned(k: String) = prefs[k]?.pinned == true
     private fun muted(m: Message) = !isMuted(if (m.chatId != null) "c:" + m.chatId else m.sender)

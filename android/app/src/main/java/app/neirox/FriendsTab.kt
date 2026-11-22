@@ -60,7 +60,7 @@ fun FriendsTab() {
     fun PersonRow(p: Profile?, content: @Composable () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(p, 44.dp)
-            Text(p?.nick ?: "", color = Txt, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp).weight(1f))
+            Text(Store.dname(p) + (if (p != null && Store.alias.containsKey(p.id)) " (${p.nick})" else ""), color = Txt, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp).weight(1f))
             content()
         }
     }

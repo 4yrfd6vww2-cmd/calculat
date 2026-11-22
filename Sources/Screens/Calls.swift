@@ -464,7 +464,7 @@ struct CallView: View {
             VStack(spacing: 8) {
                 Spacer().frame(height: calls.remoteVideo != nil ? 20 : 60)
                 if calls.remoteVideo == nil { Avatar(nick: peer?.nick ?? "?", url: peer?.avatarUrl, size: 120) }
-                Text(peer?.nick ?? "").font(.system(size: 26, weight: .semibold)).foregroundColor(Theme.text).padding(.top, 14)
+                Text(Store.shared.dname(peer)).font(.system(size: 26, weight: .semibold)).foregroundColor(Theme.text).padding(.top, 14)
                 Text(status).font(.system(size: 17)).foregroundColor(Theme.textSecondary)
                 Spacer()
                 if calls.state == .incoming {

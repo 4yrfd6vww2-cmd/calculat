@@ -43,5 +43,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-${{ github.run_number }}
-          name: Neirox Android ${{ github.run_number }} (0.9 android build)
+          name: Neirox Android ${{ github.run_number }} (0.9.1 android build)
           files: Neirox.apk

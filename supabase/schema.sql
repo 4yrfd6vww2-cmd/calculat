@@ -341,3 +341,6 @@ revoke all on public.app_secrets from anon, authenticated;
 -- my_stickers(id, user_id, path) — свои стикеры (файлы в chat-media/<uid>/stickers/);
 -- rpc join_by_code(code) -> uuid чата; rpc channel_counts(ids uuid[]) -> [{chat_id, n}] (число подписчиков).
 -- Встроенные стикеры = текст из 1–5 эмодзи; свой стикер = kind 'image' с file_name 'sticker.<ext>'.
+
+-- 20. Имена контактов (0.9.1): применено миграцией contact_names
+-- contact_names(user_id, contact_id, name ≤40) — своё имя для друга, видно только владельцу (RLS по user_id), одинаково на всех устройствах.
