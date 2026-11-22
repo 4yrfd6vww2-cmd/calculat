@@ -41,19 +41,25 @@ struct ChatsView: View {
     @ObservedObject private var inbox = AIInbox.shared
     @State private var aiActive = false
 
-    private var friends: [Profile] {
-        let list = store.friendIds.compactMap { store.profiles[$0] }
+    struct Row: Identifiable { let key: String; let title: String; let profile: Profile?; let chat: Chat?; var id: String { key } }
+    @State private var showCreate = false
+    @State private var showFind = false
+    @State private var openKey: String?
+
+    private var friends: [Row] {
+        var list: [Row] = store.friendIds.compactMap { store.profiles[$0] }.map { Row(key: $0.id, title: $0.nick, profile: $0, chat: nil) }
+        list += store.chats.map { Row(key: "c:" + $0.id, title: $0.title, profile: nil, chat: $0) }
         return list.sorted { a, b in
-            let la = store.thread(with: a.id).last?.createdAt ?? .distantPast
-            let lb = store.thread(with: b.id).last?.createdAt ?? .distantPast
+            let la = store.thread(with: a.key).last?.createdAt ?? .distantPast
+            let lb = store.thread(with: b.key).last?.createdAt ?? .distantPast
             if la != lb { return la > lb }
-            return a.nick < b.nick
+            return a.title < b.title
         }
     }
 
     private func preview(_ m: Message?) -> String {
         guard let m = m else { return tr("Нет сообщений", "No messages", "Keine Nachrichten") }
-        let prefix = m.sender == store.myId ? tr("Вы: ", "You: ", "Du: ") : ""
+        let prefix = m.sender == store.myId ? tr("Вы: ", "You: ", "Du: ") : (m.chatId != nil ? (store.profiles[m.sender]?.nick ?? "") + ": " : "")
         switch m.kind {
         case "image": return prefix + tr("📷 Фото", "📷 Photo", "📷 Foto")
         case "file": return prefix + "📎 " + (m.fileName ?? tr("Файл", "File", "Datei"))
@@ -98,22 +104,39 @@ struct ChatsView: View {
                         }
                         .buttonStyle(.plain)
 
+                        HStack(spacing: 18) {
+                            Button { showCreate = true } label: { Text("＋ " + tr("Группа / канал", "Group / channel", "Gruppe / Kanal")) }
+                            Button { showFind = true } label: { Text("🔍 " + tr("Найти канал", "Find channel", "Kanal suchen")) }
+                            Spacer()
+                        }
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.accent)
+                        .padding(.horizontal, 4)
+
                         ForEach(friends) { p in
-                            NavigationLink(destination: ChatView(friend: p)) {
+                            NavigationLink(destination: ChatView(key: p.key)) {
                                 GlassCard {
                                     HStack(spacing: 12) {
-                                        Avatar(nick: p.nick, url: p.avatarUrl, size: 46)
+                                        if let pr = p.profile {
+                                            Avatar(nick: pr.nick, url: pr.avatarUrl, size: 46)
+                                        } else {
+                                            ZStack {
+                                                Circle().fill(Theme.accentGradient)
+                                                Text(p.chat?.kind == "channel" ? "📢" : "👥").font(.system(size: 22))
+                                            }
+                                            .frame(width: 46, height: 46)
+                                        }
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(p.nick)
+                                            Text(p.title)
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundColor(Theme.text)
-                                            Text(preview(store.thread(with: p.id).last))
+                                            Text(preview(store.thread(with: p.key).last))
                                                 .font(.system(size: 13))
                                                 .foregroundColor(Theme.textSecondary)
                                                 .lineLimit(1)
                                         }
                                         Spacer()
-                                        let n = store.unread(from: p.id)
+                                        let n = store.unread(from: p.key)
                                         if n > 0 {
                                             Text("\(n)")
                                                 .font(.system(size: 12, weight: .bold))
@@ -144,6 +167,11 @@ struct ChatsView: View {
             }
             .neonScreen(tr("Чаты", "Chats", "Chats"))
             .navigationDestination(isPresented: $aiActive) { AIChatView() }
+            .navigationDestination(isPresented: Binding(get: { openKey != nil }, set: { if !$0 { openKey = nil } })) {
+                if let k = openKey { ChatView(key: k) }
+            }
+            .sheet(isPresented: $showCreate) { CreateChatSheet { k in showCreate = false; openKey = k } }
+            .sheet(isPresented: $showFind) { FindChannelSheet { k in showFind = false; openKey = k } }
             .onChange(of: inbox.pending) { v in
                 if v != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { aiActive = true }
@@ -213,13 +241,48 @@ struct Bubble: View {
     var onEdit: (() -> Void)? = nil
     var onForward: () -> Void = {}
     var onDelete: () -> Void = {}
+    var quoted: Message? = nil
+    var showNick: Bool = false
+    var rx: [Reaction] = []
+    var onReply: () -> Void = {}
+    var onReact: (String) -> Void = { _ in }
     @Environment(\.openURL) private var openURL
+    private let store = Store.shared
 
     var body: some View {
         HStack {
             if mine { Spacer(minLength: 50) }
             VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+                if showNick {
+                    Text(store.profiles[m.sender]?.nick ?? "").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
+                }
+                if m.replyTo != nil {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(quoted == nil ? tr("Сообщение удалено", "Message deleted", "Nachricht gelöscht")
+                             : (quoted!.sender == store.myId ? tr("Вы", "You", "Du") : (store.profiles[quoted!.sender]?.nick ?? "")))
+                            .font(.system(size: 11, weight: .semibold))
+                        if let q = quoted {
+                            Text(q.body ?? (q.kind == "image" ? "📷" : "📎")).font(.system(size: 12)).lineLimit(2).opacity(0.85)
+                        }
+                    }
+                    .foregroundColor(mine ? .white : Theme.text)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.black.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
                 content
+                if !rx.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(Array(Dictionary(grouping: rx, by: { $0.emoji }).sorted { $0.key < $1.key }), id: \.key) { e, list in
+                            Text(e + (list.count > 1 ? " \(list.count)" : ""))
+                                .font(.system(size: 13))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.black.opacity(0.2))
+                                .clipShape(Capsule())
+                                .onTapGesture { onReact(e) }
+                        }
+                    }
+                }
                 Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
                     .font(.system(size: 10))
                     .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
@@ -243,6 +306,10 @@ struct Bubble: View {
             }
             .contextMenu {
                 if !selecting {
+                    ForEach(["👍", "❤️", "😂", "😮", "😢", "🔥"], id: \.self) { e in
+                        Button(e) { onReact(e) }
+                    }
+                    Button { onReply() } label: { Label(tr("Ответить", "Reply", "Antworten"), systemImage: "arrowshape.turn.up.left") }
                     Button { onCopy() } label: { Label(tr("Копировать", "Copy", "Kopieren"), systemImage: "doc.on.doc") }
                     if let e = onEdit {
                         Button { e() } label: { Label(tr("Изменить", "Edit", "Bearbeiten"), systemImage: "square.and.pencil") }
@@ -280,7 +347,18 @@ struct Bubble: View {
 struct ChatView: View {
     @ObservedObject private var st = Settings.shared
     @ObservedObject private var store = Store.shared
-    let friend: Profile
+    let key: String
+    @State private var replyTo: Message?
+    @State private var showInfo = false
+    @State private var typingTick = 0
+    private var chat: Chat? { store.chatByKey(key) }
+    private var friend: Profile { store.profiles[key] ?? Profile(id: key, nick: "") }
+    private var subtitle: String {
+        let t = store.typingIn(key)
+        if !t.isEmpty { return (chat != nil ? t.map { $0.nick }.joined(separator: ", ") + " " : "") + tr("печатает…", "typing…", "tippt …") }
+        if let c = chat { return (c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")) + " · \(store.memberCount(key))" }
+        return store.isOnline(friend) ? tr("в сети", "online", "online") : tr("был(а) недавно", "last seen recently", "zuletzt online")
+    }
 
     @State private var text = ""
     @State private var photoItems: [PhotosPickerItem] = []
@@ -308,17 +386,29 @@ struct ChatView: View {
         if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
     }
 
-    private var thread: [Message] { store.thread(with: friend.id) }
+    private var thread: [Message] { store.thread(with: key) }
 
     var body: some View {
         ZStack {
             AppBackground()
             VStack(spacing: 0) {
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(!store.typingIn(key).isEmpty || (chat == nil && store.isOnline(friend)) ? Theme.accent : Theme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if chat != nil { showInfo = true } }
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             ForEach(thread) { m in
                                 Bubble(m: m, mine: m.sender == store.myId,
+                                       quoted: m.replyTo.flatMap { rid in thread.first { $0.id == rid } },
+                                       showNick: chat != nil && m.sender != store.myId,
+                                       rx: store.reactions(of: m.id),
+                                       onReply: { if store.canPost(key) { replyTo = m } },
+                                       onReact: { e in Task { await store.react(m.id, e) } },
                                        selected: selected.contains(m.id), selecting: !selected.isEmpty,
                                        onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 }, onVideo: { videoPath = $0 },
                                        onCopy: { copyOne(m) },
@@ -331,13 +421,26 @@ struct ChatView: View {
                     }
                     .onChange(of: thread.count) { _ in
                         if let last = thread.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
-                        Task { await store.markRead(from: friend.id) }
+                        Task { await store.markRead(from: key) }
                     }
                     .onAppear {
                         if let last = thread.last { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
                 if !error.isEmpty { ErrorText(text: error).padding(.horizontal, 14) }
+                if let rt = replyTo, editing == nil {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("↩ " + (rt.sender == store.myId ? tr("Вы", "You", "Du") : (store.profiles[rt.sender]?.nick ?? "")))
+                                .font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
+                            Text(rt.body ?? (rt.kind == "image" ? "📷" : "📎")).font(.system(size: 13)).foregroundColor(Theme.textSecondary).lineLimit(1)
+                        }
+                        Spacer()
+                        Button { replyTo = nil } label: { Image(systemName: "xmark").foregroundColor(Theme.textSecondary) }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .background(Theme.card)
+                }
                 if editing != nil {
                     HStack {
                         Text("✏️ " + tr("Редактирование", "Editing", "Bearbeiten")).font(.system(size: 13)).foregroundColor(Theme.accent)
@@ -354,7 +457,7 @@ struct ChatView: View {
                 inputBar
             }
         }
-        .neonScreen(friend.nick)
+        .neonScreen(chat?.title ?? friend.nick)
         .toolbar {
             if !selected.isEmpty {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -367,12 +470,21 @@ struct ChatView: View {
                     Button { selected = [] } label: { Image(systemName: "xmark") }
                 }
             } else {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { Calls.shared.start(peer: friend.id) } label: { Image(systemName: "phone.fill") }
+                if chat != nil {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button { showInfo = true } label: { Image(systemName: "info.circle") }
+                    }
+                } else {
+                    ToolbarItemGroup(placement: .navigationBarTrailing) {
+                        Button { Calls.shared.start(peer: key, video: true) } label: { Image(systemName: "video.fill") }
+                        Button { Calls.shared.start(peer: key) } label: { Image(systemName: "phone.fill") }
+                    }
                 }
             }
         }
         .sheet(isPresented: $showForward) { forwardSheet }
+        .sheet(isPresented: $showInfo) { ChatInfoSheet(key: key) { showInfo = false; dismiss() } }
+        .onChange(of: text) { t in if !t.isEmpty { store.sendTyping(to: key) } }
         .confirmationDialog(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?"), isPresented: $showDelete, titleVisibility: .visible) {
             Button(tr("У меня", "For me", "Für mich"), role: .destructive) { deleteSelected(forAll: false) }
             if !selMsgs.isEmpty && selMsgs.allSatisfy({ $0.sender == store.myId }) {
@@ -395,7 +507,7 @@ struct ChatView: View {
                 }
             }
         }
-        .task { await store.markRead(from: friend.id) }
+        .task { await store.markRead(from: key) }
         .onDisappear { recorder.cancel() }
         .sheet(isPresented: $showFiles) {
             DocPicker(types: [.item]) { urls in
@@ -430,7 +542,22 @@ struct ChatView: View {
 
     private var inputBar: some View {
         Group {
-            if recorder.recording {
+            if chat != nil && !store.canPost(key) {
+                HStack {
+                    Spacer()
+                    if store.myMember(key) == nil {
+                        Button(tr("Подписаться", "Subscribe", "Abonnieren")) {
+                            Task { try? await store.joinChat(store.cidOf(key)) }
+                        }
+                        .font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.accent)
+                    } else {
+                        Text(tr("Писать в канал может только владелец", "Only the owner can post", "Nur der Besitzer kann posten"))
+                            .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                    }
+                    Spacer()
+                }
+                .frame(height: 42)
+            } else if recorder.recording {
                 HStack(spacing: 14) {
                     Image(systemName: "circle.fill").font(.system(size: 12)).foregroundColor(.red)
                     Text(fmtSecs(Double(recorder.seconds))).foregroundColor(Theme.text).font(.system(size: 17))
@@ -502,7 +629,8 @@ struct ChatView: View {
         Task {
             do {
                 let data = try Data(contentsOf: url)
-                try await store.sendAlbum([OutItem(data: data, mime: "audio/mp4", name: "voice.m4a", kind: "voice")], caption: "", to: friend.id)
+                try await store.sendAlbum([OutItem(data: data, mime: "audio/mp4", name: "voice.m4a", kind: "voice")], caption: "", to: key, reply: replyTo?.id)
+                replyTo = nil
                 haptic()
             } catch { report(error) }
             try? FileManager.default.removeItem(at: url)
@@ -545,7 +673,8 @@ struct ChatView: View {
             do {
                 var out: [OutItem] = []
                 for p in list { out.append(try await p.makeOutItem()) }
-                try await store.sendAlbum(out, caption: caption, to: friend.id)
+                try await store.sendAlbum(out, caption: caption, to: key, reply: replyTo?.id)
+                replyTo = nil
                 pending.removeAll { x in list.contains { $0.id == x.id } }
             } catch {
                 report(error)
@@ -580,8 +709,10 @@ struct ChatView: View {
         text = ""
         error = ""
         haptic()
+        let rid = replyTo?.id
+        replyTo = nil
         Task {
-            do { try await store.sendText(t, to: friend.id) } catch { report(error); text = t }
+            do { try await store.sendText(t, to: key, reply: rid) } catch { report(error); text = t }
         }
     }
 
@@ -651,6 +782,11 @@ struct ChatView: View {
                 Button { forwardToAI() } label: {
                     HStack { Image(systemName: "sparkles"); Text(tr("Умный Чат", "Smart Chat", "Smarter Chat")) }
                 }
+                ForEach(store.chats.filter { store.canPost("c:" + $0.id) }) { c in
+                    Button { forwardTo("c:" + c.id) } label: {
+                        HStack(spacing: 12) { Text(c.kind == "channel" ? "📢" : "👥"); Text(c.title) }
+                    }
+                }
                 ForEach(store.friendIds.compactMap { store.profiles[$0] }) { p in
                     Button { forwardTo(p.id) } label: {
                         HStack(spacing: 12) { Avatar(nick: p.nick, url: p.avatarUrl, size: 36); Text(p.nick) }
@@ -703,7 +839,8 @@ struct ChatView: View {
         Task {
             do {
                 let data = try await API.shared.aiImage(p)
-                try await store.sendMedia(data: data, mime: "image/jpeg", fileName: "ai.jpg", kind: "image", to: friend.id)
+                try await store.sendMedia(data: data, mime: "image/jpeg", fileName: "ai.jpg", kind: "image", to: key, reply: replyTo?.id)
+                replyTo = nil
             } catch { report(error) }
             busy = false
         }

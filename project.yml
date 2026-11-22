@@ -24,6 +24,7 @@ targets:
       properties:
         UIFileSharingEnabled: true
         NSMicrophoneUsageDescription: "Микрофон нужен для голосовых сообщений и звонков"
+        NSCameraUsageDescription: "Камера нужна для видеозвонков"
         LSSupportsOpeningDocumentsInPlace: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: Audio
@@ -37,7 +38,7 @@ targets:
       base:
         PRODUCT_NAME: Neirox
         PRODUCT_BUNDLE_IDENTIFIER: com.example.neirox
-        MARKETING_VERSION: "0.7"
+        MARKETING_VERSION: "0.8"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

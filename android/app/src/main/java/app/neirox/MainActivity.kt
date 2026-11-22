@@ -16,6 +16,7 @@ class MainActivity : ComponentActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         if (Store.loggedIn) NeiroxService.start(this)
+        Updater.start(this)
         setContent { NeiroxApp() }
     }
 

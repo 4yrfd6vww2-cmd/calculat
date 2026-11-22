@@ -6,6 +6,7 @@ import WebRTC
 enum CallState { case idle, outgoing, incoming, connecting, active }
 
 struct CallPayload: Decodable {
+    var video: Bool?
     var sdp: String?
     var mid: String?
     var idx: Int?
@@ -23,6 +24,11 @@ struct CallSignal: Decodable {
 private final class PCDelegate: NSObject, RTCPeerConnectionDelegate {
     var onCandidate: ((RTCIceCandidate) -> Void)?
     var onState: ((RTCIceConnectionState) -> Void)?
+    var onVideo: ((RTCVideoTrack) -> Void)?
+
+    func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
+        if let t = transceiver.receiver.track as? RTCVideoTrack { onVideo?(t) }
+    }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {}
     func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {}
@@ -45,6 +51,13 @@ final class Calls: ObservableObject {
     @Published var speaker = false
     @Published var seconds = 0
     @Published var failed = ""
+    @Published var video = false
+    @Published var camOff = false
+    @Published var remoteVideo: RTCVideoTrack?
+    @Published var localVideo: RTCVideoTrack?
+    private var capturer: RTCCameraVideoCapturer?
+    private var vSource: RTCVideoSource?
+    private var usingFront = true
 
     private var pollTimer: Timer?
     private var lastId = -1
@@ -124,6 +137,8 @@ final class Calls: ObservableObject {
             }
             callId = r.callId
             peerId = r.sender
+            video = r.payload?.video == true
+            camOff = false
             state = .incoming
             failed = ""
             startRing()
@@ -175,7 +190,7 @@ final class Calls: ObservableObject {
 
     // MARK: actions
 
-    func start(peer: String) {
+    func start(peer: String, video wantVideo: Bool = false) {
         guard state == .idle else { return }
         AVAudioSession.sharedInstance().requestRecordPermission { ok in
             Task { @MainActor in
@@ -187,11 +202,13 @@ final class Calls: ObservableObject {
                 self.callId = UUID().uuidString.lowercased()
                 self.peerId = peer
                 self.state = .outgoing
+                self.video = wantVideo
+                self.camOff = false
                 self.failed = ""
                 self.muted = false
                 self.speaker = false
                 let mine = self.callId
-                self.sendSignal(mine, peer, "invite", onFail: {
+                self.sendSignal(mine, peer, "invite", wantVideo ? ["video": true] : nil, onFail: {
                     if self.callId == mine && self.state == .outgoing {
                         self.end(notify: false, message: tr("Не удалось позвонить", "Could not place the call", "Anruf fehlgeschlagen"))
                     }
@@ -240,6 +257,29 @@ final class Calls: ObservableObject {
         track?.isEnabled = !muted
     }
 
+    func toggleCam() {
+        camOff.toggle()
+        localVideo?.isEnabled = !camOff
+    }
+
+    func switchCam() {
+        guard let cap = capturer else { return }
+        usingFront.toggle()
+        startCapture(cap, front: usingFront)
+    }
+
+    private func startCapture(_ cap: RTCCameraVideoCapturer, front: Bool) {
+        let devices = RTCCameraVideoCapturer.captureDevices()
+        guard let dev = devices.first(where: { $0.position == (front ? .front : .back) }) ?? devices.first else { return }
+        let formats = RTCCameraVideoCapturer.supportedFormats(for: dev)
+        guard let fmt = formats.first(where: {
+            let d = CMVideoFormatDescriptionGetDimensions($0.formatDescription)
+            return d.width >= 640 && d.height >= 360
+        }) ?? formats.first else { return }
+        let fps = Int(min(24, fmt.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 24))
+        cap.startCapture(with: dev, format: fmt, fps: fps)
+    }
+
     func toggleSpeaker() {
         speaker.toggle()
         applySpeaker()
@@ -269,6 +309,7 @@ final class Calls: ObservableObject {
         let cfg = RTCConfiguration()
         cfg.iceServers = servers
         cfg.sdpSemantics = .unifiedPlan
+        delegate.onVideo = { [weak self] t in Task { @MainActor in self?.remoteVideo = t } }
         delegate.onCandidate = { [weak self] c in
             Task { @MainActor in
                 self?.send("ice", ["sdp": c.sdp, "mid": c.sdpMid ?? "", "idx": Int(c.sdpMLineIndex)])
@@ -305,12 +346,24 @@ final class Calls: ObservableObject {
         t.isEnabled = !muted
         track = t
         conn.add(t, streamIds: ["s0"])
+        if video {
+            let vs = f.videoSource()
+            let cap = RTCCameraVideoCapturer(delegate: vs)
+            let vt = f.videoTrack(with: vs, trackId: "v0")
+            vt.isEnabled = !camOff
+            conn.add(vt, streamIds: ["s0"])
+            vSource = vs
+            capturer = cap
+            localVideo = vt
+            usingFront = true
+            startCapture(cap, front: true)
+        }
         applySpeaker()
     }
 
     private func makeOffer() {
         guard let c = pc else { return }
-        let cons = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": "true"], optionalConstraints: nil)
+        let cons = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": "true", "OfferToReceiveVideo": video ? "true" : "false"], optionalConstraints: nil)
         c.offer(for: cons) { sdp, _ in
             guard let sdp = sdp else { return }
             c.setLocalDescription(sdp) { _ in }
@@ -320,7 +373,7 @@ final class Calls: ObservableObject {
 
     private func makeAnswer() {
         guard let c = pc else { return }
-        let cons = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": "true"], optionalConstraints: nil)
+        let cons = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": "true", "OfferToReceiveVideo": video ? "true" : "false"], optionalConstraints: nil)
         c.answer(for: cons) { sdp, _ in
             guard let sdp = sdp else { return }
             c.setLocalDescription(sdp) { _ in }
@@ -340,6 +393,13 @@ final class Calls: ObservableObject {
         timeoutTask?.cancel()
         secTimer?.invalidate()
         secTimer = nil
+        capturer?.stopCapture()
+        capturer = nil
+        vSource = nil
+        remoteVideo = nil
+        localVideo = nil
+        video = false
+        camOff = false
         pc?.close()
         pc = nil
         track = nil
@@ -386,9 +446,24 @@ struct CallView: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [Theme.bgTop, Theme.bgBottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+            if let rv = calls.remoteVideo {
+                VideoRenderer(track: rv, mirror: false).ignoresSafeArea()
+            }
+            if let lv = calls.localVideo, !calls.camOff {
+                VStack {
+                    HStack {
+                        Spacer()
+                        VideoRenderer(track: lv, mirror: true)
+                            .frame(width: 100, height: 140)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .padding(12)
+                    }
+                    Spacer()
+                }
+            }
             VStack(spacing: 8) {
-                Spacer().frame(height: 60)
-                Avatar(nick: peer?.nick ?? "?", url: peer?.avatarUrl, size: 120)
+                Spacer().frame(height: calls.remoteVideo != nil ? 20 : 60)
+                if calls.remoteVideo == nil { Avatar(nick: peer?.nick ?? "?", url: peer?.avatarUrl, size: 120) }
                 Text(peer?.nick ?? "").font(.system(size: 26, weight: .semibold)).foregroundColor(Theme.text).padding(.top, 14)
                 Text(status).font(.system(size: 17)).foregroundColor(Theme.textSecondary)
                 Spacer()
@@ -407,6 +482,12 @@ struct CallView: View {
                         Spacer()
                         round("phone.down.fill", Color(red: 0.9, green: 0.28, blue: 0.3)) { calls.hangUp() }
                         Spacer()
+                        if calls.video {
+                            round(calls.camOff ? "video.slash.fill" : "video.fill", calls.camOff ? Theme.accent : Color.white.opacity(0.18)) { calls.toggleCam() }
+                            Spacer()
+                            round("arrow.triangle.2.circlepath.camera.fill", Color.white.opacity(0.18)) { calls.switchCam() }
+                            Spacer()
+                        }
                         round("speaker.wave.2.fill", calls.speaker ? Theme.accent : Color.white.opacity(0.18)) { calls.toggleSpeaker() }
                         Spacer()
                     }
@@ -421,5 +502,33 @@ struct CallView: View {
             Image(systemName: icon).font(.system(size: 26)).foregroundColor(.white)
                 .frame(width: 70, height: 70).background(bg).clipShape(Circle())
         }
+    }
+}
+
+struct VideoRenderer: UIViewRepresentable {
+    let track: RTCVideoTrack
+    let mirror: Bool
+
+    func makeUIView(context: Context) -> RTCMTLVideoView {
+        let v = RTCMTLVideoView()
+        v.videoContentMode = .scaleAspectFill
+        if mirror { v.transform = CGAffineTransform(scaleX: -1, y: 1) }
+        track.add(v)
+        context.coordinator.view = v
+        return v
+    }
+
+    func updateUIView(_ uiView: RTCMTLVideoView, context: Context) {}
+
+    static func dismantleUIView(_ uiView: RTCMTLVideoView, coordinator: Coordinator) {
+        coordinator.track?.remove(uiView)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(track: track) }
+
+    final class Coordinator {
+        var track: RTCVideoTrack?
+        var view: RTCMTLVideoView?
+        init(track: RTCVideoTrack) { self.track = track }
     }
 }

@@ -27,7 +27,9 @@ struct RootView: View {
         .fullScreenCover(isPresented: Binding(get: { calls.state != .idle && store.loggedIn }, set: { _ in })) {
             CallView()
         }
+        .overlay(alignment: .top) { if store.loggedIn { UpdateBanner() } }
         .task {
+            Updater.shared.start()
             if store.loggedIn { await store.start() }
         }
         .onOpenURL { url in
@@ -44,7 +46,7 @@ struct MainTabs: View {
     @ObservedObject private var store = Store.shared
 
     private var totalUnread: Int {
-        store.messages.filter { $0.receiver == store.myId && $0.readAt == nil }.count
+        store.totalUnread
     }
 
     var body: some View {

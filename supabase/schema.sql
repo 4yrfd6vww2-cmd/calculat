@@ -328,3 +328,9 @@ revoke all on public.app_secrets from anon, authenticated;
 -- call_signals(id, call_id uuid, sender, receiver, type [invite|accept|offer|answer|ice|end|decline], payload jsonb, created_at).
 -- RLS: читать — отправитель/получатель; вставлять — только другу; удалять — обе стороны.
 -- Триггер call_signals_purge_trg удаляет строки старше часа перед каждой вставкой.
+
+-- 18. Группы, каналы, ответы, реакции, «печатает» (0.8): применено миграцией в проекте
+-- chats(id, kind group|channel, title, description, avatar_url, owner, created_at), уникальный lower(title) для каналов;
+-- chat_members(chat_id, user_id, role owner|admin|member, last_read bigint, joined_at); функции is_member/member_role/chat_kind/can_post;
+-- messages: receiver nullable, chat_id uuid, reply_to bigint, CHECK (receiver is null) <> (chat_id is null); новые RLS по участникам;
+-- message_reactions(message_id, user_id, emoji) — одна реакция на пользователя; profiles.typing_to/typing_at (+ grants на колонки).

@@ -33,6 +33,12 @@ object Store {
         private set
     var hidden by mutableStateOf<Set<Long>>(emptySet())
         private set
+    var chats by mutableStateOf<List<Chat>>(emptyList())
+        private set
+    var members by mutableStateOf<List<Member>>(emptyList())
+        private set
+    var reactions by mutableStateOf<List<Reaction>>(emptyList())
+        private set
 
     @Volatile
     var appVisible = false
@@ -72,6 +78,9 @@ object Store {
         friendships = emptyList()
         profiles = emptyMap()
         messages = emptyList()
+        chats = emptyList()
+        members = emptyList()
+        reactions = emptyList()
         recoveryEmail = null
         known = emptySet()
         firstLoad = false
@@ -101,6 +110,16 @@ object Store {
             val fr = Api.select("friendships?select=*")
             friendships = (0 until fr.length()).map { parseFriendship(fr.getJSONObject(it)) }
 
+            try {
+                val mm = Api.select("chat_members?select=*")
+                members = (0 until mm.length()).map { parseMember(mm.getJSONObject(it)) }
+                val ck = members.map { it.chatId }.distinct()
+                if (ck.isNotEmpty()) {
+                    val cc = Api.select("chats?id=in.(${ck.joinToString(",")})&select=*")
+                    chats = (0 until cc.length()).map { parseChat(cc.getJSONObject(it)) }
+                } else chats = emptyList()
+            } catch (e: ApiError) {
+            }
             val ms = Api.select("messages?select=*&order=created_at.desc&limit=1000")
             val list = (0 until ms.length()).map { parseMessage(ms.getJSONObject(it)) }
             try {
@@ -110,10 +129,16 @@ object Store {
             }
             notifyNew(list)
             messages = list.filter { it.id !in hidden }.reversed()
+            try {
+                val rr = Api.select("message_reactions?select=*&limit=3000")
+                reactions = (0 until rr.length()).map { parseReaction(rr.getJSONObject(it)) }
+            } catch (e: ApiError) {
+            }
 
             val ids = HashSet<String>()
             for (f in friendships) { ids.add(f.requester); ids.add(f.addressee) }
-            for (m in list) { ids.add(m.sender); ids.add(m.receiver) }
+            for (m in list) { ids.add(m.sender); m.receiver?.let { ids.add(it) } }
+            for (mb in members) ids.add(mb.userId)
             ids.remove(uid)
             val map = HashMap(profiles)
             if (ids.isNotEmpty()) {
@@ -148,7 +173,7 @@ object Store {
     private fun notifyNew(list: List<Message>) {
         val ids = list.map { it.id }.toSet()
         if (firstLoad) {
-            val fresh = list.filter { it.id !in known && it.receiver == myId }
+            val fresh = list.filter { it.id !in known && it.sender != myId && (it.receiver == myId || (it.chatId != null && isMember(it.chatId))) && muted(it) }
             if (fresh.isNotEmpty()) {
                 if (appVisible) {
                     if (Settings.sound) {
@@ -160,13 +185,15 @@ object Store {
                         }
                     }
                 } else {
-                    for ((sender, group) in fresh.groupBy { it.sender }) {
+                    for ((key, group) in fresh.groupBy { if (it.chatId != null) "c:" + it.chatId else it.sender }) {
                         val last = group.maxByOrNull { it.createdAt } ?: continue
+                        val sender = key
+                        val title = if (last.chatId != null) (chatByKey(key)?.title ?: "neirox") else (profiles[last.sender]?.nick ?: "neirox")
                         val preview = previewOf(last)
                         val text = if (group.size > 1) {
                             tr("Новых: ${group.size}. ", "New: ${group.size}. ", "Neu: ${group.size}. ") + preview
                         } else preview
-                        Notif.message(appCtx, sender, profiles[sender]?.nick ?: "neirox", text)
+                        Notif.message(appCtx, sender, title, text)
                     }
                 }
             }
@@ -215,27 +242,154 @@ object Store {
 
     // Сообщения
 
-    fun thread(with: String): List<Message> = messages.filter {
-        (it.sender == with && it.receiver == myId) || (it.sender == myId && it.receiver == with)
+    fun isKey(k: String) = k.startsWith("c:")
+    fun cidOf(k: String) = k.removePrefix("c:")
+    fun chatByKey(k: String): Chat? = if (isKey(k)) chats.firstOrNull { it.id == cidOf(k) } else null
+    fun isMember(cid: String) = members.any { it.chatId == cid && it.userId == myId }
+    fun myMember(k: String): Member? = members.firstOrNull { it.chatId == cidOf(k) && it.userId == myId }
+    fun memberCount(k: String) = members.count { it.chatId == cidOf(k) }
+    private fun muted(m: Message) = true
+
+    fun canPost(k: String): Boolean {
+        val c = chatByKey(k) ?: return true
+        if (c.kind != "channel") return myMember(k) != null
+        val r = myMember(k)?.role
+        return r == "owner" || r == "admin"
     }
 
-    fun unread(from: String): Int = messages.count { it.sender == from && it.receiver == myId && it.readAt == null }
+    private fun tgt(to: String, o: JSONObject): JSONObject =
+        if (isKey(to)) o.put("chat_id", cidOf(to)) else o.put("receiver", to)
 
-    val totalUnread: Int get() = messages.count { it.receiver == myId && it.readAt == null }
+    fun thread(with: String): List<Message> =
+        if (isKey(with)) messages.filter { it.chatId == cidOf(with) }
+        else messages.filter { (it.sender == with && it.receiver == myId) || (it.sender == myId && it.receiver == with) }
 
-    suspend fun sendText(text: String, to: String) {
-        Api.insert("messages", JSONObject().put("sender", myId).put("receiver", to).put("kind", "text").put("body", text))
+    fun unread(from: String): Int {
+        if (isKey(from)) {
+            val lr = myMember(from)?.lastRead ?: 0L
+            return messages.count { it.chatId == cidOf(from) && it.sender != myId && it.id > lr }
+        }
+        return messages.count { it.sender == from && it.receiver == myId && it.readAt == null }
+    }
+
+    val totalUnread: Int
+        get() = messages.count { it.receiver == myId && it.readAt == null } +
+            chats.sumOf { unread("c:" + it.id) }
+
+    fun reactionsOf(id: Long) = reactions.filter { it.messageId == id }
+
+    suspend fun react(id: Long, emoji: String) {
+        val mine = reactions.firstOrNull { it.messageId == id && it.userId == myId }
+        if (mine != null) Api.delete("message_reactions?message_id=eq.$id&user_id=eq.$myId")
+        if (mine == null || mine.emoji != emoji) {
+            Api.insert("message_reactions", JSONObject().put("message_id", id).put("user_id", myId).put("emoji", emoji))
+        }
         refresh()
     }
 
-    suspend fun sendMedia(data: ByteArray, mime: String, fileName: String, kind: String, to: String) {
+    // Группы и каналы
+
+    suspend fun createChat(kind: String, title: String, friendIds: List<String>): String {
+        val id = UUID.randomUUID().toString()
+        Api.insert("chats", JSONObject().put("id", id).put("kind", kind).put("title", title).put("owner", myId))
+        for (f in friendIds) {
+            try { Api.insert("chat_members", JSONObject().put("chat_id", id).put("user_id", f).put("role", "member")) } catch (e: ApiError) { }
+        }
+        refresh()
+        return "c:$id"
+    }
+
+    suspend fun findChannels(q: String): List<Chat> {
+        val clean = q.trim().replace("*", "").replace(",", " ").replace("(", "").replace(")", "")
+        if (clean.isEmpty()) return emptyList()
+        return try {
+            val a = Api.select("chats?kind=eq.channel&title=ilike.*" + java.net.URLEncoder.encode(clean, "UTF-8") + "*&select=*&limit=20")
+            (0 until a.length()).map { parseChat(a.getJSONObject(it)) }
+        } catch (e: ApiError) {
+            emptyList()
+        }
+    }
+
+    suspend fun joinChat(cid: String) {
+        Api.insert("chat_members", JSONObject().put("chat_id", cid).put("user_id", myId).put("role", "member"))
+        refresh()
+    }
+
+    suspend fun leaveChat(cid: String) {
+        Api.delete("chat_members?chat_id=eq.$cid&user_id=eq.$myId")
+        refresh()
+    }
+
+    suspend fun addMember(cid: String, uid: String) {
+        Api.insert("chat_members", JSONObject().put("chat_id", cid).put("user_id", uid).put("role", "member"))
+        refresh()
+    }
+
+    suspend fun kickMember(cid: String, uid: String) {
+        Api.delete("chat_members?chat_id=eq.$cid&user_id=eq.$uid")
+        refresh()
+    }
+
+    suspend fun deleteChat(cid: String) {
+        Api.delete("chats?id=eq.$cid")
+        refresh()
+    }
+
+    suspend fun renameChat(cid: String, title: String) {
+        Api.update("chats?id=eq.$cid", JSONObject().put("title", title))
+        refresh()
+    }
+
+    // Печатает / онлайн
+
+    private var lastTyping = 0L
+
+    fun sendTyping(to: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastTyping < 3000) return
+        lastTyping = now
+        scope.launch {
+            try {
+                Api.update("profiles?id=eq.$myId", JSONObject().put("typing_to", to).put("typing_at", Instant.now().toString()))
+            } catch (e: ApiError) {
+            }
+        }
+    }
+
+    private fun ageSec(iso: String?): Long = try {
+        if (iso == null) 99999 else (System.currentTimeMillis() - java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()) / 1000
+    } catch (e: Exception) { 99999 }
+
+    fun isTyping(p: Profile?, key: String): Boolean = p != null && p.typingTo == key && ageSec(p.typingAt) < 6
+
+    fun isOnline(p: Profile?): Boolean = p != null && ageSec(p.lastSeen) < 15
+
+    /** Кто печатает в чате key (кроме меня). */
+    fun typingIn(key: String): List<Profile> =
+        if (isKey(key)) profiles.values.filter { it.id != myId && isTyping(it, key) }
+        else listOfNotNull(profiles[key]).filter { isTyping(it, myId) }
+
+    fun statusLine(p: Profile?): String = when {
+        p == null -> ""
+        isOnline(p) -> tr("в сети", "online", "online")
+        else -> tr("был(а) недавно", "last seen recently", "zuletzt online")
+    }
+
+    suspend fun sendText(text: String, to: String, reply: Long? = null) {
+        val o = tgt(to, JSONObject().put("sender", myId).put("kind", "text").put("body", text))
+        if (reply != null) o.put("reply_to", reply)
+        Api.insert("messages", o)
+        refresh()
+    }
+
+    suspend fun sendMedia(data: ByteArray, mime: String, fileName: String, kind: String, to: String, reply: Long? = null) {
         val ext = fileName.substringAfterLast('.', "")
         val path = "$myId/${UUID.randomUUID()}" + (if (ext.isEmpty()) "" else ".$ext")
         Api.upload("chat-media", path, data, mime)
         Api.insert(
             "messages",
-            JSONObject().put("sender", myId).put("receiver", to).put("kind", kind)
-                .put("media_path", path).put("file_name", fileName)
+            tgt(to, JSONObject().put("sender", myId).put("kind", kind)
+                .put("media_path", path).put("file_name", fileName)).also { if (reply != null) it.put("reply_to", reply) }
         )
         refresh()
     }
@@ -243,7 +397,7 @@ object Store {
     /** Одно вложение для отправки альбомом. kind: image / video / file / voice. */
     class OutItem(val data: ByteArray, val mime: String, val name: String, val kind: String)
 
-    suspend fun sendAlbum(items: List<OutItem>, caption: String, to: String) {
+    suspend fun sendAlbum(items: List<OutItem>, caption: String, to: String, reply: Long? = null) {
         val atts = org.json.JSONArray()
         for (it in items) {
             val ext = it.name.substringAfterLast('.', "")
@@ -251,7 +405,8 @@ object Store {
             Api.upload("chat-media", path, it.data, it.mime)
             atts.put(JSONObject().put("path", path).put("name", it.name).put("type", it.kind).put("mime", it.mime).put("size", it.data.size))
         }
-        val row = JSONObject().put("sender", myId).put("receiver", to).put("kind", "album").put("attachments", atts)
+        val row = tgt(to, JSONObject().put("sender", myId).put("kind", "album").put("attachments", atts))
+        if (reply != null) row.put("reply_to", reply)
         if (caption.isNotEmpty()) row.put("body", caption)
         Api.insert("messages", row)
         refresh()
@@ -259,6 +414,12 @@ object Store {
 
     suspend fun markRead(from: String) {
         if (unread(from) == 0) return
+        if (isKey(from)) {
+            val last = thread(from).maxOfOrNull { it.id } ?: return
+            Api.update("chat_members?chat_id=eq.${cidOf(from)}&user_id=eq.$myId", JSONObject().put("last_read", last))
+            refresh()
+            return
+        }
         Api.update(
             "messages?sender=eq.$from&receiver=eq.$myId&read_at=is.null",
             JSONObject().put("read_at", Instant.now().toString())

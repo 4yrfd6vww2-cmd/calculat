@@ -1,14 +1,16 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 
-const VERSION = process.platform === 'darwin' ? '0.7 mac build' : '0.3 pc build';
+const VERSION = process.platform === 'darwin' ? '0.8 mac build' : '0.4 pc build';
 const VERSION_URL = 'https://4yrfd6vww2-cmd.github.io/calculat/version.json';
 const DOWNLOAD_PREFIX = 'https://github.com/4yrfd6vww2-cmd/calculat/releases/download/';
 let mainWin = null;
 let pendingUpdate = null;
 let lastFile = null;
+let tray = null;
+let quitting = false;
 
 // В AppImage на новых Ubuntu песочница Chromium может не стартовать; грузим только свои файлы.
 if (process.platform === 'linux') app.commandLine.appendSwitch('no-sandbox');
@@ -34,6 +36,10 @@ function createWindow() {
     }
   });
   mainWin = win;
+  // закрытие окна сворачивает приложение в трей: звонки и сообщения продолжают приходить
+  win.on('close', e => {
+    if (!quitting && tray) { e.preventDefault(); win.hide(); }
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
@@ -134,11 +140,39 @@ ipcMain.on('attention', () => {
   } catch (e) { }
 });
 
+function showMain() {
+  if (!mainWin || mainWin.isDestroyed()) { createWindow(); return; }
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  mainWin.focus();
+}
+
+function createTray() {
+  try {
+    let img = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png'));
+    if (img.isEmpty()) return;
+    img = img.resize({ width: 24, height: 24 });
+    tray = new Tray(img);
+    tray.setToolTip('neirox');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Открыть', click: showMain },
+      { label: 'Выход', click: () => { quitting = true; app.quit(); } }
+    ]));
+    tray.on('click', showMain);
+  } catch (e) {
+    tray = null;
+  }
+}
+
+app.on('before-quit', () => { quitting = true; });
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  app.on('second-instance', showMain);
   app.whenReady().then(() => {
     createWindow();
+    createTray();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

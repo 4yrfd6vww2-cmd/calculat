@@ -11,7 +11,7 @@
   "build": {
     "appId": "com.example.neirox.desktop",
     "productName": "Neirox",
-    "files": ["main.js", "preload.js", "app/**/*"],
+    "files": ["main.js", "preload.js", "build/icon.png", "app/**/*"],
     "directories": { "output": "dist", "buildResources": "build" },
     "win": {
       "target": [{ "target": "portable", "arch": ["x64"] }],

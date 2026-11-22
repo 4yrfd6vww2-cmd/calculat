@@ -7,7 +7,10 @@ import java.time.format.DateTimeFormatter
 
 private fun JSONObject.str(k: String): String? = if (isNull(k)) null else optString(k, "").ifEmpty { null }
 
-data class Profile(val id: String, val nick: String, val avatarUrl: String?, val createdAt: String?)
+data class Profile(
+    val id: String, val nick: String, val avatarUrl: String?, val createdAt: String?,
+    val lastSeen: String? = null, val typingTo: String? = null, val typingAt: String? = null
+)
 
 data class Friendship(val id: Long, val requester: String, val addressee: String, val status: String)
 
@@ -16,7 +19,7 @@ data class Attachment(val path: String, val name: String, val type: String, val 
 data class Message(
     val id: Long,
     val sender: String,
-    val receiver: String,
+    val receiver: String?,
     val kind: String,
     val body: String?,
     val mediaPath: String?,
@@ -24,18 +27,37 @@ data class Message(
     val createdAt: String,
     val readAt: String?,
     val editedAt: String?,
-    val attachments: List<Attachment> = emptyList()
+    val attachments: List<Attachment> = emptyList(),
+    val chatId: String? = null,
+    val replyTo: Long? = null
 )
 
-fun parseProfile(o: JSONObject) = Profile(o.getString("id"), o.getString("nick"), o.str("avatar_url"), o.str("created_at"))
+data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String)
+
+data class Member(val chatId: String, val userId: String, val role: String, val lastRead: Long)
+
+data class Reaction(val messageId: Long, val userId: String, val emoji: String)
+
+fun parseChat(o: JSONObject) = Chat(o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"))
+
+fun parseMember(o: JSONObject) = Member(o.getString("chat_id"), o.getString("user_id"), o.optString("role", "member"), o.optLong("last_read", 0L))
+
+fun parseReaction(o: JSONObject) = Reaction(o.getLong("message_id"), o.getString("user_id"), o.getString("emoji"))
+
+fun parseProfile(o: JSONObject) = Profile(
+    o.getString("id"), o.getString("nick"), o.str("avatar_url"), o.str("created_at"),
+    o.str("last_seen"), o.str("typing_to"), o.str("typing_at")
+)
 
 fun parseFriendship(o: JSONObject) =
     Friendship(o.getLong("id"), o.getString("requester"), o.getString("addressee"), o.getString("status"))
 
 fun parseMessage(o: JSONObject) = Message(
-    o.getLong("id"), o.getString("sender"), o.getString("receiver"), o.optString("kind", "text"),
+    o.getLong("id"), o.getString("sender"), o.str("receiver"), o.optString("kind", "text"),
     o.str("body"), o.str("media_path"), o.str("file_name"), o.getString("created_at"), o.str("read_at"), o.str("edited_at"),
-    parseAttachments(o)
+    parseAttachments(o),
+    o.str("chat_id"),
+    if (o.isNull("reply_to")) null else o.optLong("reply_to")
 )
 
 private fun parseAttachments(o: JSONObject): List<Attachment> {

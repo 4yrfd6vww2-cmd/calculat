@@ -42,6 +42,8 @@ const IC = {
   mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   film: '<rect x="2" y="2" width="20" height="20" rx="2.2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>',
   phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+  video: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+  videooff: '<path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.7 0H14a2 2 0 0 1 2 2v3.3l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/>',
   phoneoff: '<path d="M10.7 13.3a16 16 0 0 0 3 2.4l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9"/><line x1="23" y1="1" x2="1" y2="23"/>',
   micoff: '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V4a3 3 0 0 0-5.9-.7"/><path d="M19 10v2a7 7 0 0 1-.1 1.2M5 10v2a7 7 0 0 0 11.5 5.4"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
@@ -221,7 +223,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {} };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -232,13 +234,29 @@ async function refresh() {
     const me = await sel('profiles', { id: 'eq.' + myId(), select: '*' });
     D.me = me[0] || null;
     D.friendships = await sel('friendships', { select: '*' });
+    try {
+      const mem = await sel('chat_members', { select: '*' });
+      const byChat = {};
+      mem.forEach(x => { (byChat[x.chat_id] = byChat[x.chat_id] || []).push(x); });
+      const cids = Object.keys(byChat);
+      const chs = cids.length ? await sel('chats', { id: 'in.(' + cids.join(',') + ')', select: '*' }) : [];
+      const cm = {}; chs.forEach(c => { cm[c.id] = c; });
+      D.members = byChat; D.chats = Object.assign({}, D.chats, cm);
+      Object.keys(D.chats).forEach(k => { if (!byChat[k] && !D.chats[k]._ext) delete D.chats[k]; });
+    } catch (e) { }
     const msgs = await sel('messages', { select: '*', order: 'created_at.desc', limit: '1000' });
     try { D.hidden = new Set((await sel('message_hidden', { select: 'message_id' })).map(r => r.message_id)); } catch (e) { }
     notifyNew(msgs);
     D.messages = msgs.filter(m => !D.hidden.has(m.id)).reverse();
+    try {
+      const rx = await sel('message_reactions', { select: '*', limit: '5000' });
+      const rm = {}; rx.forEach(x => { (rm[x.message_id] = rm[x.message_id] || []).push(x); });
+      D.reactions = rm;
+    } catch (e) { }
     const ids = new Set();
     D.friendships.forEach(f => { ids.add(f.requester); ids.add(f.addressee); });
-    msgs.forEach(m => { ids.add(m.sender); ids.add(m.receiver); });
+    msgs.forEach(m => { if (m.sender) ids.add(m.sender); if (m.receiver) ids.add(m.receiver); });
+    Object.keys(D.members).forEach(k => D.members[k].forEach(x => ids.add(x.user_id)));
     ids.delete(myId());
     if (ids.size) {
       const ps = await sel('profiles', { id: 'in.(' + Array.from(ids).join(',') + ')', select: '*' });
@@ -260,7 +278,7 @@ async function refresh() {
 function notifyNew(msgs) {
   const ids = new Set(msgs.map(m => m.id));
   if (firstLoadDone) {
-    const fresh = msgs.filter(m => !knownIds.has(m.id) && m.receiver === myId());
+    const fresh = msgs.filter(m => !knownIds.has(m.id) && m.sender !== myId() && (m.receiver === myId() || (m.chat_id && D.members[m.chat_id])));
     if (fresh.length) {
       if (S.sound) beep();
       if (!document.hasFocus() && 'Notification' in window) {
@@ -293,13 +311,35 @@ const friendIds = () => D.friendships.filter(f => f.status === 'accepted').map(f
 const incoming = () => D.friendships.filter(f => f.status === 'pending' && f.addressee === myId());
 const outgoing = () => D.friendships.filter(f => f.status === 'pending' && f.requester === myId());
 const friendshipWith = id => D.friendships.find(f => (f.requester === id && f.addressee === myId()) || (f.requester === myId() && f.addressee === id));
-const thread = id => D.messages.filter(m => (m.sender === id && m.receiver === myId()) || (m.sender === myId() && m.receiver === id));
-const unread = id => D.messages.filter(m => m.sender === id && m.receiver === myId() && !m.read_at).length;
-const totalUnread = () => friendIds().reduce((a, id) => a + unread(id), 0);
+const isKey = id => typeof id === 'string' && id.slice(0, 2) === 'c:';
+const cidOf = id => id.slice(2);
+const chatByKey = id => (isKey(id) ? D.chats[cidOf(id)] : null);
+const myMember = id => (D.members[cidOf(id)] || []).find(x => x.user_id === myId());
+const tgt = to => (isKey(to) ? { chat_id: cidOf(to) } : { receiver: to });
+const canPostTo = id => {
+  if (!isKey(id)) return true;
+  const c = chatByKey(id), m = myMember(id);
+  return !!(c && m && (c.kind === 'group' || m.role === 'owner' || m.role === 'admin'));
+};
+const myChatKeys = () => Object.keys(D.members).filter(k => D.chats[k]).map(k => 'c:' + k);
+const thread = id => (isKey(id)
+  ? D.messages.filter(m => m.chat_id === cidOf(id))
+  : D.messages.filter(m => !m.chat_id && ((m.sender === id && m.receiver === myId()) || (m.sender === myId() && m.receiver === id))));
+const unread = id => {
+  if (isKey(id)) { const m = myMember(id); const lr = m ? m.last_read : 0; return D.messages.filter(x => x.chat_id === cidOf(id) && x.sender !== myId() && x.id > lr).length; }
+  return D.messages.filter(m => m.sender === id && m.receiver === myId() && !m.read_at).length;
+};
+const totalUnread = () => friendIds().reduce((a, id) => a + unread(id), 0) + myChatKeys().reduce((a, k) => a + unread(k), 0);
 
 async function markReadIfOpen() {
   const id = U.chat;
   if (!id || id === 'ai' || !unread(id)) return;
+  if (isKey(id)) {
+    const mm = myMember(id); const last = thread(id).reduce((a, m) => Math.max(a, m.id), 0);
+    if (!mm || last <= mm.last_read) return;
+    try { await upd('chat_members', { chat_id: 'eq.' + cidOf(id), user_id: 'eq.' + myId() }, { last_read: last }); mm.last_read = last; renderAll(); } catch (e) { }
+    return;
+  }
   try {
     await upd('messages', { sender: 'eq.' + id, receiver: 'eq.' + myId(), read_at: 'is.null' }, { read_at: new Date().toISOString() });
     D.messages.forEach(m => { if (m.sender === id && m.receiver === myId() && !m.read_at) m.read_at = new Date().toISOString(); });
@@ -308,15 +348,15 @@ async function markReadIfOpen() {
 }
 
 /* ---------- сообщения: операции ---------- */
-async function sendText(text, to) {
-  await ins('messages', { sender: myId(), receiver: to, kind: 'text', body: text });
+async function sendText(text, to, extra) {
+  await ins('messages', Object.assign({ sender: myId(), kind: 'text', body: text }, tgt(to), extra || {}));
   await refresh();
 }
-async function sendMedia(blob, mime, fileName, kind, to) {
+async function sendMedia(blob, mime, fileName, kind, to, extra) {
   const ext = (fileName.split('.').pop() || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
   const path = myId() + '/' + crypto.randomUUID() + (ext && ext !== fileName ? '.' + ext : '');
   await uploadFile('chat-media', path, blob, mime, false);
-  await ins('messages', { sender: myId(), receiver: to, kind, media_path: path, file_name: fileName });
+  await ins('messages', Object.assign({ sender: myId(), kind, media_path: path, file_name: fileName }, tgt(to), extra || {}));
   await refresh();
 }
 async function uploadAtt(blob, mime, fileName) {
@@ -325,7 +365,7 @@ async function uploadAtt(blob, mime, fileName) {
   await uploadFile('chat-media', path, blob, mime, false);
   return path;
 }
-async function sendAlbum(items, caption, to) {
+async function sendAlbum(items, caption, to, extra) {
   const atts = [];
   for (const it of items) {
     let blob = it.blob || it.file, mime = it.mime || blob.type || 'application/octet-stream', name = it.name;
@@ -334,7 +374,7 @@ async function sendAlbum(items, caption, to) {
     const path = await uploadAtt(blob, mime, name);
     atts.push({ path, name, type: it.type, mime, size: blob.size });
   }
-  await ins('messages', { sender: myId(), receiver: to, kind: 'album', body: caption || null, attachments: atts });
+  await ins('messages', Object.assign({ sender: myId(), kind: 'album', body: caption || null, attachments: atts }, tgt(to), extra || {}));
   await refresh();
 }
 async function editMessage(id, text) {
@@ -518,9 +558,9 @@ function renderAll() {
 }
 
 /* ---------- список чатов ---------- */
-function preview(m) {
+function preview(m, noPre) {
   if (!m) return t('Нет сообщений', 'No messages', 'Keine Nachrichten');
-  const pre = m.sender === myId() ? t('Вы: ', 'You: ', 'Du: ') : '';
+  const pre = m.sender === myId() && !noPre ? t('Вы: ', 'You: ', 'Du: ') : '';
   if (m.kind === 'image') return pre + t('Фото', 'Photo', 'Foto');
   if (m.kind === 'file') return pre + (m.file_name || '');
   if (m.kind === 'album') {
@@ -534,22 +574,26 @@ function preview(m) {
   }
   return pre + (m.body || '');
 }
+function nickOf(id) { const p = D.profiles[id]; return p ? p.nick : '?'; }
+function lastOf(id) { return thread(id).slice(-1)[0]; }
+function chatAvatar(c, size) { return avatarHtml({ nick: c.title }, size); }
 function renderList() {
-  const friends = friendIds().map(id => D.profiles[id]).filter(Boolean);
-  friends.sort((a, b) => {
-    const la = (thread(a.id).slice(-1)[0] || {}).created_at || '', lb = (thread(b.id).slice(-1)[0] || {}).created_at || '';
-    return la !== lb ? (la < lb ? 1 : -1) : a.nick.localeCompare(b.nick);
-  });
+  const items = [];
+  friendIds().forEach(id => { const p = D.profiles[id]; if (p) items.push({ key: id, title: p.nick, av: avatarHtml(p, 46), tag: '' }); });
+  myChatKeys().forEach(k => { const c = D.chats[cidOf(k)]; items.push({ key: k, title: c.title, av: chatAvatar(c, 46), tag: c.kind === 'channel' ? t('канал', 'channel', 'Kanal') : '' }); });
+  items.forEach(it => { const l = lastOf(it.key); it.last = l; it.at = l ? l.created_at : ''; });
+  items.sort((a, b) => (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
   let h = '<div class="chat-item ' + (U.chat === 'ai' ? 'on' : '') + '" data-act="open" data-v="ai">' +
     '<div class="avatar" style="width:46px;height:46px;font-size:22px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div>' +
     '<div class="grow" style="min-width:0"><div class="title">' + t('Умный Чат (ИИ)', 'Smart Chat (AI)', 'Smarter Chat (KI)') + '</div><div class="prev">' + t('Вопросы и картинки', 'Questions and images', 'Fragen und Bilder') + '</div></div></div>';
-  friends.forEach(p => {
-    const u = unread(p.id);
-    h += '<div class="chat-item ' + (U.chat === p.id ? 'on' : '') + '" data-act="open" data-v="' + esc(p.id) + '">' + avatarHtml(p, 46) +
-      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + esc(p.nick) + '</div><div class="prev">' + esc(preview(thread(p.id).slice(-1)[0])) + '</div></div>' +
+  items.forEach(it => {
+    const u = unread(it.key);
+    const who = isKey(it.key) && it.last && it.last.sender !== myId() ? nickOf(it.last.sender) + ': ' : '';
+    h += '<div class="chat-item ' + (U.chat === it.key ? 'on' : '') + '" data-act="open" data-v="' + esc(it.key) + '">' + it.av +
+      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + esc(it.title) + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
       (u ? '<span class="unread">' + u + '</span>' : '') + '</div>';
   });
-  if (!friends.length) h += '<div class="empty">' + t('Добавь друзей на вкладке «Друзья», чтобы начать переписку.', 'Add friends in the Friends tab to start chatting.', 'Füge im Tab „Freunde“ Freunde hinzu, um zu chatten.') + '</div>';
+  if (!items.length) h += '<div class="empty">' + t('Добавь друзей на вкладке «Друзья», чтобы начать переписку.', 'Add friends in the Friends tab to start chatting.', 'Füge im Tab „Freunde“ Freunde hinzu, um zu chatten.') + '</div>';
   setHTML($('#list'), h);
 }
 
@@ -565,6 +609,7 @@ function buildPane() {
     '<div class="msgs" id="msgs"></div>' +
     '<div id="cerr"></div>' +
     '<div id="banner"></div>' +
+    '<div id="cnote"></div>' +
     '<div id="tray"></div>' +
     '<div id="emoji" class="hidden"></div>' +
     '<div class="composer" id="composer">' +
@@ -581,7 +626,7 @@ function buildPane() {
     '<button class="icon-btn send" data-act="rec-send" title="' + t('Отправить', 'Send', 'Senden') + '">{i:send}</button></div></div>');
   const inp = $('#inp');
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
-  inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(140, inp.scrollHeight) + 'px'; });
+  inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(140, inp.scrollHeight) + 'px'; if (inp.value) sendTyping(); });
   if (!ai) {
     pane.ondragover = e => { e.preventDefault(); pane.classList.add('drop'); };
     pane.ondragleave = () => pane.classList.remove('drop');
@@ -602,7 +647,8 @@ function renderPane() {
   if (paneBuilt !== U.chat) buildPane();
   if (!U.chat) return;
   const ai = U.chat === 'ai';
-  const p = ai ? null : D.profiles[U.chat];
+  const key = isKey(U.chat), ch = key ? chatByKey(U.chat) : null;
+  const p = ai || key ? null : D.profiles[U.chat];
   // шапка
   let head;
   if (U.selected.size) {
@@ -615,8 +661,14 @@ function renderPane() {
   } else if (ai) {
     head = '<div class="avatar" style="width:40px;height:40px;font-size:20px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div class="title" style="flex:1">' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><button class="icon-btn" data-act="ai-clear" title="' + t('Очистить', 'Clear', 'Leeren') + '">{i:trash}</button>';
   } else {
-    head = avatarHtml(p, 40) + '<div class="title" style="flex:1">' + esc(p ? p.nick : '') + '</div>' +
-      (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button>' : '');
+    if (key) {
+      const cnt = (D.members[cidOf(U.chat)] || []).length;
+      head = '<div class="hd-click" data-act="chat-info" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0">' + (ch ? chatAvatar(ch, 40) : '') +
+        '<div style="min-width:0"><div class="title">' + esc(ch ? ch.title : '') + '</div><div class="sub">' + esc(typingLine() || (ch ? (ch.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + (cnt ? ' · ' + cnt : '') : '')) + '</div></div></div>';
+    } else {
+      head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? p.nick : '') + '</div><div class="sub">' + esc(statusLine(p)) + '</div></div>' +
+        (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
+    }
   }
   setHTML($('#chead'), head);
 
@@ -638,8 +690,19 @@ function renderPane() {
   } else {
     html = null;
     setHTML($('#cerr'), U.error ? '<div class="err" style="padding:0 18px">' + esc(U.error) + '</div>' : '');
+    const rm = U.replyTo ? D.messages.find(x => x.id === U.replyTo) : null;
     setHTML($('#banner'), U.editing ? '<div class="banner"><span class="grow" style="flex:1">{i:edit} ' + t('Редактирование', 'Editing', 'Bearbeiten') + '</span><button data-act="edit-cancel">{i:x}</button></div>' :
-      (U.sending ? '<div class="banner"><span class="grow" style="flex:1">{i:clip} ' + t('Отправка…', 'Sending…', 'Senden…') + '</span></div>' : ''));
+      (U.sending ? '<div class="banner"><span class="grow" style="flex:1">{i:clip} ' + t('Отправка…', 'Sending…', 'Senden…') + '</span></div>' :
+        (rm ? '<div class="banner"><span class="grow" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{i:forward} ' + esc(nickOf(rm.sender)) + ': ' + esc(preview(rm, true)) + '</span><button data-act="reply-cancel">{i:x}</button></div>' : '')));
+    const canPost = canPostTo(U.chat);
+    $('#composer').classList.toggle('hidden', !canPost);
+    let note = '';
+    if (key && !canPost) {
+      note = !myMember(U.chat) && ch && ch.kind === 'channel'
+        ? '<div class="cnote"><button class="btn" data-act="ch-join" data-id="' + esc(ch.id) + '">' + t('Подписаться', 'Subscribe', 'Abonnieren') + '</button></div>'
+        : '<div class="cnote muted">' + t('Писать в канал могут только администраторы', 'Only admins can post in this channel', 'Nur Admins können in diesem Kanal schreiben') + '</div>';
+    }
+    setHTML($('#cnote'), note);
     setHTML($('#tray'), trayHtml());
   }
   if (ai) setHTML($('#tray'), '');
@@ -670,7 +733,7 @@ function srcAttr(path, withFull) {
   const c = urlCache[path];
   return c && c.exp > Date.now() ? ' src="' + esc(c.url) + '"' + (withFull ? ' data-full="' + esc(c.url) + '"' : '') : '';
 }
-function msgContent(m) {
+function msgContentBase(m) {
   if (m.kind === 'image' && m.media_path) return '<img class="pic" data-path="' + esc(m.media_path) + '"' + srcAttr(m.media_path, true) + ' alt="">';
   if (m.kind === 'file' && m.media_path) return '<div class="file" data-act="open-file" data-id="' + m.id + '">{i:file} <span>' + esc(m.file_name || 'file') + '</span></div>';
   if (m.kind === 'album') {
@@ -689,6 +752,82 @@ function msgContent(m) {
   }
   return linkify(m.body || '');
 }
+function quoteHtml(m) {
+  if (!m.reply_to) return '';
+  const q = D.messages.find(x => x.id === m.reply_to);
+  return '<div class="quote">' + (q ? '<b>' + esc(nickOf(q.sender)) + '</b>' + esc(preview(q, true)) : '<i>' + t('Сообщение удалено', 'Message deleted', 'Nachricht gelöscht') + '</i>') + '</div>';
+}
+const RX_LIST = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+function rxHtml(m) {
+  const l = D.reactions[m.id];
+  if (!l || !l.length) return '';
+  const g = {};
+  l.forEach(x => { const o = g[x.emoji] || (g[x.emoji] = { n: 0, me: false }); o.n++; if (x.user_id === myId()) o.me = true; });
+  return '<div class="rx">' + Object.keys(g).map(e => '<span class="rxc' + (g[e].me ? ' me' : '') + '" data-act="rx" data-id="' + m.id + '" data-e="' + esc(e) + '">' + esc(e) + ' ' + g[e].n + '</span>').join('') + '</div>';
+}
+function msgContent(m) {
+  const sn = (m.chat_id && m.sender !== myId()) ? '<div class="snick">' + esc(nickOf(m.sender)) + '</div>' : '';
+  return sn + quoteHtml(m) + msgContentBase(m) + rxHtml(m);
+}
+async function reactTo(mid, emoji) {
+  const mine = (D.reactions[mid] || []).find(x => x.user_id === myId());
+  try {
+    if (mine && mine.emoji === emoji) {
+      await del('message_reactions', { message_id: 'eq.' + mid, user_id: 'eq.' + myId() });
+      D.reactions[mid] = D.reactions[mid].filter(x => x !== mine);
+    } else if (mine) {
+      await upd('message_reactions', { message_id: 'eq.' + mid, user_id: 'eq.' + myId() }, { emoji });
+      mine.emoji = emoji;
+    } else {
+      await ins('message_reactions', { message_id: mid, emoji });
+      (D.reactions[mid] = D.reactions[mid] || []).push({ message_id: mid, user_id: myId(), emoji });
+    }
+  } catch (e) { }
+  renderAll();
+}
+
+/* ---------- статус: в сети / печатает ---------- */
+const isOnline = p => !!(p && p.last_seen && Date.now() - new Date(p.last_seen).getTime() < 30000);
+function isTypingTo(p, key) {
+  return !!(p && p.typing_to === key && p.typing_at && Date.now() - new Date(p.typing_at).getTime() < 5000);
+}
+function statusLine(p) {
+  if (!p) return '';
+  if (isTypingTo(p, myId())) return t('печатает…', 'typing…', 'schreibt…');
+  if (isOnline(p)) return t('в сети', 'online', 'online');
+  if (!p.last_seen) return '';
+  const d = new Date(p.last_seen), today = new Date().toDateString() === d.toDateString();
+  return t('был(а) ', 'last seen ', 'zuletzt ') + (today ? '' : d.toLocaleDateString() + ' ') + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function typingLine() {
+  if (!isKey(U.chat)) return '';
+  const names = (D.members[cidOf(U.chat)] || []).filter(x => x.user_id !== myId() && isTypingTo(D.profiles[x.user_id], U.chat)).map(x => nickOf(x.user_id));
+  if (!names.length) return '';
+  return names.slice(0, 2).join(', ') + ' ' + t('печатает…', 'typing…', 'schreibt…');
+}
+let lastTypingSent = 0;
+function sendTyping() {
+  if (!U.chat || U.chat === 'ai' || Date.now() - lastTypingSent < 3000) return;
+  lastTypingSent = Date.now();
+  upd('profiles', { id: 'eq.' + myId() }, { typing_to: U.chat, typing_at: new Date().toISOString() }).catch(() => { });
+}
+let statusSig = '';
+let statusBusy = false;
+async function statusPoll() {
+  if (!session || statusBusy || !U.chat || U.chat === 'ai' || $('#app').classList.contains('hidden')) return;
+  const ids = isKey(U.chat) ? (D.members[cidOf(U.chat)] || []).map(x => x.user_id).filter(x => x !== myId()) : [U.chat];
+  if (!ids.length) return;
+  statusBusy = true;
+  try {
+    const ps = await sel('profiles', { id: 'in.(' + ids.join(',') + ')', select: 'id,last_seen,typing_to,typing_at' });
+    ps.forEach(x => { D.profiles[x.id] = Object.assign(D.profiles[x.id] || {}, x); });
+    const sig = ps.map(x => (isOnline(x) ? 1 : 0) + '|' + (isTypingTo(x, isKey(U.chat) ? U.chat : myId()) ? 1 : 0)).join(',') + U.chat;
+    if (sig !== statusSig) { statusSig = sig; renderAll(); }
+  } catch (e) { }
+  statusBusy = false;
+}
+setInterval(statusPoll, 2000);
+
 function msgMeta(m, mine) {
   return (m.edited_at ? t('изм. ', 'edited ', 'bearb. ') : '') + timeOf(m.created_at) + (mine && m.read_at ? ' {i:checks}' : '');
 }
@@ -825,6 +964,7 @@ async function finishRec() {
 }
 
 /* ---------- отправка ---------- */
+const replyExtra = () => (U.replyTo ? { reply_to: U.replyTo } : {});
 async function doSend() {
   const inp = $('#inp');
   const text = inp.value.trim();
@@ -847,14 +987,15 @@ async function doSend() {
     inp.value = ''; inp.style.height = 'auto';
     U.sending = true; renderAll();
     try {
-      await sendAlbum(list, text, to);
+      await sendAlbum(list, text, to, replyExtra());
+      U.replyTo = null;
       PEND[to] = (PEND[to] || []).filter(x => !list.includes(x));
       list.forEach(x => { if (x.url) URL.revokeObjectURL(x.url); });
     } catch (e) { U.error = friendly(e); if (U.chat === to && !inp.value) inp.value = text; }
     U.sending = false; renderAll(); return;
   }
   inp.value = ''; inp.style.height = 'auto';
-  try { await sendText(text, to); } catch (e) { inp.value = text; U.error = friendly(e); renderAll(); }
+  try { await sendText(text, to, replyExtra()); U.replyTo = null; } catch (e) { inp.value = text; U.error = friendly(e); renderAll(); }
 }
 async function sendAiPic() {
   openDialog(t('Картинка от ИИ', 'AI image', 'KI-Bild'),
@@ -915,6 +1056,8 @@ function renderFriends() {
     h += '<div class="section">' + t('Заявки в друзья', 'Friend requests', 'Freundschaftsanfragen') + '</div>';
     inc.forEach(f => { const p = D.profiles[f.requester]; if (p) h += rows(p, '<button class="btn sm" data-act="f-accept" data-fid="' + f.id + '">' + t('Принять', 'Accept', 'Annehmen') + '</button><button class="btn sm ghost" data-act="f-remove" data-fid="' + f.id + '">' + t('Отклонить', 'Decline', 'Ablehnen') + '</button>'); });
   }
+  h += '<div class="section">' + t('Группы и каналы', 'Groups and channels', 'Gruppen und Kanäle') + '</div>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="new-chat">{i:plus} ' + t('Создать', 'Create', 'Erstellen') + '</button><button class="btn sm ghost" data-act="find-channel">' + t('Найти канал', 'Find a channel', 'Kanal suchen') + '</button></div>';
   h += '<div class="section">' + t('Друзья', 'Friends', 'Freunde') + '</div>';
   const fr = friendIds().map(id => D.profiles[id]).filter(Boolean).sort((a, b) => a.nick.localeCompare(b.nick));
   if (!fr.length) h += '<div class="muted">' + t('Пока нет друзей. Найди человека по нику и отправь заявку.', 'No friends yet. Find someone by nick and send a request.', 'Noch keine Freunde. Suche jemanden per Nick und sende eine Anfrage.') + '</div>';
@@ -1024,6 +1167,8 @@ function showCtx(id, x, y) {
   const c = $('#ctx');
   const canEdit = m.sender === myId() && m.kind === 'text';
   c.innerHTML = icons(
+    '<div class="rxrow">' + RX_LIST.map(e => '<button data-act="rx" data-id="' + id + '" data-e="' + e + '">' + e + '</button>').join('') + '</div>' +
+    (canPostTo(U.chat) ? '<button data-act="c-reply" data-id="' + id + '">{i:forward} ' + t('Ответить', 'Reply', 'Antworten') + '</button>' : '') +
     '<button data-act="c-copy" data-id="' + id + '">{i:copy} ' + t('Копировать', 'Copy', 'Kopieren') + '</button>' +
     (canEdit ? '<button data-act="c-edit" data-id="' + id + '">{i:edit} ' + t('Изменить', 'Edit', 'Bearbeiten') + '</button>' : '') +
     '<button data-act="c-forward" data-id="' + id + '">{i:forward} ' + t('Переслать', 'Forward', 'Weiterleiten') + '</button>' +
@@ -1061,7 +1206,8 @@ function openForward(list) {
   window._fwd = list;
   openDialog(t('Переслать', 'Forward', 'Weiterleiten'),
     '<div class="pick" data-act="fwd-ai"><div class="avatar" style="width:36px;height:36px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div>' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div></div>' +
-    friends.map(p => '<div class="pick" data-act="fwd-to" data-id="' + esc(p.id) + '">' + avatarHtml(p, 36) + '<div>' + esc(p.nick) + '</div></div>').join(''),
+    friends.map(p => '<div class="pick" data-act="fwd-to" data-id="' + esc(p.id) + '">' + avatarHtml(p, 36) + '<div>' + esc(p.nick) + '</div></div>').join('') +
+    myChatKeys().filter(canPostTo).map(k => '<div class="pick" data-act="fwd-to" data-id="' + esc(k) + '">' + chatAvatar(D.chats[cidOf(k)], 36) + '<div>' + esc(D.chats[cidOf(k)].title) + '</div></div>').join(''),
     [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost']]);
 }
 function openDelete(list) {
@@ -1125,8 +1271,8 @@ document.addEventListener('click', async e => {
       await authAction(async () => { await raw('POST', '/functions/v1/recover', { json: { action: 'confirm', nick: U.recNick, code, new_password: p }, auth: false }); await signIn(U.recNick, p); await startApp(); }); break;
     }
     case 'tab': U.tab = v; U.error = ''; renderAll(); break;
-    case 'open': U.chat = v; U.selected = new Set(); U.editing = null; U.error = ''; renderAll(); markReadIfOpen(); break;
-    case 'f-chat': U.tab = 'chats'; U.chat = id; renderAll(); markReadIfOpen(); break;
+    case 'open': U.chat = v; U.selected = new Set(); U.editing = null; U.replyTo = null; U.error = ''; renderAll(); markReadIfOpen(); break;
+    case 'f-chat': U.tab = 'chats'; U.chat = id; U.replyTo = null; renderAll(); markReadIfOpen(); break;
     case 'send': doSend(); break;
     case 'attach-photo': $('#pick-photo').click(); break;
     case 'emoji': U.emoji = !U.emoji; renderAll(); break;
@@ -1224,7 +1370,25 @@ document.addEventListener('click', async e => {
       renderAll(); break;
     }
     case 'logout': logout(); break;
-    case 'call-start': callStart(U.chat); break;
+    case 'call-start': callStart(U.chat, false); break;
+    case 'call-video': callStart(U.chat, true); break;
+    case 'call-cam': callCam(); break;
+    case 'rx': hideCtx(); reactTo(Number(id), el.dataset.e); break;
+    case 'c-reply': hideCtx(); U.replyTo = Number(id); renderAll(); { const i = $('#inp'); if (i) i.focus(); } break;
+    case 'reply-cancel': U.replyTo = null; renderAll(); break;
+    case 'new-chat': openCreateChat(); break;
+    case 'chat-create': chatCreate(); break;
+    case 'find-channel': openFindChannel(); break;
+    case 'ch-open': chOpen(id); break;
+    case 'ch-join': chJoin(id); break;
+    case 'chat-info': openChatInfo(); break;
+    case 'm-add': memberAdd(id); break;
+    case 'm-add-nick': memberAddNick(); break;
+    case 'm-kick': memberKick(id); break;
+    case 'chat-leave': chatLeave(); break;
+    case 'chat-del': chatDelete(); break;
+    case 'chat-rename': chatRename(); break;
+    case 'chat-rename-go': chatRenameGo(); break;
     case 'call-accept': callAccept(); break;
     case 'call-decline': callDecline(); break;
     case 'call-hang': callHang(); break;
@@ -1259,6 +1423,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'accent-custom') { U.picking = true; S.accent = e.target.value; applyTheme(); lsSet('s.accent', S.accent); return; }
+  if (e.target.id === 'd-chq') { clearTimeout(chqT); chqT = setTimeout(() => findChannels(e.target.value.trim()), 250); return; }
   if (e.target.id === 'f-q') {
     U.query = e.target.value;
     clearTimeout(searchT); searchT = setTimeout(doSearch, 300);
@@ -1292,13 +1457,129 @@ document.addEventListener('change', e => {
 });
 
 
-/* ---------- звонки (только голос) ---------- */
+
+/* ---------- группы и каналы ---------- */
+function openCreateChat() {
+  const fr = friendIds().map(id => D.profiles[id]).filter(Boolean);
+  openDialog(t('Новый чат', 'New chat', 'Neuer Chat'),
+    '<div class="seg" style="margin-bottom:10px"><label><input type="radio" name="ckind" value="group" checked> ' + t('Группа', 'Group', 'Gruppe') + '</label> <label style="margin-left:14px"><input type="radio" name="ckind" value="channel"> ' + t('Канал', 'Channel', 'Kanal') + '</label></div>' +
+    '<input class="field" id="d-ctitle" maxlength="60" placeholder="' + t('Название', 'Title', 'Titel') + '">' +
+    '<div class="muted" style="margin:10px 0 4px">' + t('Участники (для группы)', 'Members (for a group)', 'Mitglieder (für Gruppe)') + '</div>' +
+    '<div class="pickbox">' + (fr.map(p => '<label class="pick"><input type="checkbox" class="cm" value="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div>' + esc(p.nick) + '</div></label>').join('') || '<div class="muted">' + t('Друзей пока нет', 'No friends yet', 'Noch keine Freunde') + '</div>') + '</div>' +
+    '<input class="field" id="d-cnicks" style="margin-top:8px" placeholder="' + t('Или ники через пробел', 'Or nicks separated by spaces', 'Oder Nicks mit Leerzeichen')+ '">',
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['chat-create', t('Создать', 'Create', 'Erstellen'), '']]);
+}
+async function nicksToIds(str) {
+  const list = str.toLowerCase().split(/[\s,;]+/).map(x => x.replace(/[^a-z0-9_]/g, '')).filter(Boolean);
+  if (!list.length) return [];
+  const ps = await sel('profiles', { nick: 'in.(' + list.join(',') + ')', select: 'id,nick' });
+  ps.forEach(p => { D.profiles[p.id] = Object.assign(D.profiles[p.id] || {}, p); });
+  return ps.map(p => p.id);
+}
+async function chatCreate() {
+  const kind = (document.querySelector('input[name="ckind"]:checked') || {}).value || 'group';
+  const title = val('d-ctitle');
+  const picked = Array.from(document.querySelectorAll('.cm:checked')).map(x => x.value);
+  const nicks = val('d-cnicks');
+  closeDialog();
+  if (!title) return;
+  try {
+    const id = crypto.randomUUID();
+    await ins('chats', { id, kind, title });
+    if (kind === 'group') {
+      let ids = picked.slice();
+      try { (await nicksToIds(nicks)).forEach(x => { if (ids.indexOf(x) < 0) ids.push(x); }); } catch (e) { }
+      ids = ids.filter(x => x !== myId());
+      for (const u of ids) { try { await ins('chat_members', { chat_id: id, user_id: u, role: 'member' }); } catch (e) { } }
+    }
+    await refresh();
+    U.tab = 'chats'; U.chat = 'c:' + id; renderAll();
+  } catch (e) { U.error = friendly(e); toast(friendly(e)); }
+}
+function openFindChannel() {
+  openDialog(t('Найти канал', 'Find a channel', 'Kanal suchen'), '<input class="field" id="d-chq" placeholder="' + t('Название канала', 'Channel title', 'Kanalname') + '"><div id="d-chr" class="pickbox" style="margin-top:8px"></div>',
+    [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
+  setTimeout(() => { const e = $('#d-chq'); if (e) e.focus(); findChannels(''); }, 30);
+}
+let chqT = null;
+async function findChannels(q) {
+  let rows = [];
+  try { rows = await sel('chats', Object.assign({ kind: 'eq.channel', select: '*', limit: '30', order: 'created_at.desc' }, q ? { title: 'ilike.*' + q.replace(/[*,()]/g, ' ') + '*' } : {})); } catch (e) { }
+  rows.forEach(c => { D.chats[c.id] = Object.assign(D.chats[c.id] || {}, c, { _ext: true }); });
+  const box = $('#d-chr'); if (!box) return;
+  box.innerHTML = rows.length ? rows.map(c => '<div class="pick" data-act="ch-open" data-id="' + esc(c.id) + '">' + chatAvatar(c, 32) + '<div style="flex:1">' + esc(c.title) + '</div><span class="muted">' + (D.members[c.id] ? t('Открыть', 'Open', 'Öffnen') : t('Подписаться', 'Subscribe', 'Abonnieren')) + '</span></div>').join('') : '<div class="muted">' + t('Ничего не найдено', 'Nothing found', 'Nichts gefunden') + '</div>';
+}
+async function chJoin(cid) {
+  try {
+    if (!D.members[cid]) await ins('chat_members', { chat_id: cid, user_id: myId(), role: 'member' });
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+async function chOpen(cid) {
+  closeDialog();
+  await chJoin(cid);
+  U.tab = 'chats'; U.chat = 'c:' + cid; renderAll();
+}
+function openChatInfo() {
+  const key = U.chat; if (!isKey(key)) return;
+  const c = chatByKey(key), me = myMember(key); if (!c) return;
+  const mem = D.members[c.id] || [];
+  const owner = me && me.role === 'owner';
+  const fr = friendIds().filter(id => !mem.some(x => x.user_id === id)).map(id => D.profiles[id]).filter(Boolean);
+  let h = '<div class="muted" style="margin-bottom:8px">' + (c.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + ' · ' + mem.length + '</div>' +
+    '<div class="pickbox">' + mem.map(x => '<div class="pick">' + avatarHtml(D.profiles[x.user_id], 30) + '<div style="flex:1">' + esc(nickOf(x.user_id)) + (x.role === 'owner' ? ' <span class="tag">' + t('создатель', 'owner', 'Besitzer') + '</span>' : '') + '</div>' +
+      (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button>' : '') + '</div>').join('') + '</div>';
+  if (owner && c.kind === 'group') {
+    h += '<div class="muted" style="margin:10px 0 4px">' + t('Добавить', 'Add', 'Hinzufügen') + '</div><div class="pickbox">' +
+      (fr.map(p => '<div class="pick" data-act="m-add" data-id="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div style="flex:1">' + esc(p.nick) + '</div><span class="muted">+</span></div>').join('') || '<div class="muted">' + t('Все друзья уже в группе', 'All friends are in the group', 'Alle Freunde sind in der Gruppe') + '</div>') + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px"><input class="field" id="d-mnick" placeholder="' + t('Ник', 'Nick', 'Nick') + '"><button class="btn sm" data-act="m-add-nick">' + t('Добавить', 'Add', 'Hinzufügen') + '</button></div>';
+  }
+  const btns = [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']];
+  if (owner) { btns.push(['chat-rename', t('Переименовать', 'Rename', 'Umbenennen'), 'ghost']); btns.push(['chat-del', t('Удалить', 'Delete', 'Löschen'), 'danger']); }
+  else if (me) btns.push(['chat-leave', c.kind === 'channel' ? t('Отписаться', 'Unsubscribe', 'Abbestellen') : t('Выйти', 'Leave', 'Verlassen'), 'danger']);
+  openDialog(c.title, h, btns);
+}
+async function memberAdd(uid) {
+  const key = U.chat; if (!isKey(key)) return;
+  try { await ins('chat_members', { chat_id: cidOf(key), user_id: uid, role: 'member' }); await refresh(); } catch (e) { toast(friendly(e)); }
+  openChatInfo();
+}
+async function memberAddNick() {
+  try { const ids = await nicksToIds(val('d-mnick')); if (!ids.length) { toast(t('Никого не найдено', 'Nobody found', 'Niemand gefunden')); return; } for (const u of ids) { try { await ins('chat_members', { chat_id: cidOf(U.chat), user_id: u, role: 'member' }); } catch (e) { } } await refresh(); } catch (e) { toast(friendly(e)); }
+  openChatInfo();
+}
+async function memberKick(uid) {
+  try { await del('chat_members', { chat_id: 'eq.' + cidOf(U.chat), user_id: 'eq.' + uid }); await refresh(); } catch (e) { toast(friendly(e)); }
+  openChatInfo();
+}
+async function chatLeave() {
+  const key = U.chat; closeDialog();
+  try { await del('chat_members', { chat_id: 'eq.' + cidOf(key), user_id: 'eq.' + myId() }); delete D.members[cidOf(key)]; U.chat = null; await refresh(); } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+async function chatDelete() {
+  const key = U.chat; closeDialog();
+  try { await del('chats', { id: 'eq.' + cidOf(key) }); delete D.members[cidOf(key)]; delete D.chats[cidOf(key)]; U.chat = null; await refresh(); } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+function chatRename() {
+  const c = chatByKey(U.chat); if (!c) return;
+  openDialog(t('Переименовать', 'Rename', 'Umbenennen'), '<input class="field" id="d-rn" maxlength="60" value="' + esc(c.title) + '">',
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['chat-rename-go', t('Сохранить', 'Save', 'Speichern'), '']]);
+}
+async function chatRenameGo() {
+  const n = val('d-rn'); closeDialog(); if (!n) return;
+  try { await upd('chats', { id: 'eq.' + cidOf(U.chat) }, { title: n }); await refresh(); } catch (e) { toast(friendly(e)); }
+}
+
+/* ---------- звонки ---------- */
 const CALL_OK = typeof RTCPeerConnection !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 const ICE = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
 ];
-const CALL = { st: 'idle', peer: null, id: '', pc: null, stream: null, ice: [], remote: false, muted: false, secs: 0, last: -1, poll: null, polling: false, tmo: null, tick: null, ring: null, msg: '', chain: Promise.resolve() };
+const CALL = { video: false, camOff: false, rstream: null, st: 'idle', peer: null, id: '', pc: null, stream: null, ice: [], remote: false, muted: false, secs: 0, last: -1, poll: null, polling: false, tmo: null, tick: null, ring: null, msg: '', chain: Promise.resolve() };
 
 function callUuid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
@@ -1336,7 +1617,7 @@ async function callHandle(r) {
   if (r.type === 'invite') {
     if (Date.now() - new Date(r.created_at).getTime() > 40000) return;
     if (CALL.st !== 'idle') { if (r.call_id !== CALL.id) callSend(r.call_id, r.sender, 'decline'); return; }
-    CALL.id = r.call_id; CALL.peer = r.sender; CALL.st = 'incoming'; CALL.msg = '';
+    CALL.id = r.call_id; CALL.peer = r.sender; CALL.st = 'incoming'; CALL.msg = ''; CALL.video = !!p.video; CALL.camOff = false;
     callRingStart();
     clearTimeout(CALL.tmo);
     CALL.tmo = setTimeout(() => { if (CALL.st === 'incoming') callEnd(false, ''); }, 45000);
@@ -1384,8 +1665,9 @@ function callFlushIce() {
   CALL.ice = [];
 }
 async function callGetMic() {
-  CALL.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  CALL.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: CALL.video ? { width: { ideal: 640 }, height: { ideal: 480 } } : false });
   CALL.stream.getAudioTracks().forEach(tr => { tr.enabled = !CALL.muted; });
+  CALL.stream.getVideoTracks().forEach(tr => { tr.enabled = !CALL.camOff; });
 }
 async function callMakePc() {
   if (!CALL.stream) await callGetMic();
@@ -1397,8 +1679,11 @@ async function callMakePc() {
     if (e.candidate) callSend(CALL.id, CALL.peer, 'ice', { sdp: e.candidate.candidate, mid: e.candidate.sdpMid || '', idx: e.candidate.sdpMLineIndex || 0 });
   };
   pc.ontrack = e => {
+    if (e.streams && e.streams[0]) CALL.rstream = e.streams[0];
+    else { CALL.rstream = CALL.rstream || new MediaStream(); CALL.rstream.addTrack(e.track); }
     const a = $('#call-audio');
-    if (a) { a.srcObject = e.streams[0] || new MediaStream([e.track]); a.play().catch(() => { }); }
+    if (a) { a.srcObject = CALL.rstream; a.play().catch(() => { }); }
+    callAttachVideo();
   };
   pc.oniceconnectionstatechange = () => {
     const st = pc.iceConnectionState;
@@ -1413,12 +1698,13 @@ async function callMakePc() {
     }
   };
 }
-async function callStart(peer) {
-  if (!CALL_OK || CALL.st !== 'idle' || !peer || peer === 'ai') return;
-  try { await callGetMic(); } catch (e) { toast(t('Нет доступа к микрофону', 'No access to the microphone', 'Kein Zugriff auf das Mikrofon')); return; }
+async function callStart(peer, video) {
+  if (!CALL_OK || CALL.st !== 'idle' || !peer || peer === 'ai' || isKey(peer)) return;
+  CALL.video = !!video; CALL.camOff = false;
+  try { await callGetMic(); } catch (e) { CALL.video = false; toast(t('Нет доступа к микрофону или камере', 'No access to the microphone or camera', 'Kein Zugriff auf Mikrofon oder Kamera')); return; }
   CALL.id = callUuid(); CALL.peer = peer; CALL.st = 'outgoing'; CALL.msg = ''; CALL.muted = false;
   const mine = CALL.id;
-  callSend(mine, peer, 'invite', null, () => { if (CALL.id === mine && CALL.st === 'outgoing') callEnd(false, t('Не удалось позвонить', 'Could not place the call', 'Anruf fehlgeschlagen')); });
+  callSend(mine, peer, 'invite', { video: CALL.video }, () => { if (CALL.id === mine && CALL.st === 'outgoing') callEnd(false, t('Не удалось позвонить', 'Could not place the call', 'Anruf fehlgeschlagen')); });
   clearTimeout(CALL.tmo);
   CALL.tmo = setTimeout(() => { if (CALL.st === 'outgoing') callEnd(true, t('Нет ответа', 'No answer', 'Keine Antwort')); }, 45000);
   renderCall();
@@ -1427,13 +1713,24 @@ async function callAccept() {
   if (CALL.st !== 'incoming') return;
   callRingStop();
   clearTimeout(CALL.tmo);
-  try { await callGetMic(); } catch (e) { toast(t('Нет доступа к микрофону', 'No access to the microphone', 'Kein Zugriff auf das Mikrofon')); callDecline(); return; }
+  try { await callGetMic(); } catch (e) { toast(t('Нет доступа к микрофону или камере', 'No access to the microphone or camera', 'Kein Zugriff auf Mikrofon oder Kamera')); callDecline(); return; }
   CALL.st = 'connecting'; renderCall();
   await callMakePc();
   callSend(CALL.id, CALL.peer, 'accept');
   CALL.tmo = setTimeout(() => { if (CALL.st === 'connecting') callEnd(true, t('Нет соединения', 'Connection failed', 'Keine Verbindung')); }, 30000);
 }
 function callDecline() { if (CALL.st === 'incoming') callEnd(true, '', true); }
+function callCam() {
+  if (!CALL.video || !CALL.stream) return;
+  CALL.camOff = !CALL.camOff;
+  CALL.stream.getVideoTracks().forEach(tr => { tr.enabled = !CALL.camOff; });
+  renderCall();
+}
+function callAttachVideo() {
+  const rv = $('#call-rv'), lv = $('#call-lv');
+  if (rv && CALL.rstream && rv.srcObject !== CALL.rstream) { rv.srcObject = CALL.rstream; rv.play().catch(() => { }); }
+  if (lv && CALL.stream && lv.srcObject !== CALL.stream) { lv.srcObject = CALL.stream; lv.play().catch(() => { }); }
+}
 function callHang() { if (CALL.st !== 'idle') callEnd(true, ''); }
 function callMute() {
   CALL.muted = !CALL.muted;
@@ -1447,7 +1744,7 @@ function callEnd(notify, msg, decline) {
   try { if (CALL.pc) CALL.pc.close(); } catch (e) { }
   try { if (CALL.stream) CALL.stream.getTracks().forEach(tr => tr.stop()); } catch (e) { }
   const a = $('#call-audio'); if (a) a.srcObject = null;
-  CALL.pc = null; CALL.stream = null; CALL.ice = []; CALL.remote = false;
+  CALL.pc = null; CALL.stream = null; CALL.rstream = null; CALL.ice = []; CALL.remote = false; CALL.video = false; CALL.camOff = false;
   CALL.st = 'idle'; CALL.peer = null; CALL.secs = 0;
   renderCall();
   if (msg) toast(msg);
@@ -1460,7 +1757,7 @@ function callRingStart() {
 function callRingStop() { if (CALL.ring) { clearInterval(CALL.ring); CALL.ring = null; } }
 function callStatus() {
   if (CALL.st === 'outgoing') return t('Вызов…', 'Calling…', 'Anruf…');
-  if (CALL.st === 'incoming') return t('Входящий звонок', 'Incoming call', 'Eingehender Anruf');
+  if (CALL.st === 'incoming') return CALL.video ? t('Входящий видеозвонок', 'Incoming video call', 'Eingehender Videoanruf') : t('Входящий звонок', 'Incoming call', 'Eingehender Anruf');
   if (CALL.st === 'connecting') return t('Соединение…', 'Connecting…', 'Verbindung…');
   return Math.floor(CALL.secs / 60) + ':' + String(CALL.secs % 60).padStart(2, '0');
 }
@@ -1471,9 +1768,13 @@ function renderCall() {
   const p = D.profiles[CALL.peer];
   const btns = CALL.st === 'incoming'
     ? '<button class="cbtn red" data-act="call-decline" title="' + t('Отклонить', 'Decline', 'Ablehnen') + '">{i:phoneoff}</button><button class="cbtn green" data-act="call-accept" title="' + t('Принять', 'Accept', 'Annehmen') + '">{i:phone}</button>'
-    : '<button class="cbtn ' + (CALL.muted ? 'on' : '') + '" data-act="call-mute" title="' + t('Микрофон', 'Microphone', 'Mikrofon') + '">' + (CALL.muted ? '{i:micoff}' : '{i:mic}') + '</button><button class="cbtn red" data-act="call-hang" title="' + t('Завершить', 'Hang up', 'Auflegen') + '">{i:phoneoff}</button>';
-  el.innerHTML = icons('<div class="call-box">' + avatarHtml(p, 120) + '<div class="call-nick">' + esc(p ? p.nick : '') + '</div><div class="call-st" id="call-st">' + callStatus() + '</div><div class="call-btns">' + btns + '</div></div>');
+    : '<button class="cbtn ' + (CALL.muted ? 'on' : '') + '" data-act="call-mute" title="' + t('Микрофон', 'Microphone', 'Mikrofon') + '">' + (CALL.muted ? '{i:micoff}' : '{i:mic}') + '</button>' +
+      (CALL.video ? '<button class="cbtn ' + (CALL.camOff ? 'on' : '') + '" data-act="call-cam" title="' + t('Камера', 'Camera', 'Kamera') + '">' + (CALL.camOff ? '{i:videooff}' : '{i:video}') + '</button>' : '') +
+      '<button class="cbtn red" data-act="call-hang" title="' + t('Завершить', 'Hang up', 'Auflegen') + '">{i:phoneoff}</button>';
+  const vid = CALL.video && CALL.st !== 'incoming' ? '<video id="call-rv" class="call-rv" autoplay playsinline muted></video><video id="call-lv" class="call-lv" autoplay playsinline muted></video>' : '';
+  el.innerHTML = icons(vid + '<div class="call-box' + (vid ? ' over' : '') + '">' + (vid ? '' : avatarHtml(p, 120)) + '<div class="call-nick">' + esc(p ? p.nick : '') + '</div><div class="call-st" id="call-st">' + callStatus() + '</div><div class="call-btns">' + btns + '</div></div>');
   el.classList.remove('hidden');
+  callAttachVideo();
 }
 
 /* ---------- обновления приложения (Electron) ---------- */

@@ -51,6 +51,19 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
+import org.webrtc.Camera2Enumerator
+import org.webrtc.CameraVideoCapturer
+import org.webrtc.DefaultVideoDecoderFactory
+import org.webrtc.DefaultVideoEncoderFactory
+import org.webrtc.EglBase
+import org.webrtc.RtpReceiver
+import org.webrtc.SurfaceTextureHelper
+import org.webrtc.SurfaceViewRenderer
+import org.webrtc.VideoSource
+import org.webrtc.VideoTrack
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
@@ -85,6 +98,19 @@ object Calls {
         private set
     var failed by mutableStateOf("")
         private set
+    var video by mutableStateOf(false)
+        private set
+    var camOff by mutableStateOf(false)
+        private set
+    var remoteVideo by mutableStateOf<VideoTrack?>(null)
+        private set
+    var localVideo by mutableStateOf<VideoTrack?>(null)
+        private set
+    var egl: EglBase? = null
+        private set
+    private var capturer: CameraVideoCapturer? = null
+    private var vSource: VideoSource? = null
+    private var vHelper: SurfaceTextureHelper? = null
 
     private lateinit var ctx: Context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -182,6 +208,8 @@ object Calls {
             }
             callId = call
             peerId = sender
+            video = payload?.optBoolean("video") == true
+            camOff = false
             state = CallState.INCOMING
             failed = ""
             startRing()
@@ -226,8 +254,13 @@ object Calls {
 
     // ---------- public actions ----------
 
-    fun start(peer: String) {
+    fun hasCam(c: Context) =
+        ContextCompat.checkSelfPermission(c, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    fun start(peer: String, withVideo: Boolean = false) {
         if (state != CallState.IDLE) return
+        video = withVideo
+        camOff = false
         callId = UUID.randomUUID().toString()
         peerId = peer
         state = CallState.OUTGOING
@@ -235,7 +268,7 @@ object Calls {
         muted = false
         speaker = false
         val mine = callId
-        sendSignal(mine, peer, "invite", onFail = {
+        sendSignal(mine, peer, "invite", if (withVideo) JSONObject().put("video", true) else null, onFail = {
             if (callId == mine && state == CallState.OUTGOING) end(false, tr("Не удалось позвонить", "Could not place the call", "Anruf fehlgeschlagen"))
         })
         timeoutJob?.cancel()
@@ -267,6 +300,15 @@ object Calls {
         track?.setEnabled(!muted)
     }
 
+    fun toggleCam() {
+        camOff = !camOff
+        localVideo?.setEnabled(!camOff)
+    }
+
+    fun switchCam() {
+        try { capturer?.switchCamera(null) } catch (e: Exception) { }
+    }
+
     fun toggleSpeaker() {
         speaker = !speaker
         applySpeaker()
@@ -278,7 +320,11 @@ object Calls {
         factory?.let { return it }
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(ctx).createInitializationOptions())
         val adm = JavaAudioDeviceModule.builder(ctx).createAudioDeviceModule()
-        val f = PeerConnectionFactory.builder().setAudioDeviceModule(adm).createPeerConnectionFactory()
+        val e = egl ?: EglBase.create().also { egl = it }
+        val f = PeerConnectionFactory.builder().setAudioDeviceModule(adm)
+            .setVideoEncoderFactory(DefaultVideoEncoderFactory(e.eglBaseContext, true, true))
+            .setVideoDecoderFactory(DefaultVideoDecoderFactory(e.eglBaseContext))
+            .createPeerConnectionFactory()
         factory = f
         return f
     }
@@ -325,6 +371,10 @@ object Calls {
                 }
             }
             override fun onIceCandidatesRemoved(a: Array<out IceCandidate>?) {}
+            override fun onAddTrack(r: RtpReceiver?, s: Array<out MediaStream>?) {
+                val t = r?.track()
+                if (t is VideoTrack) scope.launch { remoteVideo = t }
+            }
             override fun onAddStream(s: MediaStream?) {}
             override fun onRemoveStream(s: MediaStream?) {}
             override fun onDataChannel(d: org.webrtc.DataChannel?) {}
@@ -340,9 +390,27 @@ object Calls {
         track = f.createAudioTrack("a0", source)
         track?.setEnabled(!muted)
         conn.addTrack(track, listOf("s0"))
+        if (video && hasCam(ctx)) startCamera(f, conn)
         val am = audio()
         am.mode = AudioManager.MODE_IN_COMMUNICATION
         applySpeaker()
+    }
+
+    private fun startCamera(f: PeerConnectionFactory, conn: PeerConnection) {
+        try {
+            val en = Camera2Enumerator(ctx)
+            val name = en.deviceNames.firstOrNull { en.isFrontFacing(it) } ?: en.deviceNames.firstOrNull() ?: return
+            val cap = en.createCapturer(name, null) ?: return
+            val helper = SurfaceTextureHelper.create("cam", egl!!.eglBaseContext)
+            val src = f.createVideoSource(false)
+            cap.initialize(helper, ctx, src.capturerObserver)
+            cap.startCapture(640, 480, 24)
+            val vt = f.createVideoTrack("v0", src)
+            vt.setEnabled(!camOff)
+            conn.addTrack(vt, listOf("s0"))
+            capturer = cap; vSource = src; vHelper = helper
+            localVideo = vt
+        } catch (e: Exception) { }
     }
 
     private fun makeOffer() {
@@ -388,6 +456,13 @@ object Calls {
         try { pc?.dispose() } catch (e: Exception) { }
         try { source?.dispose() } catch (e: Exception) { }
         try { track?.dispose() } catch (e: Exception) { }
+        try { capturer?.stopCapture() } catch (e: Exception) { }
+        try { capturer?.dispose() } catch (e: Exception) { }
+        try { vSource?.dispose() } catch (e: Exception) { }
+        try { vHelper?.dispose() } catch (e: Exception) { }
+        capturer = null; vSource = null; vHelper = null
+        remoteVideo = null; localVideo = null
+        video = false; camOff = false
         pc = null; source = null; track = null
         pendingIce.clear()
         remoteSet = false
@@ -430,8 +505,8 @@ fun CallScreen() {
     val ctx = LocalContext.current
     val peer = Calls.peerId?.let { Store.profiles[it] }
     val st = Calls.state
-    val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) Calls.accept() else Calls.decline()
+    val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+        if (res[Manifest.permission.RECORD_AUDIO] == true) Calls.accept() else Calls.decline()
     }
     val status = when (st) {
         CallState.OUTGOING -> tr("Вызов…", "Calling…", "Anruf…")
@@ -445,12 +520,20 @@ fun CallScreen() {
             .background(Brush.verticalGradient(listOf(BgTop, BgBottom)))
             .clickable(enabled = false) { }
     ) {
+        val rv = Calls.remoteVideo
+        if (rv != null && Calls.egl != null) VideoView(rv, Modifier.fillMaxSize(), false)
+        val lv = Calls.localVideo
+        if (lv != null && Calls.egl != null && !Calls.camOff) {
+            Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp).size(width = 100.dp, height = 140.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))) {
+                VideoView(lv, Modifier.fillMaxSize(), true)
+            }
+        }
         Column(
             Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(80.dp))
-            Avatar(peer, 120.dp)
+            Spacer(Modifier.height(if (rv != null) 20.dp else 80.dp))
+            if (rv == null) Avatar(peer, 120.dp)
             Spacer(Modifier.height(20.dp))
             Text(peer?.nick ?: "", color = Txt, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
@@ -460,13 +543,18 @@ fun CallScreen() {
                 Row(Modifier.fillMaxWidth().padding(bottom = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     CallBtn("📵", Color(0xFFE5484D)) { Calls.decline() }
                     CallBtn("📞", Color(0xFF30A46C)) {
-                        if (Calls.hasMic(ctx)) Calls.accept() else perm.launch(Manifest.permission.RECORD_AUDIO)
+                        val need = if (Calls.video) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA) else arrayOf(Manifest.permission.RECORD_AUDIO)
+                        if (Calls.hasMic(ctx) && (!Calls.video || Calls.hasCam(ctx))) Calls.accept() else perm.launch(need)
                     }
                 }
             } else {
                 Row(Modifier.fillMaxWidth().padding(bottom = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     CallBtn(if (Calls.muted) "🔇" else "🎤", if (Calls.muted) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleMute() }
                     CallBtn("📵", Color(0xFFE5484D)) { Calls.hangUp() }
+                    if (Calls.video) {
+                        CallBtn(if (Calls.camOff) "🚫" else "📷", if (Calls.camOff) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleCam() }
+                        CallBtn("🔄", Color.White.copy(alpha = 0.18f)) { Calls.switchCam() }
+                    }
                     CallBtn("🔊", if (Calls.speaker) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleSpeaker() }
                 }
             }
@@ -480,4 +568,31 @@ private fun CallBtn(icon: String, bg: Color, onClick: () -> Unit) {
         Modifier.size(70.dp).clip(CircleShape).background(bg).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) { Text(icon, fontSize = 28.sp) }
+}
+
+@Composable
+private fun VideoView(track: VideoTrack, modifier: Modifier, mirror: Boolean) {
+    val egl = Calls.egl ?: return
+    val holder = remember { arrayOfNulls<SurfaceViewRenderer>(1) }
+    AndroidView(
+        modifier = modifier,
+        factory = { c ->
+            SurfaceViewRenderer(c).also {
+                it.init(egl.eglBaseContext, null)
+                it.setMirror(mirror)
+                it.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                if (mirror) it.setZOrderMediaOverlay(true)
+                track.addSink(it)
+                holder[0] = it
+            }
+        }
+    )
+    DisposableEffect(track) {
+        onDispose {
+            holder[0]?.let { r ->
+                try { track.removeSink(r) } catch (e: Exception) { }
+                try { r.release() } catch (e: Exception) { }
+            }
+        }
+    }
 }

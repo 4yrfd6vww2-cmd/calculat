@@ -51,6 +51,7 @@ fun NeiroxApp() {
                 ) {
                     if (Store.loggedIn) MainScreen() else AuthFlow()
                 }
+                if (Store.loggedIn) Box(Modifier.align(androidx.compose.ui.Alignment.TopCenter)) { UpdateBanner() }
                 if (Store.loggedIn && Calls.state != CallState.IDLE) CallScreen()
             }
         }
