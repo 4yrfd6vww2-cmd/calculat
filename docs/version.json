@@ -1,40 +1,40 @@
 {
   "win": {
-    "version": "0.5.0",
-    "x64": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-12/Neirox-Windows.exe",
-    "ia32": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-12/Neirox-Windows-32.exe"
+    "version": "0.5.1",
+    "x64": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-13/Neirox-Windows.exe",
+    "ia32": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-13/Neirox-Windows-32.exe"
   },
   "linux": {
-    "version": "0.5.0",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-12/Neirox-Linux.AppImage"
+    "version": "0.5.1",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-13/Neirox-Linux.AppImage"
   },
   "mac": {
-    "version": "0.9.0",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-12/Neirox-Mac.dmg"
+    "version": "0.9.1",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-13/Neirox-Mac.dmg"
   },
   "android": {
-    "version": "0.9",
-    "code": 9,
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/android-14/Neirox.apk"
+    "version": "0.9.1",
+    "code": 10,
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/android-15/Neirox.apk"
   },
   "ios": {
-    "version": "0.9",
+    "version": "0.9.1",
     "url": "https://4yrfd6vww2-cmd.github.io/calculat/"
   },
   "legacy_xp": {
-    "version": "0.0.3",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-4/Neirox-WinXP.zip"
+    "version": "0.0.4",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-5/Neirox-WinXP.zip"
   },
   "legacy_mac": {
-    "version": "0.0.3",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-4/Neirox-Mac-Old.dmg"
+    "version": "0.0.4",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-5/Neirox-Mac-Old.dmg"
   },
   "legacy_linux": {
-    "version": "0.0.3",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-4/Neirox-Linux-Old.AppImage"
+    "version": "0.0.4",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-5/Neirox-Linux-Old.AppImage"
   },
   "legacy_linux32": {
-    "version": "0.0.3",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-4/Neirox-Linux-32.AppImage"
+    "version": "0.0.4",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/legacy-5/Neirox-Linux-32.AppImage"
   }
 }
