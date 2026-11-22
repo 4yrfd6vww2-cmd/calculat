@@ -39,7 +39,7 @@ fun CreateChatDialog(onClose: () -> Unit, onCreated: (String) -> Unit) {
         title = { Text(tr("Новый чат", "New chat", "Neuer Chat")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp)) {
-                Row(Arrangement.spacedBy(16.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(
                         (if (!channel) "● " else "○ ") + tr("Группа", "Group", "Gruppe"),
                         color = if (!channel) Accent else TextSecondary, modifier = Modifier.clickable { channel = false }.padding(6.dp)

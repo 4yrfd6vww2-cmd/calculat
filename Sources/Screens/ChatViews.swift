@@ -256,33 +256,9 @@ struct Bubble: View {
                 if showNick {
                     Text(store.profiles[m.sender]?.nick ?? "").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
                 }
-                if m.replyTo != nil {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(quoted == nil ? tr("Сообщение удалено", "Message deleted", "Nachricht gelöscht")
-                             : (quoted!.sender == store.myId ? tr("Вы", "You", "Du") : (store.profiles[quoted!.sender]?.nick ?? "")))
-                            .font(.system(size: 11, weight: .semibold))
-                        if let q = quoted {
-                            Text(q.body ?? (q.kind == "image" ? "📷" : "📎")).font(.system(size: 12)).lineLimit(2).opacity(0.85)
-                        }
-                    }
-                    .foregroundColor(mine ? .white : Theme.text)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Color.black.opacity(0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
+                if m.replyTo != nil { quoteView }
                 content
-                if !rx.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(Array(Dictionary(grouping: rx, by: { $0.emoji }).sorted { $0.key < $1.key }), id: \.key) { e, list in
-                            Text(e + (list.count > 1 ? " \(list.count)" : ""))
-                                .font(.system(size: 13))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.black.opacity(0.2))
-                                .clipShape(Capsule())
-                                .onTapGesture { onReact(e) }
-                        }
-                    }
-                }
+                if !rx.isEmpty { rxView }
                 Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
                     .font(.system(size: 10))
                     .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
@@ -325,6 +301,46 @@ struct Bubble: View {
         .background(selected ? Theme.accent.opacity(0.2) : Color.clear)
     }
 
+    private var quoteName: String {
+        guard let q = quoted else { return tr("Сообщение удалено", "Message deleted", "Nachricht gelöscht") }
+        if q.sender == store.myId { return tr("Вы", "You", "Du") }
+        return store.profiles[q.sender]?.nick ?? ""
+    }
+
+    private var quoteView: some View {
+        let fg: Color = mine ? Color.white : Theme.text
+        return VStack(alignment: .leading, spacing: 1) {
+            Text(quoteName).font(.system(size: 11, weight: .semibold))
+            if let q = quoted {
+                Text(q.body ?? "📎").font(.system(size: 12)).lineLimit(2).opacity(0.85)
+            }
+        }
+        .foregroundColor(fg)
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Color.black.opacity(0.18))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var rxGroups: [(String, Int)] {
+        var d: [String: Int] = [:]
+        for r in rx { d[r.emoji, default: 0] += 1 }
+        return d.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+    }
+
+    private var rxView: some View {
+        HStack(spacing: 4) {
+            ForEach(rxGroups, id: \.0) { g in
+                let label: String = g.1 > 1 ? g.0 + " " + String(g.1) : g.0
+                Text(label)
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color.black.opacity(0.2))
+                    .clipShape(Capsule())
+                    .onTapGesture { onReact(g.0) }
+            }
+        }
+    }
+
     @ViewBuilder private var content: some View {
         if m.kind == "image", let p = m.mediaPath {
             MediaImage(path: p)
@@ -355,11 +371,16 @@ struct ChatView: View {
     private var friend: Profile { store.profiles[key] ?? Profile(id: key, nick: "") }
     private var subtitle: String {
         let t = store.typingIn(key)
-        if !t.isEmpty { return (chat != nil ? t.map { $0.nick }.joined(separator: ", ") + " " : "") + tr("печатает…", "typing…", "tippt …") }
-        if let c = chat { return (c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")) + " · \(store.memberCount(key))" }
+        if !t.isEmpty {
+            let who: String = chat != nil ? t.map { $0.nick }.joined(separator: ", ") + " " : ""
+            return who + tr("печатает…", "typing…", "tippt …")
+        }
+        if let c = chat {
+            let kindName: String = c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")
+            return kindName + " · " + String(store.memberCount(key))
+        }
         return store.isOnline(friend) ? tr("в сети", "online", "online") : tr("был(а) недавно", "last seen recently", "zuletzt online")
     }
-
     @State private var text = ""
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var pending: [PendingItem] = []
@@ -403,18 +424,7 @@ struct ChatView: View {
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             ForEach(thread) { m in
-                                Bubble(m: m, mine: m.sender == store.myId,
-                                       quoted: m.replyTo.flatMap { rid in thread.first { $0.id == rid } },
-                                       showNick: chat != nil && m.sender != store.myId,
-                                       rx: store.reactions(of: m.id),
-                                       onReply: { if store.canPost(key) { replyTo = m } },
-                                       onReact: { e in Task { await store.react(m.id, e) } },
-                                       selected: selected.contains(m.id), selecting: !selected.isEmpty,
-                                       onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 }, onVideo: { videoPath = $0 },
-                                       onCopy: { copyOne(m) },
-                                       onEdit: (m.sender == store.myId && m.kind == "text") ? { editing = m; text = m.body ?? "" } : nil,
-                                       onForward: { selected = [m.id]; showForward = true },
-                                       onDelete: { selected = [m.id]; showDelete = true }).id(m.id)
+                                bubbleRow(m)
                             }
                         }
                         .padding(14)
@@ -538,6 +548,25 @@ struct ChatView: View {
                 photoItems = []
             }
         }
+    }
+
+    @ViewBuilder private func bubbleRow(_ m: Message) -> some View {
+        let isMine: Bool = m.sender == store.myId
+        let quotedMsg: Message? = m.replyTo.flatMap { rid in thread.first(where: { $0.id == rid }) }
+        let canEdit: Bool = isMine && m.kind == "text"
+        Bubble(m: m, mine: isMine,
+               selected: selected.contains(m.id), selecting: !selected.isEmpty,
+               onToggle: { toggle(m.id) }, onImage: { fullscreenPath = $0 }, onVideo: { videoPath = $0 },
+               onCopy: { copyOne(m) },
+               onEdit: canEdit ? { editing = m; text = m.body ?? "" } : nil,
+               onForward: { selected = [m.id]; showForward = true },
+               onDelete: { selected = [m.id]; showDelete = true },
+               quoted: quotedMsg,
+               showNick: chat != nil && !isMine,
+               rx: store.reactions(of: m.id),
+               onReply: { if store.canPost(key) { replyTo = m } },
+               onReact: { e in Task { await store.react(m.id, e) } })
+            .id(m.id)
     }
 
     private var inputBar: some View {
