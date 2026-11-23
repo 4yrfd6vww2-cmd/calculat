@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 private func sharedMedia(_ store: Store, _ friendId: String) -> [Message] {
     store.thread(with: friendId).filter { $0.kind == "image" && $0.mediaPath != nil && !$0.isSticker }
 }
