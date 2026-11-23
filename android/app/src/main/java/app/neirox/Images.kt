@@ -68,12 +68,12 @@ fun compressImage(ctx: Context, uri: Uri, maxSide: Int = 1600): ByteArray? {
     val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
     var bmp = decodeBitmap(bytes, maxSide) ?: return null
     try {
-        val orientation = android.media.ExifInterface(ByteArrayInputStream(bytes))
-            .getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)
+        val orientation = androidx.exifinterface.media.ExifInterface(ByteArrayInputStream(bytes))
+            .getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL)
         val degrees = when (orientation) {
-            android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
             else -> 0f
         }
         if (degrees != 0f) {

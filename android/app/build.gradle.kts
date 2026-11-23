@@ -50,6 +50,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.getstream:stream-webrtc-android:1.3.8")
     if (old) coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
