@@ -23,6 +23,7 @@ final class Store: ObservableObject {
     @Published var levels: [String: Int] = [:]
     @Published var board: [BoardRow] = []
     @Published var noxNotice: String?
+    @Published var blocked: Set<String> = []
     private var checkedAt = Date.distantPast
     private var stkLoaded = false
     @Published var recoveryEmail: String?
@@ -106,6 +107,9 @@ final class Store: ObservableObject {
                 var d: [String: String] = [:]
                 for x in cn { d[x.contactId] = x.name }
                 alias = d
+            }
+            if let bl: [BlockedRow] = try? await API.shared.select("blocked_users", [URLQueryItem(name: "select", value: "blocked_id")]) {
+                blocked = Set(bl.map { $0.blockedId })
             }
             if let pr: [ChatPref] = try? await API.shared.select("chat_prefs", [URLQueryItem(name: "select", value: "*")]) {
                 var d: [String: ChatPref] = [:]
@@ -364,6 +368,18 @@ final class Store: ObservableObject {
             }
         } catch {
         }
+    }
+
+    func iBlocked(_ id: String) -> Bool { blocked.contains(id) }
+
+    func blockUser(_ id: String) async throws {
+        try await API.shared.insert("blocked_users", ["blocker_id": myId, "blocked_id": id])
+        blocked.insert(id)
+    }
+
+    func unblockUser(_ id: String) async throws {
+        try await API.shared.delete("blocked_users", [URLQueryItem(name: "blocker_id", value: "eq.\(myId)"), URLQueryItem(name: "blocked_id", value: "eq.\(id)")])
+        blocked.remove(id)
     }
 
     func isMuted(_ k: String) -> Bool { prefs[k]?.muted ?? false }

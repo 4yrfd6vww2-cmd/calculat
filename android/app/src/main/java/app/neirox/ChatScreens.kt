@@ -210,6 +210,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     val thread = Store.thread(friendId)
     var replyTo by remember { mutableStateOf<Message?>(null) }
     var showInfo by remember { mutableStateOf(false) }
+    var showProfile by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -587,12 +588,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                     else -> Store.statusLine(friend) + Store.levelTag(friendId)
                 }
                 Column(
-                    Modifier.padding(start = 10.dp).weight(1f).then(if (chat != null) Modifier.clickable { showInfo = true } else Modifier)
+                    Modifier.padding(start = 10.dp).weight(1f).clickable { if (chat != null) showInfo = true else showProfile = true }
                 ) {
                     Text(chat?.title ?: Store.dname(friend), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(sub, color = if (typers.isNotEmpty() || (chat == null && Store.isOnline(friend))) Accent else TextSecondary, fontSize = 12.sp)
                 }
-                if (chat == null) {
+                if (chat == null && !Store.iBlocked(friendId)) {
                     Text("🎥", fontSize = 22.sp, modifier = Modifier.clickable { videoCallClick() }.padding(8.dp))
                     Text("📞", fontSize = 22.sp, modifier = Modifier.clickable { callClick() }.padding(8.dp))
                 }
@@ -749,6 +750,17 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 Text("🗑", fontSize = 24.sp, modifier = Modifier.clickable { cancelRecording() }.padding(10.dp))
                 Text("➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { finishRecording() }.padding(10.dp))
             }
+        } else if (chat == null && Store.iBlocked(friendId)) {
+            Row(
+                Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(12.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    tr("Пользователь заблокирован", "User is blocked", "Nutzer ist blockiert") + " · " + tr("Разблокировать", "Unblock", "Entsperren"),
+                    color = Accent, fontSize = 14.sp,
+                    modifier = Modifier.clickable { scope.launch { try { Store.unblockUser(friendId) } catch (e: Exception) { } } }.padding(8.dp)
+                )
+            }
         } else if (chat != null && !Store.canPost(friendId)) {
             Row(
                 Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(12.dp),
@@ -889,6 +901,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     }
     if (showSearch) SearchDialog(friendId, { showSearch = false }) { _, id -> showSearch = false; Store.jumpTo = id }
     if (showInfo && chat != null) ChatInfoDialog(friendId, { showInfo = false }) { showInfo = false; onBack() }
+    if (showProfile && chat == null) ContactProfileDialog(friendId, { showProfile = false }, { callClick() }, { showSearch = true })
 
     val fs = fullscreen
     if (fs != null) {

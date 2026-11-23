@@ -354,3 +354,8 @@ revoke all on public.app_secrets from anon, authenticated;
 
 -- 22. Скрытый разработчик (0.10): применено миграцией nox_hidden_dev_grant
 -- nox_wallets.hidden bool — такие кошельки не попадают в nox_leaderboard(); аккаунтам desert и neirox выдано 1 000 000 nox.
+
+-- 23. Блокировка пользователей (0.10.2): применено миграцией blocked_users
+-- blocked_users(blocker_id, blocked_id) — RLS: видно только свои записи.
+-- is_blocked_pair(other) — security-definer, true если любая сторона заблокировала другую.
+-- Триггер messages_block_check перед вставкой в messages отклоняет личные сообщения при блокировке в любую сторону.

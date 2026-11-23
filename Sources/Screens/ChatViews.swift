@@ -425,6 +425,7 @@ struct ChatView: View {
     let key: String
     @State private var replyTo: Message?
     @State private var showInfo = false
+    @State private var showProfile = false
     @State private var typingTick = 0
     private var chat: Chat? { store.chatByKey(key) }
     private var friend: Profile { store.profiles[key] ?? Profile(id: key, nick: "") }
@@ -483,7 +484,7 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
-                    .onTapGesture { if chat != nil { showInfo = true } }
+                    .onTapGesture { if chat != nil { showInfo = true } else { showProfile = true } }
                 pinBar
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -558,8 +559,10 @@ struct ChatView: View {
                 } else {
                     ToolbarItemGroup(placement: .navigationBarTrailing) {
                         moreMenu
-                        Button { Calls.shared.start(peer: key, video: true) } label: { Image(systemName: "video.fill") }
-                        Button { Calls.shared.start(peer: key) } label: { Image(systemName: "phone.fill") }
+                        if !store.iBlocked(key) {
+                            Button { Calls.shared.start(peer: key, video: true) } label: { Image(systemName: "video.fill") }
+                            Button { Calls.shared.start(peer: key) } label: { Image(systemName: "phone.fill") }
+                        }
                     }
                 }
             }
@@ -574,6 +577,7 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showSearch) { SearchSheet(only: key) { _, id in showSearch = false; store.jumpTo = id } }
         .sheet(isPresented: $showInfo) { ChatInfoSheet(key: key) { showInfo = false; dismiss() } }
+        .sheet(isPresented: $showProfile) { ContactProfileSheet(friendId: key, onCall: { Calls.shared.start(peer: key) }, onSearch: { showSearch = true }) { showProfile = false } }
         .onChange(of: text) { t in if !t.isEmpty { store.sendTyping(to: key) } }
         .confirmationDialog(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?"), isPresented: $showDelete, titleVisibility: .visible) {
             Button(tr("У меня", "For me", "Für mich"), role: .destructive) { deleteSelected(forAll: false) }
@@ -723,7 +727,17 @@ struct ChatView: View {
 
     private var inputBar: some View {
         Group {
-            if chat != nil && !store.canPost(key) {
+            if chat == nil && store.iBlocked(key) {
+                HStack {
+                    Spacer()
+                    Button(tr("Пользователь заблокирован · Разблокировать", "User is blocked · Unblock", "Nutzer ist blockiert · Entsperren")) {
+                        Task { try? await store.unblockUser(key) }
+                    }
+                    .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
+                    Spacer()
+                }
+                .frame(height: 42)
+            } else if chat != nil && !store.canPost(key) {
                 HStack {
                     Spacer()
                     if store.myMember(key) == nil {

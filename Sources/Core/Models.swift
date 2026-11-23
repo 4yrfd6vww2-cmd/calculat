@@ -134,6 +134,8 @@ func isBigEmoji(_ s: String?) -> Bool {
 
 struct HiddenRow: Codable { let messageId: Int }
 
+struct BlockedRow: Codable { let blockedId: String }
+
 struct PrivateProfile: Codable {
     let userId: String
     let recoveryEmail: String

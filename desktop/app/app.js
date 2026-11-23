@@ -138,6 +138,7 @@ function friendly(e) {
   if (s.includes('bad_nick')) return t('Ник: 3–20 символов, только a–z, цифры и _', 'Nick: 3–20 chars, a–z, digits and _', 'Nick: 3–20 Zeichen, a–z, Ziffern und _');
   if (s.includes('bad_password')) return t('Пароль: минимум 6 символов', 'Password: at least 6 characters', 'Passwort: mindestens 6 Zeichen');
   if (s.includes('bad_code')) return t('Неверный или просроченный код', 'Wrong or expired code', 'Code falsch oder abgelaufen');
+  if (s.includes('blocked')) return t('Нельзя написать: пользователь заблокировал переписку', "Can't send: the user has blocked this chat", 'Kann nicht senden: der Nutzer hat den Chat blockiert');
   if (s.includes('too_many')) return t('Слишком много попыток, попробуй через час', 'Too many attempts, try again in an hour', 'Zu viele Versuche, versuche es in einer Stunde erneut');
   if (s.includes('mail_failed') || s.includes('mail_not_configured')) return t('Не удалось отправить письмо, попробуй позже', 'Could not send the email, try later', 'E-Mail konnte nicht gesendet werden');
   if (s.includes('no_profile')) return t('Профиль не найден', 'Profile not found', 'Profil nicht gefunden');
@@ -225,7 +226,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set() };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -257,6 +258,7 @@ async function refresh() {
     } catch (e) { }
     try { const cn = await sel('contact_names', { select: '*' }); const am = {}; cn.forEach(x => { am[x.contact_id] = x.name; }); D.alias = am; } catch (e) { }
     try { const pr = await sel('chat_prefs', { select: '*' }); const pm = {}; pr.forEach(x => { pm[x.key] = x; }); D.prefs = pm; } catch (e) { }
+    try { D.blocked = new Set((await sel('blocked_users', { select: 'blocked_id' })).map(r => r.blocked_id)); } catch (e) { }
     if (!D.stkLoaded) { try { D.stickers = await sel('my_stickers', { select: '*', order: 'id.desc' }); D.stkLoaded = true; } catch (e) { } }
     const ids = new Set();
     D.friendships.forEach(f => { ids.add(f.requester); ids.add(f.addressee); });
@@ -283,6 +285,9 @@ async function refresh() {
 
 const isMuted = k => !!(D.prefs[k] && D.prefs[k].muted);
 const isPinned = k => !!(D.prefs[k] && D.prefs[k].pinned);
+const iBlocked = id => D.blocked.has(id);
+async function blockUser(id) { await ins('blocked_users', { blocker_id: myId(), blocked_id: id }); D.blocked.add(id); renderAll(); }
+async function unblockUser(id) { await del('blocked_users', { blocker_id: 'eq.' + myId(), blocked_id: 'eq.' + id }); D.blocked.delete(id); renderAll(); }
 async function setPref(k, field, v) {
   const cur = D.prefs[k];
   try {
@@ -758,8 +763,8 @@ function renderPane() {
       head = '<div class="hd-click" data-act="chat-info" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0">' + (ch ? chatAvatar(ch, 40) : '') +
         '<div style="min-width:0"><div class="title">' + esc(ch ? ch.title : '') + '</div><div class="sub">' + esc(typingLine() || (ch ? (ch.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + (cnt ? ' · ' + cnt : '') : '')) + '</div></div></div>' + chatTools();
     } else {
-      head = avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? dname(p) : '') + '</div><div class="sub">' + esc(statusLine(p) + levelTag(p)) + '</div></div>' +
-        chatTools() + (CALL_OK ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
+      head = '<div class="hd-click" data-act="contact-profile" data-id="' + esc(U.chat) + '" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0">' + avatarHtml(p, 40) + '<div style="flex:1;min-width:0"><div class="title">' + esc(p ? dname(p) : '') + '</div><div class="sub">' + esc(statusLine(p) + levelTag(p)) + '</div></div></div>' +
+        chatTools() + (CALL_OK && !iBlocked(U.chat) ? '<button class="icon-btn" data-act="call-start" title="' + t('Позвонить', 'Call', 'Anrufen') + '">{i:phone}</button><button class="icon-btn" data-act="call-video" title="' + t('Видеозвонок', 'Video call', 'Videoanruf') + '">{i:video}</button>' : '');
     }
   }
   setHTML($('#chead'), head);
@@ -792,10 +797,12 @@ function renderPane() {
     setHTML($('#banner'), U.editing ? '<div class="banner"><span class="grow" style="flex:1">{i:edit} ' + t('Редактирование', 'Editing', 'Bearbeiten') + '</span><button data-act="edit-cancel">{i:x}</button></div>' :
       (U.sending ? '<div class="banner"><span class="grow" style="flex:1">{i:clip} ' + t('Отправка…', 'Sending…', 'Senden…') + '</span></div>' :
         (rm ? '<div class="banner"><span class="grow" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{i:forward} ' + esc(nickOf(rm.sender)) + ': ' + esc(preview(rm, true)) + '</span><button data-act="reply-cancel">{i:x}</button></div>' : '')));
-    const canPost = canPostTo(U.chat);
+    const canPost = canPostTo(U.chat) && !(!key && iBlocked(U.chat));
     $('#composer').classList.toggle('hidden', !canPost);
     let note = '';
-    if (key && !canPost) {
+    if (!key && iBlocked(U.chat)) {
+      note = '<div class="cnote"><button class="btn ghost" data-act="unblock" data-id="' + esc(U.chat) + '">' + t('Пользователь заблокирован · Разблокировать', 'User is blocked · Unblock', 'Nutzer ist blockiert · Entsperren') + '</button></div>';
+    } else if (key && !canPost) {
       note = !myMember(U.chat) && ch && ch.kind === 'channel'
         ? '<div class="cnote"><button class="btn" data-act="ch-join" data-id="' + esc(ch.id) + '">' + t('Подписаться', 'Subscribe', 'Abonnieren') + '</button></div>'
         : '<div class="cnote muted">' + t('Писать в канал могут только администраторы', 'Only admins can post in this channel', 'Nur Admins können in diesem Kanal schreiben') + '</div>';
@@ -1607,6 +1614,12 @@ document.addEventListener('click', async e => {
     case 'ch-open': chOpen(id); break;
     case 'ch-join': chJoin(id); break;
     case 'chat-info': openChatInfo(); break;
+    case 'contact-profile': openContactProfile(el.dataset.id); break;
+    case 'block-user': blockUser(el.dataset.id).then(() => { closeDialog(); renderAll(); }).catch(e => toast(friendly(e))); break;
+    case 'unblock': unblockUser(el.dataset.id).then(() => { closeDialog(); renderAll(); }).catch(e => toast(friendly(e))); break;
+    case 'cp-call': closeDialog(); U.chat = el.dataset.id; renderAll(); callStart(el.dataset.id, false); break;
+    case 'cp-search': closeDialog(); openSearch(); break;
+    case 'cp-media-all': openContactMediaAll(el.dataset.id); break;
     case 'm-add': memberAdd(id); break;
     case 'm-add-nick': memberAddNick(); break;
     case 'm-kick': memberKick(id); break;
@@ -1776,6 +1789,42 @@ async function chOpen(cid) {
   closeDialog();
   await chJoin(cid);
   U.tab = 'chats'; U.chat = 'c:' + cid; renderAll();
+}
+function contactMedia(id) {
+  return D.messages.filter(m => !isKey(id) && ((m.sender === id && m.receiver === myId()) || (m.sender === myId() && m.receiver === id)) && m.kind === 'image' && m.media_path && !isSticker(m));
+}
+function openContactProfile(id) {
+  const p = D.profiles[id]; if (!p) return;
+  const blockedByMe = iBlocked(id);
+  const media = contactMedia(id);
+  const msgCount = D.messages.filter(m => (m.sender === id && m.receiver === myId()) || (m.sender === myId() && m.receiver === id)).length;
+  const lb = levelTag(p);
+  const h =
+    '<div class="cp-head"><div class="cp-glow"></div>' + avatarHtml(p, 108) + '</div>' +
+    '<div class="cp-name">' + esc(dname(p)) + '</div>' +
+    (p.nick !== dname(p) ? '<div class="cp-nick">@' + esc(p.nick) + '</div>' : '') +
+    (lb ? '<div class="cp-level">★ ' + esc(lb.replace(' · ★ ', '')) + '</div>' : '') +
+    '<div class="cp-status">' + esc(statusLine(p)) + '</div>' +
+    '<div class="cp-pills">' +
+      '<div class="cp-pill' + (blockedByMe ? ' off' : '') + '" data-act="' + (blockedByMe ? '' : 'cp-call') + '" data-id="' + esc(id) + '">{i:phone}<span>' + t('Звонок', 'Call', 'Anruf') + '</span></div>' +
+      '<div class="cp-pill" data-act="cp-mute" data-id="' + esc(id) + '">{i:bell}<span>' + (isMuted(id) ? t('Звук', 'Unmute', 'Ton an') : t('Без звука', 'Mute', 'Stumm')) + '</span></div>' +
+      '<div class="cp-pill" data-act="cp-search">🔍<span>' + t('Поиск', 'Search', 'Suche') + '</span></div>' +
+      '<div class="cp-pill' + (blockedByMe ? '' : ' danger') + '" data-act="' + (blockedByMe ? 'unblock' : 'block-user') + '" data-id="' + esc(id) + '">{i:x}<span>' + (blockedByMe ? t('Разблок.', 'Unblock', 'Entsperren') : t('Блок.', 'Block', 'Blockieren')) + '</span></div>' +
+    '</div>' +
+    '<div class="cp-card">' +
+      '<div class="cp-row" data-act="cname" data-id="' + esc(id) + '"><span class="muted">' + t('Имя контакта', 'Contact name', 'Kontaktname') + '</span><span class="cp-accent">' + esc(D.alias[id] || t('не задано', 'not set', 'nicht gesetzt')) + '</span></div>' +
+      '<div class="cp-row"><span class="muted">' + t('Сообщений', 'Messages', 'Nachrichten') + '</span><span>' + msgCount + '</span></div>' +
+    '</div>' +
+    (media.length ? '<div class="cp-media-head"><b>' + t('Общие медиа', 'Shared media', 'Geteilte Medien') + '</b>' + (media.length > 8 ? '<span class="cp-accent" data-act="cp-media-all" data-id="' + esc(id) + '">' + t('Показать все', 'Show all', 'Alle anzeigen') + '</span>' : '') + '</div>' +
+      '<div class="cp-media-row">' + media.slice(-12).reverse().map(m => '<img class="pic cp-thumb" data-path="' + esc(m.media_path) + '">').join('') + '</div>' : '');
+  openDialog(t('Профиль', 'Profile', 'Profil'), h, [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
+  hydrateImages($('#modal'));
+}
+function openContactMediaAll(id) {
+  const media = contactMedia(id);
+  const h = '<div class="cp-grid">' + media.reverse().map(m => '<img class="pic cp-grid-img" data-path="' + esc(m.media_path) + '">').join('') + '</div>';
+  openDialog(t('Общие медиа', 'Shared media', 'Geteilte Medien'), h, [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
+  hydrateImages($('#modal'));
 }
 function openChatInfo() {
   const key = U.chat; if (!isKey(key)) return;

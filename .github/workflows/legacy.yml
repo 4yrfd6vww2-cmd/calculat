@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 env:
-  LABEL: '0.0.6 trapped build'
+  LABEL: '0.0.7 trapped build'
 
 jobs:
   xp:
@@ -57,7 +57,7 @@ jobs:
           sed -i '' "s/^const VERSION = .*/const VERSION = '${LABEL}';/" main.js
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@22.3.27
-          npx electron-builder --mac dir --universal --config.extraMetadata.version=0.0.6 --publish never
+          npx electron-builder --mac dir --universal --config.extraMetadata.version=0.0.7 --publish never
       - name: Sign ad-hoc and make DMG
         working-directory: desktop
         run: |
@@ -85,13 +85,13 @@ jobs:
           sed -i "s/^const VERSION = .*/const VERSION = '${LABEL}';/" main.js
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund electron@22.3.27
-          npx electron-builder --linux AppImage --x64 --config.linux.artifactName='Neirox-Linux-Old.${ext}' --config.extraMetadata.version=0.0.6 --publish never
+          npx electron-builder --linux AppImage --x64 --config.linux.artifactName='Neirox-Linux-Old.${ext}' --config.extraMetadata.version=0.0.7 --publish never
           ls -la dist
       - name: Linux 32 bit (Electron 18 — последний с поддержкой Linux 32 bit)
         working-directory: desktop
         run: |
           npm install --no-save --no-audit --no-fund electron@18.3.15
-          npx electron-builder --linux AppImage --ia32 --config.linux.artifactName='Neirox-Linux-32.${ext}' --config.extraMetadata.version=0.0.6 --publish never
+          npx electron-builder --linux AppImage --ia32 --config.linux.artifactName='Neirox-Linux-32.${ext}' --config.extraMetadata.version=0.0.7 --publish never
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
@@ -112,7 +112,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: legacy-${{ github.run_number }}
-          name: Neirox Legacy ${{ github.run_number }} (0.0.6 trapped build)
+          name: Neirox Legacy ${{ github.run_number }} (0.0.7 trapped build)
           files: |
             out/xp/Neirox-WinXP.zip
             out/macold/Neirox-Mac-Old.dmg

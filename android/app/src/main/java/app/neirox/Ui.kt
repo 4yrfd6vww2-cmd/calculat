@@ -225,6 +225,8 @@ fun friendlyError(raw: String): String {
             tr("Пароль: минимум 6 символов", "Password: at least 6 characters", "Passwort: mindestens 6 Zeichen")
         s.contains("bad_code") ->
             tr("Неверный или просроченный код", "Wrong or expired code", "Code falsch oder abgelaufen")
+        s.contains("blocked") ->
+            tr("Нельзя написать: пользователь заблокировал переписку", "Can't send: the user has blocked this chat", "Kann nicht senden: der Nutzer hat den Chat blockiert")
         s.contains("too_many") ->
             tr("Слишком много попыток, попробуй через час", "Too many attempts, try again in an hour", "Zu viele Versuche, versuche es in einer Stunde erneut")
         s.contains("mail_failed") || s.contains("mail_not_configured") ->

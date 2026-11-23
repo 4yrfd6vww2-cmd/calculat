@@ -55,6 +55,9 @@ object Store {
     private var stkLoaded = false
         private set
 
+    var blocked by mutableStateOf<Set<String>>(emptySet())
+        private set
+
     @Volatile
     var appVisible = false
     private var initialized = false
@@ -147,6 +150,11 @@ object Store {
             try {
                 val cn = Api.select("contact_names?select=*")
                 alias = (0 until cn.length()).associate { cn.getJSONObject(it).getString("contact_id") to cn.getJSONObject(it).getString("name") }
+            } catch (e: ApiError) {
+            }
+            try {
+                val bl = Api.select("blocked_users?select=blocked_id")
+                blocked = (0 until bl.length()).map { bl.getJSONObject(it).getString("blocked_id") }.toSet()
             } catch (e: ApiError) {
             }
             try {
@@ -372,6 +380,22 @@ object Store {
             alias = alias + (id to v)
         }
     }
+
+    fun iBlocked(id: String) = blocked.contains(id)
+
+    suspend fun blockUser(id: String) {
+        Api.insert("blocked_users", JSONObject().put("blocker_id", myId).put("blocked_id", id))
+        blocked = blocked + id
+    }
+
+    suspend fun unblockUser(id: String) {
+        Api.delete("blocked_users?blocker_id=eq.$myId&blocked_id=eq.$id")
+        blocked = blocked - id
+    }
+
+    suspend fun isBlockedPair(id: String): Boolean = try {
+        Api.request("POST", "/rest/v1/rpc/is_blocked_pair", JSONObject().put("other", id)).trim().toBoolean()
+    } catch (e: Exception) { iBlocked(id) }
 
     fun isMuted(k: String) = prefs[k]?.muted == true
     fun isPinned(k: String) = prefs[k]?.pinned == true

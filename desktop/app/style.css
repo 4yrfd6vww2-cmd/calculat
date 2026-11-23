@@ -290,3 +290,22 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .stk-x{position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:9px;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:10px;cursor:pointer;padding:0}
 .stk-add{width:64px;height:64px;border-radius:8px;border:2px dashed var(--accent);background:none;color:var(--accent);font-size:26px;cursor:pointer}
 .lvl{font-size:12px;font-weight:600;color:var(--accent);margin-left:6px}
+.cp-head{position:relative;display:flex;align-items:center;justify-content:center;height:140px;margin-bottom:6px}
+.cp-glow{position:absolute;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,rgba(var(--accent-rgb),.5),rgba(var(--accent-rgb),0) 70%)}
+.cp-name{text-align:center;font-size:20px;font-weight:700}
+.cp-nick{text-align:center;font-size:13px;color:var(--muted)}
+.cp-level{text-align:center;font-size:14px;font-weight:600;color:var(--accent);margin-top:2px}
+.cp-status{text-align:center;font-size:13px;color:var(--muted);margin-bottom:14px}
+.cp-pills{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
+.cp-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;border-radius:16px;background:var(--card);cursor:pointer;font-size:11px;color:var(--muted);min-width:64px}
+.cp-pill svg{width:20px;height:20px}
+.cp-pill.danger{color:#ff6b6b}
+.cp-pill.off{opacity:.4;cursor:default}
+.cp-card{background:var(--card);border-radius:16px;padding:12px 16px;margin-bottom:14px}
+.cp-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;cursor:pointer}
+.cp-accent{color:var(--accent)}
+.cp-media-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:14px}
+.cp-media-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.cp-thumb{width:84px;height:84px;border-radius:10px;object-fit:cover;flex:none;cursor:pointer}
+.cp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:60vh;overflow:auto}
+.cp-grid-img{width:100%;height:120px;object-fit:cover;cursor:pointer}

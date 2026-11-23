@@ -10,6 +10,7 @@ func friendlyError(_ raw: String) -> String {
     if s.contains("bad_nick") { return tr("Ник: 3–20 символов, только a–z, цифры и _", "Nick: 3–20 chars, a–z, digits and _", "Nick: 3–20 Zeichen, a–z, Ziffern und _") }
     if s.contains("bad_password") { return tr("Пароль: минимум 6 символов", "Password: at least 6 characters", "Passwort: mindestens 6 Zeichen") }
     if s.contains("bad_code") { return tr("Неверный или просроченный код", "Wrong or expired code", "Code falsch oder abgelaufen") }
+    if s.contains("blocked") { return tr("Нельзя написать: пользователь заблокировал переписку", "Can't send: the user has blocked this chat", "Kann nicht senden: der Nutzer hat den Chat blockiert") }
     if s.contains("too_many") { return tr("Слишком много попыток, попробуй через час", "Too many attempts, try again in an hour", "Zu viele Versuche, versuche es in einer Stunde erneut") }
     if s.contains("mail_failed") || s.contains("mail_not_configured") { return tr("Не удалось отправить письмо, попробуй позже", "Could not send the email, try later", "E-Mail konnte nicht gesendet werden") }
     if s.contains("no_profile") { return tr("Профиль не найден", "Profile not found", "Profil nicht gefunden") }
