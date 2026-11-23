@@ -289,3 +289,4 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .stk-m img{width:64px;height:64px;object-fit:contain;cursor:pointer;border-radius:8px}
 .stk-x{position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:9px;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:10px;cursor:pointer;padding:0}
 .stk-add{width:64px;height:64px;border-radius:8px;border:2px dashed var(--accent);background:none;color:var(--accent);font-size:26px;cursor:pointer}
+.lvl{font-size:12px;font-weight:600;color:var(--accent);margin-left:6px}

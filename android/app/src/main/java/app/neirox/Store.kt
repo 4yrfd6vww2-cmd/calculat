@@ -320,6 +320,11 @@ object Store {
         }
     }
 
+    fun levelBadge(id: String): String {
+        val l = levels[id] ?: return ""
+        return "★ " + levelStr(l)
+    }
+
     fun levelTag(id: String): String {
         val l = levels[id] ?: 0
         return if (l > 0) " · ★ " + levelStr(l) else ""

@@ -148,6 +148,9 @@ struct ProfileSettings: View {
                 Text(store.me?.nick ?? "")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(Theme.text)
+                Text("★ " + levelStr(store.levels[store.myId] ?? 0))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Theme.accent)
                 PhotosPicker(selection: $item, matching: .images) {
                     Text(busy ? "…" : tr("Сменить фото", "Change photo", "Foto ändern"))
                         .font(.system(size: 16, weight: .semibold))

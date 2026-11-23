@@ -153,9 +153,16 @@ struct ChatsView: View {
                                             Avatar(nick: p.title, url: p.chat?.avatarUrl, size: 46)
                                         }
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(titleLine(p))
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundColor(Theme.text)
+                                            HStack(spacing: 6) {
+                                                Text(titleLine(p))
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                    .foregroundColor(Theme.text)
+                                                if p.profile != nil, !store.levelBadge(p.key).isEmpty {
+                                                    Text(store.levelBadge(p.key))
+                                                        .font(.system(size: 12, weight: .semibold))
+                                                        .foregroundColor(Theme.accent)
+                                                }
+                                            }
                                             Text(preview(store.thread(with: p.key).last))
                                                 .font(.system(size: 13))
                                                 .foregroundColor(Theme.textSecondary)

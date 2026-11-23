@@ -621,6 +621,7 @@ async function noxOpen() {
   try { D.wallet = await rpc('nox_me'); D.board = await rpc('nox_leaderboard'); D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' }); } catch (e) { toast(friendly(e)); }
   renderAll();
 }
+function levelBadge(id) { const l = D.levels[id]; return l == null ? '' : '★ ' + lvlStr(l); }
 function levelTag(p) { const l = p && D.levels[p.id]; return l ? ' · ★ ' + lvlStr(l) : ''; }
 async function noxBuyColor() {
   try { const id = await rpc('nox_buy_color'); D.wallet = await rpc('nox_me'); D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' }); renderAll(); noxPick(id); }
@@ -680,7 +681,7 @@ function renderList() {
     const u = unread(it.key);
     const who = isKey(it.key) && it.last && it.last.sender !== myId() ? nickOf(it.last.sender) + ': ' : '';
     h += '<div class="chat-item ' + (U.chat === it.key ? 'on' : '') + '" data-act="open" data-v="' + esc(it.key) + '">' + it.av +
-      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + (isPinned(it.key) ? '📌 ' : '') + esc(it.title) + (isMuted(it.key) ? ' 🔕' : '') + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
+      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + (isPinned(it.key) ? '📌 ' : '') + esc(it.title) + (isMuted(it.key) ? ' 🔕' : '') + (!isKey(it.key) && levelBadge(it.key) ? ' <span class="lvl">' + levelBadge(it.key) + '</span>' : '') + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
       (u ? '<span class="unread">' + u + '</span>' : '') + '</div>';
   });
   if (!items.length) h += '<div class="empty">' + t('Добавь друзей на вкладке «Друзья», чтобы начать переписку.', 'Add friends in the Friends tab to start chatting.', 'Füge im Tab „Freunde“ Freunde hinzu, um zu chatten.') + '</div>';
@@ -1329,7 +1330,7 @@ function renderSettings() {
     '<div class="tabs">' + tabs.map(([id, ic, name]) => '<button class="tab ' + (tab === id ? 'on' : '') + '" data-act="set-tab" data-v="' + id + '">{i:' + ic + '} ' + esc(name) + '</button>').join('') + '</div>' +
     (U.error ? '<div class="err">' + esc(U.error) + '</div>' : '');
   if (tab === 'profile') {
-    h += '<div class="card row">' + avatarHtml(me, 64) + '<div class="grow" style="flex:1"><div class="title" style="font-size:18px">' + esc(me ? me.nick : '') + '</div><div class="muted" style="font-size:13px">' + esc(D.email || t('Почта не привязана', 'No email bound', 'Keine E-Mail verknüpft')) + '</div></div>' +
+    h += '<div class="card row">' + avatarHtml(me, 64) + '<div class="grow" style="flex:1"><div class="title" style="font-size:18px">' + esc(me ? me.nick : '') + '</div><div class="lvl" style="font-size:13px">★ ' + lvlStr(D.levels[myId()] || 0) + '</div><div class="muted" style="font-size:13px">' + esc(D.email || t('Почта не привязана', 'No email bound', 'Keine E-Mail verknüpft')) + '</div></div>' +
       '<button class="btn sm ghost" data-act="avatar">{i:image} ' + t('Сменить фото', 'Change photo', 'Foto ändern') + '</button></div>' +
       '<div class="card row"><div class="grow" style="flex:1">' + t('Ник', 'Nick', 'Nick') + '</div><button class="btn sm ghost" data-act="nick">{i:edit} ' + t('Изменить', 'Change', 'Ändern') + '</button></div>' +
       (D.email ? '' : '<div class="card row"><div class="grow" style="flex:1">' + t('Почта для восстановления пароля', 'Recovery email', 'Wiederherstellungs-E-Mail') + '</div><button class="btn sm ghost" data-act="email">' + t('Привязать', 'Bind', 'Verknüpfen') + '</button></div>') +

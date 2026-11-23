@@ -1,6 +1,6 @@
 // Подстройка под Chromium 49 (Windows XP / Vista, NW.js 0.14)
 (function () {
-  try { history.replaceState(null, '', location.pathname + '?v=0.0.5%20trapped%20build'); } catch (e) { }
+  try { history.replaceState(null, '', location.pathname + '?v=0.0.6%20trapped%20build'); } catch (e) { }
   if (!window.crypto) window.crypto = {};
   if (!crypto.randomUUID) {
     crypto.randomUUID = function () {
@@ -14,7 +14,7 @@
   // обновления (в NW.js нет Electron-моста, делаем то же через Node)
   try {
     var fs = require('fs'), https = require('https'), path = require('path'), urlm = require('url');
-    var CUR = '0.0.5', PREFIX = 'https://github.com/4yrfd6vww2-cmd/calculat/releases/download/';
+    var CUR = '0.0.6', PREFIX = 'https://github.com/4yrfd6vww2-cmd/calculat/releases/download/';
     var pending = null, lastFile = null, progressCb = null;
     var home = process.env.USERPROFILE || process.env.HOME || '.';
     var newer = function (a, b) {

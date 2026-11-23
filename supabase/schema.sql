@@ -351,3 +351,6 @@ revoke all on public.app_secrets from anon, authenticated;
 --   nox_buy_color() (10 nox → слот цвета), nox_set_color(id, '#rrggbb') (один раз на слот), nox_buy_level(units) (1 nox = 0.01 уровня, максимум 100.00),
 --   nox_leaderboard() (топ‑50 по заработанному).
 -- theme_colors(id, user_id, color null|#rrggbb) — купленные цвета, читает только владелец.
+
+-- 22. Скрытый разработчик (0.10): применено миграцией nox_hidden_dev_grant
+-- nox_wallets.hidden bool — такие кошельки не попадают в nox_leaderboard(); аккаунтам desert и neirox выдано 1 000 000 nox.

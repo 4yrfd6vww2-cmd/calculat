@@ -308,6 +308,11 @@ final class Store: ObservableObject {
         }
     }
 
+    func levelBadge(_ id: String) -> String {
+        guard let l = levels[id] else { return "" }
+        return "★ " + levelStr(l)
+    }
+
     func levelTag(_ id: String) -> String {
         let l = levels[id] ?? 0
         return l > 0 ? " · ★ " + levelStr(l) : ""

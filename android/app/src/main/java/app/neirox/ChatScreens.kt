@@ -156,7 +156,13 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     if (r.profile != null) Avatar(r.profile, 48.dp)
                     else if (r.chat != null) Avatar(r.chat.asProfile(), 48.dp)
                     Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                        Text((if (Store.isPinned(r.key)) "📌 " else "") + r.title + (if (Store.isMuted(r.key)) " 🔕" else ""), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text((if (Store.isPinned(r.key)) "📌 " else "") + r.title + (if (Store.isMuted(r.key)) " 🔕" else ""), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (r.profile != null) {
+                                val lb = Store.levelBadge(r.key)
+                                if (lb.isNotEmpty()) Text(lb, color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+                            }
+                        }
                         val who = if (r.chat != null && last != null && last.sender != Store.myId) Store.dname(last.sender) + ": " else ""
                         Text(who + previewOf(last), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }

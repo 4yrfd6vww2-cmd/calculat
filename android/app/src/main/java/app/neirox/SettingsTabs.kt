@@ -178,6 +178,7 @@ private fun ProfilePage() {
         Box(Modifier.clickable { picker.launch("image/*") }) { Avatar(Store.me, 110.dp) }
         NxSmallButton(tr("Сменить фото", "Change photo", "Foto ändern")) { picker.launch("image/*") }
         Text(Store.me?.nick ?: "", color = Txt, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("★ " + levelStr(Store.levels[Store.myId] ?: 0), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
     NxField(nick, { nick = it }, tr("Новый ник", "New nick", "Neuer Nick"))
     NxCard(
