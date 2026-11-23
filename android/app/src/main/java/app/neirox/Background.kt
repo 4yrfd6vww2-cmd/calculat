@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -35,8 +36,11 @@ object Notif {
     const val ID_CALL = 2
     const val ID_SERVICE = 1
 
+    private fun nm(ctx: Context): NotificationManager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
     fun channels(ctx: Context) {
-        val nm = ctx.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT < 26) return
+        val nm = nm(ctx)
         nm.createNotificationChannel(
             NotificationChannel(CH_SERVICE, tr("Работа в фоне", "Background", "Hintergrund"), NotificationManager.IMPORTANCE_LOW)
         )
@@ -54,17 +58,23 @@ object Notif {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 
-    private fun action(ctx: Context, icon: Int, title: String, act: String): Notification.Action {
+    private fun addAction(b: Notification.Builder, ctx: Context, icon: Int, title: String, act: String) {
         val pi = PendingIntent.getBroadcast(
             ctx, act.hashCode(),
             Intent(ctx, MediaActionReceiver::class.java).setAction(act),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        return Notification.Action.Builder(Icon.createWithResource(ctx, icon), title, pi).build()
+        if (Build.VERSION.SDK_INT >= 23) {
+            b.addAction(Notification.Action.Builder(Icon.createWithResource(ctx, icon), title, pi).build())
+        } else {
+            @Suppress("DEPRECATION")
+            b.addAction(icon, title, pi)
+        }
     }
 
     fun service(ctx: Context): Notification {
-        val b = Notification.Builder(ctx, CH_SERVICE)
+        val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CH_SERVICE) else @Suppress("DEPRECATION") Notification.Builder(ctx)
+        b
             .setSmallIcon(R.drawable.ic_stat)
             .setContentIntent(openApp(ctx))
             .setOngoing(true)
@@ -72,16 +82,14 @@ object Notif {
         val title = Player.currentTitle
         if (title != null) {
             b.setContentTitle(title).setContentText("neirox")
-            b.addAction(action(ctx, android.R.drawable.ic_media_previous, "◀◀", ACT_PREV))
-            b.addAction(
-                action(
-                    ctx,
-                    if (Player.playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                    if (Player.playing) "❚❚" else "▶",
-                    ACT_TOGGLE
-                )
+            addAction(b, ctx, android.R.drawable.ic_media_previous, "◀◀", ACT_PREV)
+            addAction(
+                b, ctx,
+                if (Player.playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                if (Player.playing) "❚❚" else "▶",
+                ACT_TOGGLE
             )
-            b.addAction(action(ctx, android.R.drawable.ic_media_next, "▶▶", ACT_NEXT))
+            addAction(b, ctx, android.R.drawable.ic_media_next, "▶▶", ACT_NEXT)
             b.setStyle(Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2))
         } else {
             b.setContentTitle("neirox")
@@ -92,7 +100,7 @@ object Notif {
 
     fun update(ctx: Context) {
         if (!NeiroxService.running) return
-        ctx.getSystemService(NotificationManager::class.java).notify(ID_SERVICE, service(ctx))
+        nm(ctx).notify(ID_SERVICE, service(ctx))
     }
 
     fun message(ctx: Context, senderId: String, nick: String, text: String) {
@@ -105,7 +113,7 @@ object Notif {
             .setContentIntent(openApp(ctx))
             .build()
         try {
-            ctx.getSystemService(NotificationManager::class.java).notify(senderId.hashCode(), n)
+            nm(ctx).notify(senderId.hashCode(), n)
         } catch (e: Exception) {
         }
     }
@@ -137,20 +145,21 @@ object Notif {
             .addAction(0, tr("Ответить", "Answer", "Annehmen"), open)
             .build()
         try {
-            ctx.getSystemService(NotificationManager::class.java).notify(ID_CALL, n)
+            nm(ctx).notify(ID_CALL, n)
         } catch (e: Exception) {
         }
     }
 
     fun cancelCall(ctx: Context) {
         try {
-            ctx.getSystemService(NotificationManager::class.java).cancel(ID_CALL)
+            nm(ctx).cancel(ID_CALL)
         } catch (e: Exception) {
         }
     }
 
     fun clearMessages(ctx: Context) {
-        val nm = ctx.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT < 23) return
+        val nm = nm(ctx)
         try {
             for (n in nm.activeNotifications) if (n.id != ID_SERVICE && n.id != ID_CALL) nm.cancel(n.id)
         } catch (e: Exception) {

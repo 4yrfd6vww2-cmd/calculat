@@ -74,7 +74,7 @@ object Updater {
             c.connectTimeout = 10000; c.readTimeout = 10000
             c.inputStream.bufferedReader().use { it.readText() }
         }
-        val a = JSONObject(text).optJSONObject("android") ?: return
+        val a = JSONObject(text).optJSONObject(BuildConfig.UPDATE_KEY) ?: return
         val code = a.optInt("code", 0)
         val u = a.optString("url", "")
         val cur = try {

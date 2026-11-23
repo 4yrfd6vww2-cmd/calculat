@@ -1,0 +1,51 @@
+name: Build APK Android 5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-old.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Проверка совместимости с Android 5.0 (NewApi)
+        working-directory: android
+        run: gradle lintDebug -PoldAndroid=true --no-daemon --stacktrace
+
+      - name: Build APK
+        working-directory: android
+        run: gradle assembleDebug -PoldAndroid=true --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Neirox-Android5.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Neirox-android5-apk
+          path: Neirox-Android5.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android5-${{ github.run_number }}
+          name: Neirox Android 5+ ${{ github.run_number }} (0.0.1 android 5 build)
+          files: Neirox-Android5.apk
