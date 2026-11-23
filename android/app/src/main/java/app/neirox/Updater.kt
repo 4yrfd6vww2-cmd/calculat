@@ -108,7 +108,7 @@ object Updater {
                     val out = File(dir, "neirox.apk")
                     val c = URL(u).openConnection() as HttpURLConnection
                     c.connectTimeout = 15000; c.readTimeout = 30000
-                    val total = c.contentLengthLong
+                    val total = c.getHeaderField("Content-Length")?.toLongOrNull() ?: c.contentLength.toLong()
                     c.inputStream.use { inp ->
                         out.outputStream().use { o ->
                             val buf = ByteArray(64 * 1024)
