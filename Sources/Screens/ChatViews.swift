@@ -66,13 +66,15 @@ struct ChatsView: View {
         return r.title
     }
 
-    @ViewBuilder private func rowMenu(_ k: String) -> some View {
-        Button { Task { await store.setPref(k, "pinned", !store.isPinned(k)) } } label: {
-            Label(store.isPinned(k) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften"), systemImage: "pin")
-        }
-        Button { Task { await store.setPref(k, "muted", !store.isMuted(k)) } } label: {
-            Label(store.isMuted(k) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten"), systemImage: "bell.slash")
-        }
+    private func rowMenuActions(_ k: String) -> [MenuAction] {
+        [
+            MenuAction(icon: "pin", title: store.isPinned(k) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften")) {
+                Task { await store.setPref(k, "pinned", !store.isPinned(k)) }
+            },
+            MenuAction(icon: "bell.slash", title: store.isMuted(k) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten")) {
+                Task { await store.setPref(k, "muted", !store.isMuted(k)) }
+            }
+        ]
     }
 
     private func previewIcon(_ m: Message?) -> String? {
@@ -206,7 +208,7 @@ struct ChatsView: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                            .contextMenu { rowMenu(p.key) }
+                            .customActionMenu(actions: rowMenuActions(p.key))
                         }
 
                         if friends.isEmpty {
@@ -311,6 +313,23 @@ struct Bubble: View {
     private let store = Store.shared
     @State private var dragX: CGFloat = 0
 
+    private func bubbleMenuActions() -> [MenuAction] {
+        var items: [MenuAction] = [
+            MenuAction(icon: "arrowshape.turn.up.left", title: tr("Ответить", "Reply", "Antworten")) { onReply() },
+            MenuAction(icon: "doc.on.doc", title: tr("Копировать", "Copy", "Kopieren")) { onCopy() }
+        ]
+        if let e = onEdit {
+            items.append(MenuAction(icon: "square.and.pencil", title: tr("Изменить", "Edit", "Bearbeiten")) { e() })
+        }
+        if let pin = onPin {
+            items.append(MenuAction(icon: "pin", title: pinnedNow ? tr("Открепить", "Unpin", "Lösen") : tr("Закрепить", "Pin", "Anheften")) { pin() })
+        }
+        items.append(MenuAction(icon: "arrowshape.turn.up.right", title: tr("Переслать", "Forward", "Weiterleiten")) { onForward() })
+        items.append(MenuAction(icon: "trash", title: tr("Удалить", "Delete", "Löschen"), destructive: true) { onDelete() })
+        items.append(MenuAction(icon: "checkmark.circle", title: tr("Выделить", "Select", "Auswählen")) { onToggle() })
+        return items
+    }
+
     var body: some View {
         HStack {
             if mine { Spacer(minLength: 50) }
@@ -342,24 +361,11 @@ struct Bubble: View {
                     Task { if let u = try? await API.shared.signedURL(bucket: "chat-media", path: p) { openURL(u) } }
                 }
             }
-            .contextMenu {
-                if !selecting {
-                    ForEach(["👍", "❤️", "😂", "😮", "😢", "🔥"], id: \.self) { e in
-                        Button(e) { onReact(e) }
-                    }
-                    Button { onReply() } label: { Label(tr("Ответить", "Reply", "Antworten"), systemImage: "arrowshape.turn.up.left") }
-                    Button { onCopy() } label: { Label(tr("Копировать", "Copy", "Kopieren"), systemImage: "doc.on.doc") }
-                    if let e = onEdit {
-                        Button { e() } label: { Label(tr("Изменить", "Edit", "Bearbeiten"), systemImage: "square.and.pencil") }
-                    }
-                    if let pin = onPin {
-                        Button { pin() } label: { Label(pinnedNow ? tr("Открепить", "Unpin", "Lösen") : tr("Закрепить", "Pin", "Anheften"), systemImage: "pin") }
-                    }
-                    Button { onForward() } label: { Label(tr("Переслать", "Forward", "Weiterleiten"), systemImage: "arrowshape.turn.up.right") }
-                    Button(role: .destructive) { onDelete() } label: { Label(tr("Удалить", "Delete", "Löschen"), systemImage: "trash") }
-                    Button { onToggle() } label: { Label(tr("Выделить", "Select", "Auswählen"), systemImage: "checkmark.circle") }
-                }
-            }
+            .customActionMenu(
+                reactions: selecting ? [] : ["👍", "❤️", "😂", "😮", "😢", "🔥"],
+                onReact: selecting ? nil : { e in onReact(e) },
+                actions: selecting ? [] : bubbleMenuActions()
+            )
             if !mine { Spacer(minLength: 50) }
         }
         .padding(.vertical, 2)
@@ -504,10 +510,56 @@ struct ChatView: View {
 
     private var thread: [Message] { store.thread(with: key) }
 
+    private var customHeader: some View {
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
+            }
+            .frame(width: 28, height: 28)
+            Text(chat?.title ?? store.dname(friend))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Theme.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
+            Spacer(minLength: 6)
+            if !selected.isEmpty {
+                HStack(spacing: 16) {
+                    if selMsgs.count == 1, let one = selMsgs.first, one.sender == store.myId, one.kind == "text" {
+                        Button { editing = one; text = one.body ?? ""; selected = [] } label: { Image(systemName: "pencil") }
+                    }
+                    Button { copySelected() } label: { Image(systemName: "doc.on.doc") }
+                    Button { showForward = true } label: { Image(systemName: "arrowshape.turn.up.right") }
+                    Button { showDelete = true } label: { Image(systemName: "trash") }
+                    Button { selected = [] } label: { Image(systemName: "xmark") }
+                }
+            } else if chat != nil {
+                HStack(spacing: 16) {
+                    moreMenu
+                    Button { showInfo = true } label: { Image(systemName: "info.circle") }
+                }
+            } else {
+                HStack(spacing: 16) {
+                    moreMenu
+                    if !store.iBlocked(key) {
+                        Button { Calls.shared.start(peer: key, video: true) } label: { Image(systemName: "video.fill") }
+                        Button { Calls.shared.start(peer: key) } label: { Image(systemName: "phone.fill") }
+                    }
+                }
+            }
+        }
+        .font(.system(size: 17))
+        .foregroundColor(Theme.accent)
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+
     var body: some View {
         ZStack {
             AppBackground()
             VStack(spacing: 0) {
+                customHeader
                 Text(subtitle)
                     .font(.system(size: 12))
                     .foregroundColor(!store.typingIn(key).isEmpty || (chat == nil && store.isOnline(friend)) ? Theme.accent : Theme.textSecondary)
@@ -576,54 +628,37 @@ struct ChatView: View {
                 inputBar
             }
         }
-        .neonScreen(chat?.title ?? store.dname(friend))
-        .toolbar {
-            if !selected.isEmpty {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    if selMsgs.count == 1, let one = selMsgs.first, one.sender == store.myId, one.kind == "text" {
-                        Button { editing = one; text = one.body ?? ""; selected = [] } label: { Image(systemName: "pencil") }
-                    }
-                    Button { copySelected() } label: { Image(systemName: "doc.on.doc") }
-                    Button { showForward = true } label: { Image(systemName: "arrowshape.turn.up.right") }
-                    Button { showDelete = true } label: { Image(systemName: "trash") }
-                    Button { selected = [] } label: { Image(systemName: "xmark") }
-                }
-            } else {
-                if chat != nil {
-                    ToolbarItemGroup(placement: .navigationBarTrailing) {
-                        moreMenu
-                        Button { showInfo = true } label: { Image(systemName: "info.circle") }
-                    }
-                } else {
-                    ToolbarItemGroup(placement: .navigationBarTrailing) {
-                        moreMenu
-                        if !store.iBlocked(key) {
-                            Button { Calls.shared.start(peer: key, video: true) } label: { Image(systemName: "video.fill") }
-                            Button { Calls.shared.start(peer: key) } label: { Image(systemName: "phone.fill") }
-                        }
-                    }
-                }
-            }
-        }
+        .navigationBarHidden(true)
         .sheet(isPresented: $showForward) { forwardSheet }
-        .alert(tr("Имя контакта", "Contact name", "Kontaktname"), isPresented: $showName) {
-            TextField(tr("Например: папа, начальник", "E.g. dad, boss", "z. B. Papa, Chef"), text: $nameText)
-            Button(tr("Сохранить", "Save", "Speichern")) { Task { await store.setAlias(key, String(nameText.prefix(40))) } }
-            Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) {}
-        } message: {
-            Text(tr("Видно только вам. Ник: ", "Only you can see it. Nick: ", "Nur für dich sichtbar. Nick: ") + friend.nick)
-        }
+        .overlay(
+            PromptDialogOverlay(
+                isPresented: $showName,
+                title: tr("Имя контакта", "Contact name", "Kontaktname"),
+                message: tr("Видно только вам. Ник: ", "Only you can see it. Nick: ", "Nur für dich sichtbar. Nick: ") + friend.nick,
+                placeholder: tr("Например: папа, начальник", "E.g. dad, boss", "z. B. Papa, Chef"),
+                text: $nameText,
+                confirmTitle: tr("Сохранить", "Save", "Speichern"),
+                onConfirm: { Task { await store.setAlias(key, String(nameText.prefix(40))) } }
+            )
+        )
         .sheet(isPresented: $showSearch) { SearchSheet(only: key) { _, id in showSearch = false; store.jumpTo = id } }
         .sheet(isPresented: $showInfo) { ChatInfoSheet(key: key) { showInfo = false; dismiss() } }
         .sheet(isPresented: $showProfile) { ContactProfileSheet(friendId: key, onCall: { Calls.shared.start(peer: key) }, onSearch: { showSearch = true }) { showProfile = false } }
         .onChange(of: text) { t in if !t.isEmpty { store.sendTyping(to: key) } }
-        .confirmationDialog(tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?"), isPresented: $showDelete, titleVisibility: .visible) {
-            Button(tr("У меня", "For me", "Für mich"), role: .destructive) { deleteSelected(forAll: false) }
-            if !selMsgs.isEmpty && selMsgs.allSatisfy({ $0.sender == store.myId }) {
-                Button(tr("У всех", "For everyone", "Für alle"), role: .destructive) { deleteSelected(forAll: true) }
-            }
-            Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) {}
-        }
+        .overlay(
+            ConfirmDialogOverlay(
+                isPresented: $showDelete,
+                title: tr("Удалить сообщения?", "Delete messages?", "Nachrichten löschen?"),
+                buttons: {
+                    var b = [DialogButton(title: tr("У меня", "For me", "Für mich"), destructive: true) { deleteSelected(forAll: false) }]
+                    if !selMsgs.isEmpty && selMsgs.allSatisfy({ $0.sender == store.myId }) {
+                        b.append(DialogButton(title: tr("У всех", "For everyone", "Für alle"), destructive: true) { deleteSelected(forAll: true) })
+                    }
+                    b.append(DialogButton(title: tr("Отмена", "Cancel", "Abbrechen"), cancel: true) {})
+                    return b
+                }()
+            )
+        )
         .fullScreenCover(isPresented: Binding(get: { fullscreenPath != nil }, set: { if !$0 { fullscreenPath = nil } })) {
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -658,11 +693,17 @@ struct ChatView: View {
                 .padding(6)
                 .allowsHitTesting(false)
         )
-        .alert(tr("Картинка от ИИ", "AI image", "KI-Bild"), isPresented: $showAI) {
-            TextField(tr("Опиши картинку", "Describe the image", "Bild beschreiben"), text: $aiPrompt)
-            Button(tr("Создать и отправить", "Create and send", "Erstellen und senden")) { sendAIImage() }
-            Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) { aiPrompt = "" }
-        }
+        .overlay(
+            PromptDialogOverlay(
+                isPresented: $showAI,
+                title: tr("Картинка от ИИ", "AI image", "KI-Bild"),
+                placeholder: tr("Опиши картинку", "Describe the image", "Bild beschreiben"),
+                text: $aiPrompt,
+                confirmTitle: tr("Создать и отправить", "Create and send", "Erstellen und senden"),
+                onConfirm: { sendAIImage() },
+                onCancel: { aiPrompt = "" }
+            )
+        )
         .onChange(of: photoItems) { items in
             guard !items.isEmpty else { return }
             Task {
@@ -679,19 +720,22 @@ struct ChatView: View {
     }
 
     private var moreMenu: some View {
-        Menu {
-            Button { showSearch = true } label: { Label(tr("Поиск в чате", "Search in chat", "Im Chat suchen"), systemImage: "magnifyingglass") }
+        Button {
+            var items: [MenuAction] = [
+                MenuAction(icon: "magnifyingglass", title: tr("Поиск в чате", "Search in chat", "Im Chat suchen")) { showSearch = true }
+            ]
             if chat == nil {
-                Button { nameText = store.alias[key] ?? ""; showName = true } label: {
-                    Label(tr("Имя контакта", "Contact name", "Kontaktname"), systemImage: "pencil")
-                }
+                items.append(MenuAction(icon: "pencil", title: tr("Имя контакта", "Contact name", "Kontaktname")) {
+                    nameText = store.alias[key] ?? ""; showName = true
+                })
             }
-            Button { Task { await store.setPref(key, "muted", !store.isMuted(key)) } } label: {
-                Label(store.isMuted(key) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten"), systemImage: "bell.slash")
-            }
-            Button { Task { await store.setPref(key, "pinned", !store.isPinned(key)) } } label: {
-                Label(store.isPinned(key) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften"), systemImage: "pin")
-            }
+            items.append(MenuAction(icon: "bell.slash", title: store.isMuted(key) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten")) {
+                Task { await store.setPref(key, "muted", !store.isMuted(key)) }
+            })
+            items.append(MenuAction(icon: "pin", title: store.isPinned(key) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften")) {
+                Task { await store.setPref(key, "pinned", !store.isPinned(key)) }
+            })
+            MenuPresenter.shared.show(actions: items)
         } label: {
             Image(systemName: "ellipsis.circle")
         }
@@ -1211,13 +1255,9 @@ struct AIChatView: View {
             )
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(mine ? Color.clear : Theme.stroke, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 18))
-            .contextMenu {
-                if images[m.id] == nil {
-                    Button { UIPasteboard.general.string = m.text } label: {
-                        Label(tr("Копировать", "Copy", "Kopieren"), systemImage: "doc.on.doc")
-                    }
-                }
-            }
+            .customActionMenu(actions: images[m.id] == nil ? [
+                MenuAction(icon: "doc.on.doc", title: tr("Копировать", "Copy", "Kopieren")) { UIPasteboard.general.string = m.text }
+            ] : [])
             if !mine { Spacer(minLength: 50) }
         }
     }

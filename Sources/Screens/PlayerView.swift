@@ -264,11 +264,9 @@ struct PlayerView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button(role: .destructive) { pl.remove(t) } label: {
-                                        Label(tr("Удалить", "Delete", "Löschen"), systemImage: "trash")
-                                    }
-                                }
+                                .customActionMenu(actions: [
+                                    MenuAction(icon: "trash", title: tr("Удалить", "Delete", "Löschen"), destructive: true) { pl.remove(t) }
+                                ])
                             }
                         }
                         .padding(16)

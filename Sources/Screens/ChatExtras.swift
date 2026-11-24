@@ -108,11 +108,11 @@ struct StickerPanel: View {
         MediaImage(path: s.path)
             .frame(width: 51, height: 51)
             .onTapGesture { onOwn(s) }
-            .contextMenu {
-                Button(role: .destructive) { Task { await store.deleteSticker(s.id) } } label: {
-                    Label(tr("Удалить", "Delete", "Löschen"), systemImage: "trash")
+            .customActionMenu(actions: [
+                MenuAction(icon: "trash", title: tr("Удалить", "Delete", "Löschen"), destructive: true) {
+                    Task { await store.deleteSticker(s.id) }
                 }
-            }
+            ])
     }
 
     @MainActor private func add(_ item: PhotosPickerItem) async {

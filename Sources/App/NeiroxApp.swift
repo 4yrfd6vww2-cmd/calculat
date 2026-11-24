@@ -28,6 +28,10 @@ struct RootView: View {
             CallView()
         }
         .overlay(alignment: .top) { if store.loggedIn { UpdateBanner() } }
+        .overlay { ActionMenuOverlay() }
+        .overlay(alignment: .top) {
+            ToastOverlay(text: Binding(get: { store.noxNotice }, set: { store.noxNotice = $0 }))
+        }
         .task {
             Updater.shared.start()
             if store.loggedIn { await store.start() }
@@ -67,11 +71,6 @@ struct MainTabs: View {
                 .tag(3)
         }
         .tint(Theme.accent)
-        .alert(tr("nox", "nox", "nox"), isPresented: Binding(get: { store.noxNotice != nil }, set: { if !$0 { store.noxNotice = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(store.noxNotice ?? "")
-        }
         .onAppear { if #unavailable(iOS 26) { applyTabBarStyle() } }
         .onChange(of: st.accentHex) { _ in if #unavailable(iOS 26) { applyTabBarStyle() } }
         .onChange(of: st.mode) { _ in if #unavailable(iOS 26) { applyTabBarStyle() } }

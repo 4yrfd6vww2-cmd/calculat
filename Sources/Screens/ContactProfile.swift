@@ -116,11 +116,16 @@ struct ContactProfileSheet: View {
                     Button { onClose() } label: { Image(systemName: "chevron.left") }
                 }
             }
-            .alert(tr("Имя контакта", "Contact name", "Kontaktname"), isPresented: $showName) {
-                TextField(tr("Имя", "Name", "Name"), text: $nameText)
-                Button(tr("Сохранить", "Save", "Speichern")) { Task { await store.setAlias(friendId, String(nameText.prefix(40))) } }
-                Button(tr("Отмена", "Cancel", "Abbrechen"), role: .cancel) {}
-            }
+            .overlay(
+                PromptDialogOverlay(
+                    isPresented: $showName,
+                    title: tr("Имя контакта", "Contact name", "Kontaktname"),
+                    placeholder: tr("Имя", "Name", "Name"),
+                    text: $nameText,
+                    confirmTitle: tr("Сохранить", "Save", "Speichern"),
+                    onConfirm: { Task { await store.setAlias(friendId, String(nameText.prefix(40))) } }
+                )
+            )
             .sheet(isPresented: $showAllMedia) {
                 NavigationStack {
                     ScrollView {
