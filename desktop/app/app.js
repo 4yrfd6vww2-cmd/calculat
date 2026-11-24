@@ -46,7 +46,11 @@ const IC = {
   videooff: '<path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.7 0H14a2 2 0 0 1 2 2v3.3l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/>',
   phoneoff: '<path d="M10.7 13.3a16 16 0 0 0 3 2.4l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9"/><line x1="23" y1="1" x2="1" y2="23"/>',
   micoff: '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V4a3 3 0 0 0-5.9-.7"/><path d="M19 10v2a7 7 0 0 1-.1 1.2M5 10v2a7 7 0 0 0 11.5 5.4"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
-  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  pinfill: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="currentColor"/>',
+  belloff: '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/>'
 };
 function icons(html) {
   return html.replace(/\{i:([a-z]+)\}/g, (all, n) => IC[n]
@@ -513,7 +517,7 @@ function renderAuth() {
       '<button class="btn full" data-act="register" ' + (U.authBusy ? 'disabled' : '') + '>' + t('Создать аккаунт', 'Create account', 'Konto erstellen') + '</button>' +
       '<button class="link" data-act="auth-go" data-v="login">' + t('Уже есть аккаунт? Войти', 'Have an account? Sign in', 'Schon ein Konto? Anmelden') + '</button>';
   } else if (sc === 'recover') {
-    body = '<div class="muted" style="font-size:14px">' + t('Код придёт на почту, привязанную к аккаунту.', 'The code is sent to the email bound to the account.', 'Der Code wird an die verknüpfte E-Mail gesendet.') + '</div>' +
+    body = '<div class="muted" style="font-size:12px">' + t('Код придёт на почту, привязанную к аккаунту.', 'The code is sent to the email bound to the account.', 'Der Code wird an die verknüpfte E-Mail gesendet.') + '</div>' +
       '<input class="field" id="a-nick" placeholder="' + t('Ник', 'Nick', 'Nick') + '">' + err +
       '<button class="btn full" data-act="recover-req" ' + (U.authBusy ? 'disabled' : '') + '>' + t('Отправить код', 'Send code', 'Code senden') + '</button>' +
       '<button class="link" data-act="auth-go" data-v="login">' + t('Назад', 'Back', 'Zurück') + '</button>';
@@ -613,7 +617,7 @@ async function noxSync(ids) {
   if (!D.checkedAt || Date.now() - D.checkedAt > 30 * 60 * 1000) {
     D.checkedAt = Date.now();
     const w = await rpc('nox_checkin'); D.wallet = w;
-    if (w && w.awarded) toast(t('+5 nox за 3 дня подряд! ⚡', '+5 nox for 3 days in a row! ⚡', '+5 nox für 3 Tage in Folge! ⚡'));
+    if (w && w.awarded) toast(t('+5 nox за 3 дня подряд!', '+5 nox for 3 days in a row!', '+5 nox für 3 Tage in Folge!'));
     D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' });
   }
   const all = ids.concat([myId()]);
@@ -636,7 +640,7 @@ function noxPick(id) {
   U.pickId = id;
   openDialog(t('Свой цвет', 'Custom color', 'Eigene Farbe'),
     '<div class="muted" style="margin-bottom:10px">' + t('Цвет можно выбрать один раз, потом он сохранится в палитре.', 'You can pick the color once, then it stays in your palette.', 'Die Farbe kann einmal gewählt werden und bleibt in deiner Palette.') + '</div>' +
-    '<input type="color" id="d-color" value="#9b6bff" style="width:100%;height:56px;border:0;background:none;cursor:pointer">',
+    '<input type="color" id="d-color" value="#9b6bff" style="width:100%;height:49px;border:0;background:none;cursor:pointer">',
     [['cancel', t('Позже', 'Later', 'Später'), 'ghost'], ['nox-pick-go', t('Сохранить', 'Save', 'Speichern'), '']]);
 }
 async function noxPickGo() {
@@ -653,18 +657,18 @@ async function noxBuyLevel(n) {
 function noxHtml() {
   const w = D.wallet || { balance: 0, earned: 0, streak: 0, level: 0 };
   let h = '<div class="card"><div class="title">{i:bolt} ' + t('Мой nox', 'My nox', 'Mein nox') + '</div>' +
-    '<div style="font-size:34px;font-weight:800;margin:6px 0">' + w.balance + ' nox</div>' +
-    '<div class="muted" style="font-size:13px">' + t('Всего заработано: ', 'Total earned: ', 'Insgesamt verdient: ') + w.earned + '</div>' +
-    '<div class="muted" style="font-size:13px;margin-top:4px">' + t('Серия входов: ', 'Login streak: ', 'Login-Serie: ') + w.streak + ' / 3 · ' + t('за 3 дня подряд +5 nox', '+5 nox for 3 days in a row', '+5 nox für 3 Tage in Folge') + '</div></div>';
+    '<div style="font-size:27px;font-weight:800;margin:6px 0">' + w.balance + ' nox</div>' +
+    '<div class="muted" style="font-size:11px">' + t('Всего заработано: ', 'Total earned: ', 'Insgesamt verdient: ') + w.earned + '</div>' +
+    '<div class="muted" style="font-size:11px;margin-top:4px">' + t('Серия входов: ', 'Login streak: ', 'Login-Serie: ') + w.streak + ' / 3 · ' + t('за 3 дня подряд +5 nox', '+5 nox for 3 days in a row', '+5 nox für 3 Tage in Folge') + '</div></div>';
   h += '<div class="card"><div class="title">' + t('Свои цвета темы', 'Custom theme colors', 'Eigene Themenfarben') + '</div>' +
-    '<div class="muted" style="font-size:13px;margin:4px 0 8px">' + t('Цена: 10 nox за один цвет. Покупки хранятся на сервере.', 'Price: 10 nox per color. Purchases are stored on the server.', 'Preis: 10 nox pro Farbe. Käufe werden auf dem Server gespeichert.') + '</div><div class="swatches">' +
+    '<div class="muted" style="font-size:11px;margin:4px 0 8px">' + t('Цена: 10 nox за один цвет. Покупки хранятся на сервере.', 'Price: 10 nox per color. Purchases are stored on the server.', 'Preis: 10 nox pro Farbe. Käufe werden auf dem Server gespeichert.') + '</div><div class="swatches">' +
     D.colors.map(c => c.color ? '<button class="sw ' + (S.accent.toLowerCase() === c.color ? 'on' : '') + '" style="background:' + c.color + '" data-act="accent" data-v="' + c.color + '"></button>' : '<button class="btn sm ghost" data-act="nox-pick" data-id="' + c.id + '">' + t('Выбрать цвет', 'Pick color', 'Farbe wählen') + '</button>').join('') +
     '</div><button class="btn sm" style="margin-top:10px" data-act="nox-buy-color">' + t('Купить цвет · 10 nox', 'Buy a color · 10 nox', 'Farbe kaufen · 10 nox') + '</button></div>';
   h += '<div class="card"><div class="title">' + t('Уровень', 'Level', 'Level') + ': ★ ' + lvlStr(w.level) + ' / 100.0</div>' +
-    '<div class="muted" style="font-size:13px;margin:4px 0 8px">' + t('Виден всем. 0.01 уровня = 1 nox.', 'Visible to everyone. 0.01 level = 1 nox.', 'Für alle sichtbar. 0.01 Level = 1 nox.') + '</div>' +
+    '<div class="muted" style="font-size:11px;margin:4px 0 8px">' + t('Виден всем. 0.01 уровня = 1 nox.', 'Visible to everyone. 0.01 level = 1 nox.', 'Für alle sichtbar. 0.01 Level = 1 nox.') + '</div>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm ghost" data-act="nox-lvl" data-n="1">+0.01 · 1 nox</button><button class="btn sm ghost" data-act="nox-lvl" data-n="10">+0.10 · 10 nox</button><button class="btn sm ghost" data-act="nox-lvl" data-n="100">+1.00 · 100 nox</button></div></div>';
   h += '<div class="card"><div class="title">' + t('Таблица лидеров', 'Leaderboard', 'Bestenliste') + '</div>' +
-    ((D.board && D.board.length) ? D.board.map((r, i) => '<div class="row" style="gap:10px;padding:6px 0">' + '<div style="width:26px;text-align:center" class="muted">' + (i + 1) + '</div>' + avatarHtml({ nick: r.nick, avatar_url: r.avatar_url }, 32) +
+    ((D.board && D.board.length) ? D.board.map((r, i) => '<div class="row" style="gap:10px;padding:6px 0">' + '<div style="width:23px;text-align:center" class="muted">' + (i + 1) + '</div>' + avatarHtml({ nick: r.nick, avatar_url: r.avatar_url }, 32) +
       '<div class="grow" style="flex:1;min-width:0"><b>' + esc(r.nick) + '</b>' + (r.level ? ' <span class="muted">★ ' + lvlStr(r.level) + '</span>' : '') + '</div><div>' + r.earned + ' nox</div></div>').join('') : '<div class="muted">' + t('Пока никого нет', 'Nobody yet', 'Noch niemand') + '</div>') + '</div>';
   return h;
 }
@@ -679,14 +683,14 @@ function renderList() {
   items.forEach(it => { const l = lastOf(it.key); it.last = l; it.at = l ? l.created_at : ''; });
   items.sort((a, b) => (isPinned(b.key) - isPinned(a.key)) || (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
   let h = '<div class="chat-item ' + (U.chat === 'ai' ? 'on' : '') + '" data-act="open" data-v="ai">' +
-    '<div class="avatar" style="width:46px;height:46px;font-size:22px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div>' +
+    '<div class="avatar" style="width:40px;height:40px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div>' +
     '<div class="grow" style="min-width:0"><div class="title">' + t('Умный Чат (ИИ)', 'Smart Chat (AI)', 'Smarter Chat (KI)') + '</div><div class="prev">' + t('Вопросы и картинки', 'Questions and images', 'Fragen und Bilder') + '</div></div></div>';
-  h += '<div class="chat-item" data-act="s-open"><div class="avatar" style="width:46px;height:46px;font-size:20px;background:var(--card)">🔍</div><div class="grow" style="min-width:0"><div class="title">' + t('Поиск по сообщениям', 'Search messages', 'Nachrichten suchen') + '</div></div></div>';
+  h += '<div class="chat-item" data-act="s-open"><div class="avatar" style="width:40px;height:40px;font-size:18px;background:var(--card)">{i:search}</div><div class="grow" style="min-width:0"><div class="title">' + t('Поиск по сообщениям', 'Search messages', 'Nachrichten suchen') + '</div></div></div>';
   items.forEach(it => {
     const u = unread(it.key);
     const who = isKey(it.key) && it.last && it.last.sender !== myId() ? nickOf(it.last.sender) + ': ' : '';
     h += '<div class="chat-item ' + (U.chat === it.key ? 'on' : '') + '" data-act="open" data-v="' + esc(it.key) + '">' + it.av +
-      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + (isPinned(it.key) ? '📌 ' : '') + esc(it.title) + (isMuted(it.key) ? ' 🔕' : '') + (!isKey(it.key) && levelBadge(it.key) ? ' <span class="lvl">' + levelBadge(it.key) + '</span>' : '') + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
+      '<div class="grow" style="min-width:0;flex:1"><div class="title">' + (isPinned(it.key) ? '{i:pinfill} ' : '') + esc(it.title) + (isMuted(it.key) ? ' {i:belloff}' : '') + (!isKey(it.key) && levelBadge(it.key) ? ' <span class="lvl">' + levelBadge(it.key) + '</span>' : '') + (it.tag ? ' <span class="tag">' + esc(it.tag) + '</span>' : '') + '</div><div class="prev">' + esc(who + preview(it.last)) + '</div></div>' +
       (u ? '<span class="unread">' + u + '</span>' : '') + '</div>';
   });
   if (!items.length) h += '<div class="empty">' + t('Добавь друзей на вкладке «Друзья», чтобы начать переписку.', 'Add friends in the Friends tab to start chatting.', 'Füge im Tab „Freunde“ Freunde hinzu, um zu chatten.') + '</div>';
@@ -756,7 +760,7 @@ function renderPane() {
       '<button class="icon-btn" data-act="sel-forward" title="' + t('Переслать', 'Forward', 'Weiterleiten') + '">{i:forward}</button>' +
       '<button class="icon-btn" data-act="sel-delete" title="' + t('Удалить', 'Delete', 'Löschen') + '">{i:trash}</button>';
   } else if (ai) {
-    head = '<div class="avatar" style="width:40px;height:40px;font-size:20px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div class="title" style="flex:1">' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><button class="icon-btn" data-act="ai-clear" title="' + t('Очистить', 'Clear', 'Leeren') + '">{i:trash}</button>';
+    head = '<div class="avatar" style="width:35px;height:35px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div class="title" style="flex:1">' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><button class="icon-btn" data-act="ai-clear" title="' + t('Очистить', 'Clear', 'Leeren') + '">{i:trash}</button>';
   } else {
     if (key) {
       const cnt = (D.members[cidOf(U.chat)] || []).length;
@@ -771,7 +775,7 @@ function renderPane() {
   let pb = '';
   if (!ai && key && ch && ch.pinned_msg) {
     const pm = D.messages.find(x => x.id === ch.pinned_msg);
-    if (pm) pb = '<div class="pinbar"><span class="grow" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="goto" data-id="' + pm.id + '">📌 <b>' + esc(nickOf(pm.sender)) + '</b> ' + esc(preview(pm, true)) + '</span>' + (myAdmin(U.chat) ? '<button class="pinx" data-act="unpin">✕</button>' : '') + '</div>';
+    if (pm) pb = '<div class="pinbar"><span class="grow" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="goto" data-id="' + pm.id + '">{i:pinfill} <b>' + esc(nickOf(pm.sender)) + '</b> ' + esc(preview(pm, true)) + '</span>' + (myAdmin(U.chat) ? '<button class="pinx" data-act="unpin">{i:x}</button>' : '') + '</div>';
   }
   setHTML($('#pinbar'), pb);
 
@@ -831,10 +835,10 @@ function renderPane() {
 const myAdmin = k => { const m = myMember(k); return !!m && (m.role === 'owner' || m.role === 'admin'); };
 function chatTools() {
   const k = U.chat;
-  return '<button class="icon-btn" data-act="s-open" title="' + t('Поиск', 'Search', 'Suche') + '">🔍</button>' +
-    (isKey(k) ? '' : '<button class="icon-btn" data-act="cname" data-id="' + esc(k) + '" title="' + t('Имя контакта', 'Contact name', 'Kontaktname') + '">✏️</button>') +
-    '<button class="icon-btn" data-act="cp-pin" data-id="' + esc(k) + '" title="' + t('Закрепить чат', 'Pin chat', 'Chat anheften') + '">' + (isPinned(k) ? '📌' : '📍') + '</button>' +
-    '<button class="icon-btn" data-act="cp-mute" data-id="' + esc(k) + '" title="' + t('Уведомления', 'Notifications', 'Benachrichtigungen') + '">' + (isMuted(k) ? '🔕' : '🔔') + '</button>';
+  return '<button class="icon-btn" data-act="s-open" title="' + t('Поиск', 'Search', 'Suche') + '">{i:search}</button>' +
+    (isKey(k) ? '' : '<button class="icon-btn" data-act="cname" data-id="' + esc(k) + '" title="' + t('Имя контакта', 'Contact name', 'Kontaktname') + '">{i:edit}</button>') +
+    '<button class="icon-btn" data-act="cp-pin" data-id="' + esc(k) + '" title="' + t('Закрепить чат', 'Pin chat', 'Chat anheften') + '">' + (isPinned(k) ? '{i:pinfill}' : '{i:pin}') + '</button>' +
+    '<button class="icon-btn" data-act="cp-mute" data-id="' + esc(k) + '" title="' + t('Уведомления', 'Notifications', 'Benachrichtigungen') + '">' + (isMuted(k) ? '{i:belloff}' : '{i:bell}') + '</button>';
 }
 function gotoMsg(id) {
   const box = $('#msgs'); const r = box && box._rows && box._rows[id];
@@ -862,8 +866,8 @@ function doMsgSearch(q) {
 }
 function showChatCtx(k, x, y) {
   const c = $('#ctx');
-  c.innerHTML = icons('<button data-act="cp-pin" data-id="' + esc(k) + '">' + (isPinned(k) ? '📌 ' + t('Открепить', 'Unpin', 'Lösen') : '📍 ' + t('Закрепить', 'Pin', 'Anheften')) + '</button>' +
-    '<button data-act="cp-mute" data-id="' + esc(k) + '">' + (isMuted(k) ? '🔔 ' + t('Включить уведомления', 'Unmute', 'Ton an') : '🔕 ' + t('Выключить уведомления', 'Mute', 'Stumm')) + '</button>');
+  c.innerHTML = icons('<button data-act="cp-pin" data-id="' + esc(k) + '">' + (isPinned(k) ? '{i:pinfill} ' + t('Открепить', 'Unpin', 'Lösen') : '{i:pin} ' + t('Закрепить', 'Pin', 'Anheften')) + '</button>' +
+    '<button data-act="cp-mute" data-id="' + esc(k) + '">' + (isMuted(k) ? '{i:bell} ' + t('Включить уведомления', 'Unmute', 'Ton an') : '{i:belloff} ' + t('Выключить уведомления', 'Mute', 'Stumm')) + '</button>');
   c.classList.remove('hidden');
   const w = c.offsetWidth, h = c.offsetHeight;
   c.style.left = Math.max(6, Math.min(x, innerWidth - w - 6)) + 'px';
@@ -927,7 +931,7 @@ async function stkDel(id) {
 }
 function stickerPanel() {
   const tabs = '<div class="emo-tabs">' + EMO.map((g, i) => '<button data-act="emo-cat" data-i="' + i + '">' + g.icon + '</button>').join('') + '<button data-act="emo-cat" data-i="' + EMO.length + '" class="on">⭐</button></div>';
-  const mine = D.stickers.map(s => '<div class="stk-m"><img data-path="' + esc(s.path) + '"' + srcAttr(s.path) + ' data-act="stk-send" data-id="' + s.id + '" alt=""><button class="stk-x" data-act="stk-del" data-id="' + s.id + '">✕</button></div>').join('');
+  const mine = D.stickers.map(s => '<div class="stk-m"><img data-path="' + esc(s.path) + '"' + srcAttr(s.path) + ' data-act="stk-send" data-id="' + s.id + '" alt=""><button class="stk-x" data-act="stk-del" data-id="' + s.id + '">{i:x}</button></div>').join('');
   return tabs + '<div class="stk-wrap"><div class="muted">' + t('Стикеры', 'Stickers', 'Sticker') + '</div><div class="stk-grid">' + STK.map(e => '<button class="stk-b" data-act="stk-e" data-e="' + e + '">' + e + '</button>').join('') + '</div>' +
     '<div class="muted" style="margin-top:8px">' + t('Мои стикеры', 'My stickers', 'Meine Sticker') + '</div><div class="stk-grid">' + mine + '<button class="stk-add" data-act="stk-add">＋</button></div></div>';
 }
@@ -1303,7 +1307,7 @@ function renderPlayer() {
   let h = '<h2>' + t('Плеер', 'Player', 'Player') + '</h2>' +
     '<button class="btn" data-act="music-add">{i:plus} ' + t('Добавить музыку', 'Add music', 'Musik hinzufügen') + '</button>';
   if (cur) {
-    h += '<div class="card" style="text-align:center"><div class="title" style="font-size:18px;margin-bottom:10px">' + esc(cur.name) + '</div>' +
+    h += '<div class="card" style="text-align:center"><div class="title" style="font-size:16px;margin-bottom:10px">' + esc(cur.name) + '</div>' +
       '<input type="range" id="p-seek" min="0" max="1000" value="0">' +
       '<div class="row muted" style="justify-content:space-between;font-size:12px"><span id="p-cur">0:00</span><span id="p-dur">0:00</span></div>' +
       '<div class="ctrls"><button data-act="p-prev">{i:prev}</button><button data-act="p-toggle">' + (P.playing ? '{i:pause}' : '{i:play}') + '</button><button data-act="p-next">{i:next}</button></div></div>';
@@ -1337,7 +1341,7 @@ function renderSettings() {
     '<div class="tabs">' + tabs.map(([id, ic, name]) => '<button class="tab ' + (tab === id ? 'on' : '') + '" data-act="set-tab" data-v="' + id + '">{i:' + ic + '} ' + esc(name) + '</button>').join('') + '</div>' +
     (U.error ? '<div class="err">' + esc(U.error) + '</div>' : '');
   if (tab === 'profile') {
-    h += '<div class="card row">' + avatarHtml(me, 64) + '<div class="grow" style="flex:1"><div class="title" style="font-size:18px">' + esc(me ? me.nick : '') + '</div><div class="lvl" style="font-size:13px">★ ' + lvlStr(D.levels[myId()] || 0) + '</div><div class="muted" style="font-size:13px">' + esc(D.email || t('Почта не привязана', 'No email bound', 'Keine E-Mail verknüpft')) + '</div></div>' +
+    h += '<div class="card row">' + avatarHtml(me, 64) + '<div class="grow" style="flex:1"><div class="title" style="font-size:16px">' + esc(me ? me.nick : '') + '</div><div class="lvl" style="font-size:11px">★ ' + lvlStr(D.levels[myId()] || 0) + '</div><div class="muted" style="font-size:11px">' + esc(D.email || t('Почта не привязана', 'No email bound', 'Keine E-Mail verknüpft')) + '</div></div>' +
       '<button class="btn sm ghost" data-act="avatar">{i:image} ' + t('Сменить фото', 'Change photo', 'Foto ändern') + '</button></div>' +
       '<div class="card row"><div class="grow" style="flex:1">' + t('Ник', 'Nick', 'Nick') + '</div><button class="btn sm ghost" data-act="nick">{i:edit} ' + t('Изменить', 'Change', 'Ändern') + '</button></div>' +
       (D.email ? '' : '<div class="card row"><div class="grow" style="flex:1">' + t('Почта для восстановления пароля', 'Recovery email', 'Wiederherstellungs-E-Mail') + '</div><button class="btn sm ghost" data-act="email">' + t('Привязать', 'Bind', 'Verknüpfen') + '</button></div>') +
@@ -1378,7 +1382,7 @@ function showCtx(id, x, y) {
   c.innerHTML = icons(
     '<div class="rxrow">' + RX_LIST.map(e => '<button data-act="rx" data-id="' + id + '" data-e="' + e + '">' + e + '</button>').join('') + '</div>' +
     (canPostTo(U.chat) ? '<button data-act="c-reply" data-id="' + id + '">{i:forward} ' + t('Ответить', 'Reply', 'Antworten') + '</button>' : '') +
-    (isKey(U.chat) && myAdmin(U.chat) ? '<button data-act="c-pin" data-id="' + id + '">📌 ' + t('Закрепить', 'Pin', 'Anheften') + '</button>' : '') +
+    (isKey(U.chat) && myAdmin(U.chat) ? '<button data-act="c-pin" data-id="' + id + '">{i:pin} ' + t('Закрепить', 'Pin', 'Anheften') + '</button>' : '') +
     '<button data-act="c-copy" data-id="' + id + '">{i:copy} ' + t('Копировать', 'Copy', 'Kopieren') + '</button>' +
     (canEdit ? '<button data-act="c-edit" data-id="' + id + '">{i:edit} ' + t('Изменить', 'Edit', 'Bearbeiten') + '</button>' : '') +
     '<button data-act="c-forward" data-id="' + id + '">{i:forward} ' + t('Переслать', 'Forward', 'Weiterleiten') + '</button>' +
@@ -1415,7 +1419,7 @@ function openForward(list) {
   const friends = friendIds().map(id => D.profiles[id]).filter(Boolean);
   window._fwd = list;
   openDialog(t('Переслать', 'Forward', 'Weiterleiten'),
-    '<div class="pick" data-act="fwd-ai"><div class="avatar" style="width:36px;height:36px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div>' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div></div>' +
+    '<div class="pick" data-act="fwd-ai"><div class="avatar" style="width:32px;height:32px;font-size:16px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div><div>' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div></div>' +
     friends.map(p => '<div class="pick" data-act="fwd-to" data-id="' + esc(p.id) + '">' + avatarHtml(p, 36) + '<div>' + esc(dname(p)) + '</div></div>').join('') +
     myChatKeys().filter(canPostTo).map(k => '<div class="pick" data-act="fwd-to" data-id="' + esc(k) + '">' + chatAvatar(D.chats[cidOf(k)], 36) + '<div>' + esc(D.chats[cidOf(k)].title) + '</div></div>').join(''),
     [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost']]);
@@ -1808,7 +1812,7 @@ function openContactProfile(id) {
     '<div class="cp-pills">' +
       '<div class="cp-pill' + (blockedByMe ? ' off' : '') + '" data-act="' + (blockedByMe ? '' : 'cp-call') + '" data-id="' + esc(id) + '">{i:phone}<span>' + t('Звонок', 'Call', 'Anruf') + '</span></div>' +
       '<div class="cp-pill" data-act="cp-mute" data-id="' + esc(id) + '">{i:bell}<span>' + (isMuted(id) ? t('Звук', 'Unmute', 'Ton an') : t('Без звука', 'Mute', 'Stumm')) + '</span></div>' +
-      '<div class="cp-pill" data-act="cp-search">🔍<span>' + t('Поиск', 'Search', 'Suche') + '</span></div>' +
+      '<div class="cp-pill" data-act="cp-search">{i:search}<span>' + t('Поиск', 'Search', 'Suche') + '</span></div>' +
       '<div class="cp-pill' + (blockedByMe ? '' : ' danger') + '" data-act="' + (blockedByMe ? 'unblock' : 'block-user') + '" data-id="' + esc(id) + '">{i:x}<span>' + (blockedByMe ? t('Разблок.', 'Unblock', 'Entsperren') : t('Блок.', 'Block', 'Blockieren')) + '</span></div>' +
     '</div>' +
     '<div class="cp-card">' +

@@ -316,7 +316,7 @@ object Store {
             wallet = parseWallet(o)
             if (o.optBoolean("awarded")) {
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    android.widget.Toast.makeText(appCtx, tr("+5 nox за 3 дня подряд! ⚡", "+5 nox for 3 days in a row! ⚡", "+5 nox für 3 Tage in Folge! ⚡"), android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(appCtx, tr("+5 nox за 3 дня подряд!", "+5 nox for 3 days in a row!", "+5 nox für 3 Tage in Folge!"), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
             loadColors()

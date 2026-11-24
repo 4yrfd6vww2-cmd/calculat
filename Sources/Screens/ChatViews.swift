@@ -63,10 +63,7 @@ struct ChatsView: View {
     }
 
     private func titleLine(_ r: Row) -> String {
-        var t: String = r.title
-        if store.isPinned(r.key) { t = "📌 " + t }
-        if store.isMuted(r.key) { t += " 🔕" }
-        return t
+        return r.title
     }
 
     @ViewBuilder private func rowMenu(_ k: String) -> some View {
@@ -78,19 +75,34 @@ struct ChatsView: View {
         }
     }
 
+    private func previewIcon(_ m: Message?) -> String? {
+        guard let m = m else { return nil }
+        switch m.kind {
+        case "image": return m.isSticker ? "tag.fill" : "photo.fill"
+        case "file": return "paperclip"
+        case "album":
+            let a = m.attachments ?? []
+            if !a.isEmpty && a.allSatisfy({ $0.type == "voice" }) { return "mic.fill" }
+            if !a.isEmpty && a.allSatisfy({ $0.type == "image" }) { return "photo.fill" }
+            if !a.isEmpty && a.allSatisfy({ $0.type == "video" }) { return "video.fill" }
+            return "paperclip"
+        default: return nil
+        }
+    }
+
     private func preview(_ m: Message?) -> String {
         guard let m = m else { return tr("Нет сообщений", "No messages", "Keine Nachrichten") }
         let prefix = m.sender == store.myId ? tr("Вы: ", "You: ", "Du: ") : (m.chatId != nil ? store.dnameId(m.sender) + ": " : "")
         switch m.kind {
-        case "image": return prefix + (m.isSticker ? tr("🏷 Стикер", "🏷 Sticker", "🏷 Sticker") : tr("📷 Фото", "📷 Photo", "📷 Foto"))
-        case "file": return prefix + "📎 " + (m.fileName ?? tr("Файл", "File", "Datei"))
+        case "image": return prefix + (m.isSticker ? tr("Стикер", "Sticker", "Sticker") : tr("Фото", "Photo", "Foto"))
+        case "file": return prefix + (m.fileName ?? tr("Файл", "File", "Datei"))
         case "album":
             let a = m.attachments ?? []
             var base: String
-            if !a.isEmpty && a.allSatisfy({ $0.type == "voice" }) { base = tr("🎤 Голосовое сообщение", "🎤 Voice message", "🎤 Sprachnachricht") }
-            else if !a.isEmpty && a.allSatisfy({ $0.type == "image" }) { base = tr("📷 Фото", "📷 Photo", "📷 Foto") + (a.count > 1 ? " (\(a.count))" : "") }
-            else if !a.isEmpty && a.allSatisfy({ $0.type == "video" }) { base = tr("🎬 Видео", "🎬 Video", "🎬 Video") + (a.count > 1 ? " (\(a.count))" : "") }
-            else { base = tr("📎 Вложения", "📎 Attachments", "📎 Anhänge") + " (\(a.count))" }
+            if !a.isEmpty && a.allSatisfy({ $0.type == "voice" }) { base = tr("Голосовое сообщение", "Voice message", "Sprachnachricht") }
+            else if !a.isEmpty && a.allSatisfy({ $0.type == "image" }) { base = tr("Фото", "Photo", "Foto") + (a.count > 1 ? " (\(a.count))" : "") }
+            else if !a.isEmpty && a.allSatisfy({ $0.type == "video" }) { base = tr("Видео", "Video", "Video") + (a.count > 1 ? " (\(a.count))" : "") }
+            else { base = tr("Вложения", "Attachments", "Anhänge") + " (\(a.count))" }
             if let b = m.body, !b.isEmpty { base += ": " + b }
             return prefix + base
         default: return prefix + (m.body ?? "")
@@ -110,13 +122,13 @@ struct ChatsView: View {
                                         Circle().fill(Theme.accentGradient)
                                         Image(systemName: "sparkles").foregroundColor(.white)
                                     }
-                                    .frame(width: 46, height: 46)
+                                    .frame(width: 40, height: 40)
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(tr("Умный Чат (ИИ)", "Smart Chat (AI)", "Smarter Chat (KI)"))
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(size: 14, weight: .semibold))
                                             .foregroundColor(Theme.text)
                                         Text(tr("Вопросы и картинки", "Questions and images", "Fragen und Bilder"))
-                                            .font(.system(size: 13))
+                                            .font(.system(size: 11))
                                             .foregroundColor(Theme.textSecondary)
                                     }
                                     Spacer()
@@ -126,20 +138,20 @@ struct ChatsView: View {
                         .buttonStyle(.plain)
 
                         HStack(spacing: 18) {
-                            Button { showCreate = true } label: { Text("＋ " + tr("Группа / канал", "Group / channel", "Gruppe / Kanal")) }
-                            Button { showFind = true } label: { Text("🔍 " + tr("Найти канал", "Find channel", "Kanal suchen")) }
+                            Button { showCreate = true } label: { Label(tr("Группа / канал", "Group / channel", "Gruppe / Kanal"), systemImage: "plus.circle") }
+                            Button { showFind = true } label: { Label(tr("Найти канал", "Find channel", "Kanal suchen"), systemImage: "magnifyingglass") }
                             Spacer()
                         }
-                        .font(.system(size: 14))
+                        .font(.system(size: 12))
                         .foregroundColor(Theme.accent)
                         .padding(.horizontal, 4)
 
                         HStack(spacing: 18) {
-                            Button { showSearch = true } label: { Text("🔎 " + tr("Поиск сообщений", "Search messages", "Nachrichten suchen")) }
-                            Button { showCode = true } label: { Text("🔑 " + tr("Войти по коду", "Join by code", "Per Code")) }
+                            Button { showSearch = true } label: { Label(tr("Поиск сообщений", "Search messages", "Nachrichten suchen"), systemImage: "text.magnifyingglass") }
+                            Button { showCode = true } label: { Label(tr("Войти по коду", "Join by code", "Per Code"), systemImage: "key.fill") }
                             Spacer()
                         }
-                        .font(.system(size: 14))
+                        .font(.system(size: 12))
                         .foregroundColor(Theme.accent)
                         .padding(.horizontal, 4)
 
@@ -148,25 +160,36 @@ struct ChatsView: View {
                                 GlassCard {
                                     HStack(spacing: 12) {
                                         if let pr = p.profile {
-                                            Avatar(nick: pr.nick, url: pr.avatarUrl, size: 46)
+                                            Avatar(nick: pr.nick, url: pr.avatarUrl, size: 40)
                                         } else {
-                                            Avatar(nick: p.title, url: p.chat?.avatarUrl, size: 46)
+                                            Avatar(nick: p.title, url: p.chat?.avatarUrl, size: 40)
                                         }
                                         VStack(alignment: .leading, spacing: 3) {
                                             HStack(spacing: 6) {
+                                                if store.isPinned(p.key) {
+                                                    Image(systemName: "pin.fill").font(.system(size: 10)).foregroundColor(Theme.textSecondary)
+                                                }
                                                 Text(titleLine(p))
-                                                    .font(.system(size: 16, weight: .semibold))
+                                                    .font(.system(size: 14, weight: .semibold))
                                                     .foregroundColor(Theme.text)
                                                 if p.profile != nil, !store.levelBadge(p.key).isEmpty {
                                                     Text(store.levelBadge(p.key))
                                                         .font(.system(size: 12, weight: .semibold))
                                                         .foregroundColor(Theme.accent)
                                                 }
+                                                if store.isMuted(p.key) {
+                                                    Image(systemName: "bell.slash.fill").font(.system(size: 10)).foregroundColor(Theme.textSecondary)
+                                                }
                                             }
-                                            Text(preview(store.thread(with: p.key).last))
-                                                .font(.system(size: 13))
-                                                .foregroundColor(Theme.textSecondary)
-                                                .lineLimit(1)
+                                            HStack(spacing: 4) {
+                                                if let icon = previewIcon(store.thread(with: p.key).last) {
+                                                    Image(systemName: icon).font(.system(size: 10)).foregroundColor(Theme.textSecondary)
+                                                }
+                                                Text(preview(store.thread(with: p.key).last))
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(Theme.textSecondary)
+                                                    .lineLimit(1)
+                                            }
                                         }
                                         Spacer()
                                         let n = store.unread(from: p.key)
@@ -190,7 +213,7 @@ struct ChatsView: View {
                             Text(tr("Добавь друзей на вкладке «Друзья», чтобы начать переписку.",
                                     "Add friends in the Friends tab to start chatting.",
                                     "Füge im Tab „Freunde“ Freunde hinzu, um zu chatten."))
-                                .font(.system(size: 14))
+                                .font(.system(size: 12))
                                 .foregroundColor(Theme.textSecondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 24)
@@ -369,7 +392,14 @@ struct Bubble: View {
         return VStack(alignment: .leading, spacing: 1) {
             Text(quoteName).font(.system(size: 11, weight: .semibold))
             if let q = quoted {
-                Text(q.body ?? "📎").font(.system(size: 12)).lineLimit(2).opacity(0.85)
+                if let body = q.body {
+                    Text(body).font(.system(size: 12)).lineLimit(2).opacity(0.85)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "paperclip").font(.system(size: 11))
+                        Text(tr("Вложение", "Attachment", "Anhang")).font(.system(size: 12))
+                    }.opacity(0.85)
+                }
             }
         }
         .foregroundColor(fg)
@@ -389,7 +419,7 @@ struct Bubble: View {
             ForEach(rxGroups, id: \.0) { g in
                 let label: String = g.1 > 1 ? g.0 + " " + String(g.1) : g.0
                 Text(label)
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Color.black.opacity(0.2))
                     .clipShape(Capsule())
@@ -410,7 +440,7 @@ struct Bubble: View {
         } else if m.kind == "album" {
             AlbumView(m: m, mine: mine, selecting: selecting, onToggle: onToggle, onImage: onImage, onVideo: onVideo)
         } else if isBigEmoji(m.body) {
-            Text(m.body ?? "").font(.system(size: 48))
+            Text(m.body ?? "").font(.system(size: 38))
         } else {
             Text(linkified(m.body ?? "", mine: mine))
                 .foregroundColor(mine ? .white : Theme.text)
@@ -510,10 +540,17 @@ struct ChatView: View {
                 if !error.isEmpty { ErrorText(text: error).padding(.horizontal, 14) }
                 if let rt = replyTo, editing == nil {
                     HStack {
+                        Image(systemName: "arrowshape.turn.up.left.fill").font(.system(size: 11)).foregroundColor(Theme.accent)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("↩ " + (rt.sender == store.myId ? tr("Вы", "You", "Du") : store.dnameId(rt.sender)))
+                            Text(rt.sender == store.myId ? tr("Вы", "You", "Du") : store.dnameId(rt.sender))
                                 .font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
-                            Text(rt.body ?? (rt.kind == "image" ? "📷" : "📎")).font(.system(size: 13)).foregroundColor(Theme.textSecondary).lineLimit(1)
+                            HStack(spacing: 4) {
+                                if rt.body == nil {
+                                    Image(systemName: rt.kind == "image" ? "photo.fill" : "paperclip").font(.system(size: 10))
+                                }
+                                Text(rt.body ?? (rt.kind == "image" ? tr("Фото", "Photo", "Foto") : tr("Файл", "File", "Datei")))
+                                    .font(.system(size: 11)).lineLimit(1)
+                            }.foregroundColor(Theme.textSecondary)
                         }
                         Spacer()
                         Button { replyTo = nil } label: { Image(systemName: "xmark").foregroundColor(Theme.textSecondary) }
@@ -523,7 +560,8 @@ struct ChatView: View {
                 }
                 if editing != nil {
                     HStack {
-                        Text("✏️ " + tr("Редактирование", "Editing", "Bearbeiten")).font(.system(size: 13)).foregroundColor(Theme.accent)
+                        Image(systemName: "pencil").font(.system(size: 11)).foregroundColor(Theme.accent)
+                        Text(tr("Редактирование", "Editing", "Bearbeiten")).font(.system(size: 11)).foregroundColor(Theme.accent)
                         Spacer()
                         Button { editing = nil; text = "" } label: { Image(systemName: "xmark").foregroundColor(Theme.textSecondary) }
                     }
@@ -597,7 +635,7 @@ struct ChatView: View {
             ZStack(alignment: .topTrailing) {
                 if let p = videoPath { VideoFullView(path: p) }
                 Button { videoPath = nil } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 30)).foregroundColor(.white.opacity(0.9)).padding(16)
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundColor(.white.opacity(0.9)).padding(16)
                 }
             }
         }
@@ -662,10 +700,16 @@ struct ChatView: View {
     @ViewBuilder private var pinBar: some View {
         if let c = chat, let pid = c.pinnedMsg, let pm = thread.first(where: { $0.id == pid }) {
             HStack(spacing: 8) {
-                Text("📌")
+                Image(systemName: "pin.fill").font(.system(size: 12)).foregroundColor(Theme.accent)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(store.dnameId(pm.sender)).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
-                    Text(pm.body ?? (pm.isSticker ? "🏷" : "📎")).font(.system(size: 13)).foregroundColor(Theme.textSecondary).lineLimit(1)
+                    HStack(spacing: 4) {
+                        if pm.body == nil {
+                            Image(systemName: pm.isSticker ? "tag.fill" : "paperclip").font(.system(size: 10))
+                        }
+                        Text(pm.body ?? (pm.isSticker ? tr("Стикер", "Sticker", "Sticker") : tr("Файл", "File", "Datei")))
+                            .font(.system(size: 11)).lineLimit(1)
+                    }.foregroundColor(Theme.textSecondary)
                 }
                 Spacer()
                 if isAdm {
@@ -733,10 +777,10 @@ struct ChatView: View {
                     Button(tr("Пользователь заблокирован · Разблокировать", "User is blocked · Unblock", "Nutzer ist blockiert · Entsperren")) {
                         Task { try? await store.unblockUser(key) }
                     }
-                    .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
+                    .font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.accent)
                     Spacer()
                 }
-                .frame(height: 42)
+                .frame(height: 37)
             } else if chat != nil && !store.canPost(key) {
                 HStack {
                     Spacer()
@@ -744,51 +788,51 @@ struct ChatView: View {
                         Button(tr("Подписаться", "Subscribe", "Abonnieren")) {
                             Task { try? await store.joinChat(store.cidOf(key)) }
                         }
-                        .font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.accent)
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
                     } else {
                         Text(tr("Писать в канал может только владелец", "Only the owner can post", "Nur der Besitzer kann posten"))
-                            .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                            .font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                     }
                     Spacer()
                 }
-                .frame(height: 42)
+                .frame(height: 37)
             } else if recorder.recording {
                 HStack(spacing: 14) {
                     Image(systemName: "circle.fill").font(.system(size: 12)).foregroundColor(.red)
-                    Text(fmtSecs(Double(recorder.seconds))).foregroundColor(Theme.text).font(.system(size: 17))
+                    Text(fmtSecs(Double(recorder.seconds))).foregroundColor(Theme.text).font(.system(size: 15))
                     Spacer()
                     Button { recorder.cancel() } label: {
-                        Image(systemName: "trash").font(.system(size: 22)).foregroundColor(Theme.textSecondary)
+                        Image(systemName: "trash").font(.system(size: 18)).foregroundColor(Theme.textSecondary)
                     }
                     Button { finishRecording() } label: {
-                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 26)).foregroundColor(Theme.accent)
                     }
                 }
             } else {
                 HStack(spacing: 10) {
                     if editing == nil {
                         PhotosPicker(selection: $photoItems, maxSelectionCount: 20, matching: .any(of: [.images, .videos])) {
-                            Image(systemName: "photo").font(.system(size: 20)).foregroundColor(Theme.accent)
+                            Image(systemName: "photo").font(.system(size: 18)).foregroundColor(Theme.accent)
                         }
                         Button { showFiles = true } label: {
-                            Image(systemName: "paperclip").font(.system(size: 20)).foregroundColor(Theme.accent)
+                            Image(systemName: "paperclip").font(.system(size: 18)).foregroundColor(Theme.accent)
                         }
                         Button { showAI = true } label: {
-                            Image(systemName: "sparkles").font(.system(size: 20)).foregroundColor(Theme.accent)
+                            Image(systemName: "sparkles").font(.system(size: 18)).foregroundColor(Theme.accent)
                         }
                     }
                     Button { showEmoji.toggle(); if showEmoji { showStk = false } } label: {
-                        Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 20)).foregroundColor(Theme.accent)
+                        Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 18)).foregroundColor(Theme.accent)
                     }
                     if editing == nil {
                         Button { showStk.toggle(); if showStk { showEmoji = false } } label: {
-                            Image(systemName: "star.square").font(.system(size: 20)).foregroundColor(Theme.accent)
+                            Image(systemName: "star.square").font(.system(size: 18)).foregroundColor(Theme.accent)
                         }
                     }
                     TextField("", text: $text, prompt: Text(tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
                         .foregroundColor(Theme.text)
                         .padding(.horizontal, 14)
-                        .frame(height: 42)
+                        .frame(height: 37)
                         .background(Theme.card)
                         .overlay(RoundedRectangle(cornerRadius: 21).stroke(Theme.stroke, lineWidth: 1))
                         .clipShape(RoundedRectangle(cornerRadius: 21))
@@ -796,11 +840,11 @@ struct ChatView: View {
                         ProgressView()
                     } else if editing == nil && pending.isEmpty && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Button { startRecording() } label: {
-                            Image(systemName: "mic.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                            Image(systemName: "mic.circle.fill").font(.system(size: 26)).foregroundColor(Theme.accent)
                         }
                     } else {
                         Button { sendText() } label: {
-                            Image(systemName: editing != nil ? "checkmark.circle.fill" : "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                            Image(systemName: editing != nil ? "checkmark.circle.fill" : "arrow.up.circle.fill").font(.system(size: 26)).foregroundColor(Theme.accent)
                         }
                     }
                 }
@@ -984,12 +1028,12 @@ struct ChatView: View {
                 }
                 ForEach(store.chats.filter { store.canPost("c:" + $0.id) }) { c in
                     Button { forwardTo("c:" + c.id) } label: {
-                        HStack(spacing: 12) { Text(c.kind == "channel" ? "📢" : "👥"); Text(c.title) }
+                        HStack(spacing: 12) { Image(systemName: c.kind == "channel" ? "megaphone.fill" : "person.2.fill"); Text(c.title) }
                     }
                 }
                 ForEach(store.friendIds.compactMap { store.profiles[$0] }) { p in
                     Button { forwardTo(p.id) } label: {
-                        HStack(spacing: 12) { Avatar(nick: p.nick, url: p.avatarUrl, size: 36); Text(store.dname(p)) }
+                        HStack(spacing: 12) { Avatar(nick: p.nick, url: p.avatarUrl, size: 32); Text(store.dname(p)) }
                     }
                 }
             }
@@ -1079,7 +1123,7 @@ struct AIChatView: View {
                                 Text(tr("Задай вопрос или переключись на «Картинка» и опиши, что нарисовать.",
                                         "Ask a question, or switch to “Image” and describe what to draw.",
                                         "Stelle eine Frage oder wechsle zu „Bild“ und beschreibe, was gezeichnet werden soll."))
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 12))
                                     .foregroundColor(Theme.textSecondary)
                                     .multilineTextAlignment(.center)
                                     .padding(.top, 30)
@@ -1110,17 +1154,17 @@ struct AIChatView: View {
                 if showEmoji { EmojiPanel { input += $0 } }
                 HStack(spacing: 10) {
                     Button { showEmoji.toggle() } label: {
-                        Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 20)).foregroundColor(Theme.accent)
+                        Image(systemName: showEmoji ? "keyboard" : "face.smiling").font(.system(size: 18)).foregroundColor(Theme.accent)
                     }
                     TextField("", text: $input, prompt: Text(imageMode ? tr("Что нарисовать?", "What to draw?", "Was zeichnen?") : tr("Сообщение", "Message", "Nachricht")).foregroundColor(Theme.textSecondary))
                         .foregroundColor(Theme.text)
                         .padding(.horizontal, 14)
-                        .frame(height: 42)
+                        .frame(height: 37)
                         .background(Theme.card)
                         .overlay(RoundedRectangle(cornerRadius: 21).stroke(Theme.stroke, lineWidth: 1))
                         .clipShape(RoundedRectangle(cornerRadius: 21))
                     Button { send() } label: {
-                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 32)).foregroundColor(Theme.accent)
+                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 26)).foregroundColor(Theme.accent)
                     }
                     .disabled(busy)
                 }
@@ -1192,7 +1236,7 @@ struct AIChatView: View {
             do {
                 if asImage {
                     let data = try await API.shared.aiImage(t)
-                    let m = AIMsg(role: "assistant", text: "🖼")
+                    let m = AIMsg(role: "assistant", text: tr("[Изображение]", "[Image]", "[Bild]"))
                     images[m.id] = data
                     msgs.append(m)
                 } else {

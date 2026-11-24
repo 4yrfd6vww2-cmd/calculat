@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.neirox"
         minSdk = if (old) 21 else 26
         targetSdk = 34
-        versionCode = if (old) 2 else 13
-        versionName = if (old) "0.0.2 android 5 build" else "0.10.2 android build"
+        versionCode = if (old) 2 else 14
+        versionName = if (old) "0.0.2 android 5 build" else "0.10.3 android build"
         buildConfigField("String", "UPDATE_KEY", if (old) "\"android_old\"" else "\"android\"")
     }
 
@@ -48,6 +48,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")

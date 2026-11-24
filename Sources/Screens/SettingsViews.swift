@@ -14,11 +14,11 @@ struct SettingsRow: View {
                     .foregroundColor(Theme.accent)
                     .frame(width: 26)
                 Text(title)
-                    .font(.system(size: 16))
+                    .font(.system(size: 14))
                     .foregroundColor(Theme.text)
                 Spacer()
                 if !value.isEmpty {
-                    Text(value).font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                    Text(value).font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
@@ -41,13 +41,13 @@ struct SettingsView: View {
                         NavigationLink(destination: ProfileSettings()) {
                             GlassCard {
                                 HStack(spacing: 14) {
-                                    Avatar(nick: store.me?.nick ?? "?", url: store.me?.avatarUrl, size: 56)
+                                    Avatar(nick: store.me?.nick ?? "?", url: store.me?.avatarUrl, size: 49)
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(store.me?.nick ?? "")
-                                            .font(.system(size: 18, weight: .semibold))
+                                            .font(.system(size: 16, weight: .semibold))
                                             .foregroundColor(Theme.text)
                                         Text(tr("Профиль", "Profile", "Profil"))
-                                            .font(.system(size: 13))
+                                            .font(.system(size: 11))
                                             .foregroundColor(Theme.textSecondary)
                                     }
                                     Spacer()
@@ -88,10 +88,10 @@ struct SettingsView: View {
                             Store.shared.logout()
                         } label: {
                             Text(tr("Выйти", "Sign out", "Abmelden"))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(Color(hex: 0xFF6B6B))
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 50)
+                                .frame(height: 44)
                                 .background(Theme.card)
                                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke, lineWidth: 1))
                                 .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -146,17 +146,17 @@ struct ProfileSettings: View {
                 Avatar(nick: store.me?.nick ?? "?", url: store.me?.avatarUrl, size: 110)
                     .padding(.top, 30)
                 Text(store.me?.nick ?? "")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Theme.text)
                 Text("★ " + levelStr(store.levels[store.myId] ?? 0))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Theme.accent)
                 PhotosPicker(selection: $item, matching: .images) {
                     Text(busy ? "…" : tr("Сменить фото", "Change photo", "Foto ändern"))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 22)
-                        .frame(height: 46)
+                        .padding(.horizontal, 19)
+                        .frame(height: 40)
                         .background(Theme.accentGradient)
                         .clipShape(Capsule())
                 }
@@ -165,7 +165,7 @@ struct ProfileSettings: View {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(tr("Сменить ник", "Change nick", "Nick ändern"))
-                            .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                            .font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                         GlassField(placeholder: tr("Новый ник (a–z, цифры, _)", "New nick (a–z, digits, _)", "Neuer Nick (a–z, Ziffern, _)"), text: $newNick)
                         Text(tr("Ник должен быть уникальным: чужие ники занять нельзя. Вход выполняется по новому нику.",
                                 "A nick must be unique: nicks of other people cannot be taken. Sign in with the new nick.",
@@ -173,13 +173,13 @@ struct ProfileSettings: View {
                             .font(.system(size: 12)).foregroundColor(Theme.textSecondary)
                         NeonButton(title: tr("Сохранить ник", "Save nick", "Nick speichern"), busy: nickBusy) { changeNick() }
                         if !nickMsg.isEmpty {
-                            Text(nickMsg).font(.system(size: 13)).foregroundColor(Theme.accent)
+                            Text(nickMsg).font(.system(size: 11)).foregroundColor(Theme.accent)
                         }
                     }
                 }
                 .padding(.top, 10)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 21)
             .padding(.bottom, 30)
             }
         }
@@ -221,10 +221,10 @@ struct EmailSettings: View {
                         GlassCard {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(tr("Привязанная почта", "Bound email", "Verknüpfte E-Mail"))
-                                    .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
-                                Text(e).font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text)
+                                    .font(.system(size: 11)).foregroundColor(Theme.textSecondary)
+                                Text(e).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
                                 Text(tr("Почту нельзя изменить после привязки", "The email cannot be changed after binding", "Die E-Mail kann nach der Verknüpfung nicht geändert werden"))
-                                    .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                                    .font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -233,7 +233,7 @@ struct EmailSettings: View {
                             Text(tr("Почта не привязана. Без неё забытый пароль восстановить не получится. Привязать можно один раз, изменить потом нельзя.",
                                     "No email is bound. Without it a forgotten password cannot be recovered. You can bind it once; it cannot be changed later.",
                                     "Keine E-Mail verknüpft. Ohne sie kann ein vergessenes Passwort nicht wiederhergestellt werden. Du kannst sie einmal verknüpfen, danach nicht mehr ändern."))
-                                .font(.system(size: 14))
+                                .font(.system(size: 12))
                                 .foregroundColor(Color(hex: 0xFFC857))
                         }
                         GlassField(placeholder: tr("Адрес почты", "Email address", "E-Mail-Adresse"), text: $email)
@@ -317,10 +317,10 @@ struct LookSettings: View {
     private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(selected ? .white : Theme.text)
                 .frame(maxWidth: .infinity)
-                .frame(height: 42)
+                .frame(height: 37)
                 .background(selected ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.stroke, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -345,7 +345,7 @@ struct LookSettings: View {
                             Button { st.accentHex = h } label: {
                                 Circle()
                                     .fill(Color(hex: h))
-                                    .frame(width: 38, height: 38)
+                                    .frame(width: 33, height: 33)
                                     .overlay(Circle().stroke(Theme.text, lineWidth: st.accentHex == h ? 3 : 0))
                             }
                         }
@@ -355,7 +355,7 @@ struct LookSettings: View {
                             Button { st.accentHex = h } label: {
                                 Circle()
                                     .fill(Color(hex: h))
-                                    .frame(width: 38, height: 38)
+                                    .frame(width: 33, height: 33)
                                     .overlay(Circle().stroke(Theme.text, lineWidth: st.accentHex == h ? 3 : 0))
                             }
                         }
@@ -421,7 +421,7 @@ struct LangSettings: View {
                     Button { st.lang = l } label: {
                         GlassCard {
                             HStack {
-                                Text(l.title).font(.system(size: 16)).foregroundColor(Theme.text)
+                                Text(l.title).font(.system(size: 14)).foregroundColor(Theme.text)
                                 Spacer()
                                 if st.lang == l {
                                     Image(systemName: "checkmark").foregroundColor(Theme.accent)
@@ -459,17 +459,17 @@ struct NoxView: View {
     }
 
     private func head(_ t: String) -> some View {
-        Text(t).font(.system(size: 17, weight: .semibold)).foregroundColor(Theme.text).frame(maxWidth: .infinity, alignment: .leading)
+        Text(t).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func note(_ t: String) -> some View {
-        Text(t).font(.system(size: 13)).foregroundColor(Theme.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
+        Text(t).font(.system(size: 11)).foregroundColor(Theme.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func smallButton(_ t: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(t).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text)
-                .padding(.horizontal, 14).frame(height: 38)
+            Text(t).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                .padding(.horizontal, 14).frame(height: 33)
                 .background(Theme.card)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -480,7 +480,10 @@ struct NoxView: View {
         let w = store.wallet ?? Wallet(balance: 0, earned: 0, streak: 0, level: 0)
         return GlassCard {
             VStack(alignment: .leading, spacing: 4) {
-                Text("⚡ \(w.balance) nox").font(.system(size: 30, weight: .heavy)).foregroundColor(Theme.text)
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill").font(.system(size: 19, weight: .heavy)).foregroundColor(Theme.accent)
+                    Text("\(w.balance) nox").font(.system(size: 24, weight: .heavy)).foregroundColor(Theme.text)
+                }
                 note(tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + String(w.earned))
                 note(tr("Серия входов: ", "Login streak: ", "Login-Serie: ") + String(w.streak) + " / 3 · " + tr("за 3 дня подряд +5 nox", "+5 nox for 3 days in a row", "+5 nox für 3 Tage in Folge"))
             }
@@ -508,7 +511,7 @@ struct NoxView: View {
     @ViewBuilder private func colorCell(_ c: ThemeColor) -> some View {
         if let h = c.color, let v = UInt32(h.dropFirst(), radix: 16) {
             Button { st.accentHex = v } label: {
-                Circle().fill(Color(hex: v)).frame(width: 38, height: 38)
+                Circle().fill(Color(hex: v)).frame(width: 33, height: 33)
                     .overlay(Circle().stroke(Theme.text, lineWidth: st.accentHex == v ? 3 : 0))
             }
         } else {
@@ -533,10 +536,10 @@ struct NoxView: View {
     private func boardRow(_ i: Int, _ r: BoardRow) -> some View {
         HStack(spacing: 10) {
             Text(String(i + 1)).foregroundColor(Theme.textSecondary).frame(width: 26)
-            Avatar(nick: r.nick, url: r.avatarUrl, size: 36)
-            Text(r.nick + (r.level > 0 ? "  ★ " + levelStr(r.level) : "")).foregroundColor(Theme.text).font(.system(size: 15, weight: .medium))
+            Avatar(nick: r.nick, url: r.avatarUrl, size: 32)
+            Text(r.nick + (r.level > 0 ? "  ★ " + levelStr(r.level) : "")).foregroundColor(Theme.text).font(.system(size: 13, weight: .medium))
             Spacer()
-            Text(String(r.earned) + " nox").foregroundColor(Theme.accent).font(.system(size: 14, weight: .semibold))
+            Text(String(r.earned) + " nox").foregroundColor(Theme.accent).font(.system(size: 12, weight: .semibold))
         }
         .padding(10)
         .background(Theme.card)
@@ -573,7 +576,7 @@ struct NoxView: View {
             NavigationStack {
                 VStack(spacing: 16) {
                     Text(tr("Цвет выбирается один раз, потом он сохранится в палитре.", "You pick the color once, then it stays in your palette.", "Die Farbe wird einmal gewählt und bleibt in deiner Palette."))
-                        .font(.system(size: 14)).multilineTextAlignment(.center)
+                        .font(.system(size: 12)).multilineTextAlignment(.center)
                     ColorPicker(tr("Цвет", "Color", "Farbe"), selection: $picked, supportsOpacity: false)
                     Spacer()
                 }
@@ -607,10 +610,10 @@ struct StatsView: View {
         GlassCard {
             VStack(spacing: 4) {
                 Text(value)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.accentGradient)
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundColor(Theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -649,13 +652,13 @@ struct AboutView: View {
             AppBackground()
             VStack(spacing: 10) {
                 Text("neirox")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(.system(size: 29, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.accentGradient)
                     .padding(.top, 50)
                 Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"))
                     .foregroundColor(Theme.textSecondary)
                 Text("v\(Config.appVersion)")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Theme.text)
                     .padding(.top, 6)
                 Spacer()

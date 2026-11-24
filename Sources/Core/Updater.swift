@@ -57,7 +57,7 @@ struct UpdateBanner: View {
         if up.visible, let v = up.newVersion {
             VStack(alignment: .leading, spacing: 8) {
                 Text(tr("Доступно новое обновление ", "New update available ", "Neues Update verfügbar ") + v)
-                    .font(.system(size: 15)).foregroundColor(Theme.text)
+                    .font(.system(size: 13)).foregroundColor(Theme.text)
                 HStack {
                     Spacer()
                     Button(tr("Не устанавливать", "Not now", "Nicht jetzt")) { up.dismissed = true }
@@ -68,7 +68,7 @@ struct UpdateBanner: View {
                     }
                     .fontWeight(.semibold).foregroundColor(Theme.accent)
                 }
-                .font(.system(size: 15))
+                .font(.system(size: 13))
             }
             .padding(12)
             .background(Theme.bgBottom)

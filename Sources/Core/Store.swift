@@ -297,7 +297,7 @@ final class Store: ObservableObject {
             checkedAt = Date()
             if let w: Wallet = try? await rpc("nox_checkin") {
                 wallet = w
-                if w.awarded == true { noxNotice = tr("+5 nox за 3 дня подряд! ⚡", "+5 nox for 3 days in a row! ⚡", "+5 nox für 3 Tage in Folge! ⚡") }
+                if w.awarded == true { noxNotice = tr("+5 nox за 3 дня подряд!", "+5 nox for 3 days in a row!", "+5 nox für 3 Tage in Folge!") }
             }
             await loadColors()
         }

@@ -10,8 +10,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -53,14 +63,14 @@ fun CreateChatDialog(onClose: () -> Unit, onCreated: (String) -> Unit) {
                 NxField(title, { title = it }, tr("Название", "Title", "Titel"))
                 NxField(desc, { desc = it }, tr("Описание (необязательно)", "Description (optional)", "Beschreibung (optional)"))
                 if (!channel) {
-                    Text(tr("Участники из друзей:", "Members from friends:", "Mitglieder aus Freunden:"), color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+                    Text(tr("Участники из друзей:", "Members from friends:", "Mitglieder aus Freunden:"), color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
                     for (id in Store.friendIds) {
                         val p = Store.profiles[id] ?: continue
                         Row(
                             Modifier.fillMaxWidth().clickable { if (id in picked) picked.remove(id) else picked.add(id) }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(if (id in picked) "☑" else "☐", fontSize = 20.sp, color = Accent, modifier = Modifier.padding(end = 10.dp))
+                            Text(if (id in picked) "☑" else "☐", fontSize = 18.sp, color = Accent, modifier = Modifier.padding(end = 10.dp))
                             Avatar(p, 32.dp)
                             Text(Store.dname(p), color = Txt, modifier = Modifier.padding(start = 10.dp))
                         }
@@ -107,7 +117,10 @@ fun FindChannelDialog(onClose: () -> Unit, onOpen: (String) -> Unit) {
                     val joined = Store.isMember(c.id)
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).clickable { onOpen("c:" + c.id) }) {
-                            Text("📢 " + c.title, color = Txt)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Campaign, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(end = 4.dp))
+                                Text(c.title, color = Txt)
+                            }
                             val n = counts[c.id]
                             Text(
                                 (if (n != null) tr("Подписчиков: $n", "Subscribers: $n", "Abonnenten: $n") else "") +
@@ -119,7 +132,7 @@ fun FindChannelDialog(onClose: () -> Unit, onOpen: (String) -> Unit) {
                             TextButton(onClick = {
                                 scope.launch { try { Store.joinChat(c.id); onOpen("c:" + c.id) } catch (e: Exception) { } }
                             }) { Text(tr("Подписаться", "Subscribe", "Abonnieren")) }
-                        } else Text("✓", color = Accent)
+                        } else Icon(Icons.Filled.Check, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
                     }
                 }
                 if (results.isEmpty() && q.isNotBlank()) Text(tr("Ничего не найдено", "Nothing found", "Nichts gefunden"), color = TextSecondary, modifier = Modifier.padding(top = 10.dp))
@@ -162,11 +175,11 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                     Avatar(chat.asProfile(), 56.dp)
                     Text(
                         (if (chat.kind == "channel") tr("Канал", "Channel", "Kanal") else tr("Группа", "Group", "Gruppe")) + " · " + mem.size,
-                        color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp)
+                        color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp)
                     )
                 }
                 if (!chat.description.isNullOrBlank() && !editDesc) {
-                    Text(chat.description, color = Txt, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text(chat.description, color = Txt, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                 }
                 if (isAdmin) {
                     if (editDesc) {
@@ -175,16 +188,19 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                             scope.launch { try { Store.setDescription(cid, descText); editDesc = false } catch (e: Exception) { error = friendlyError(e.message ?: "") } }
                         }) { Text(tr("Сохранить", "Save", "Speichern")) }
                     } else {
-                        Text(
-                            "✏️ " + tr("Описание", "Description", "Beschreibung"), color = Accent,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { descText = chat.description ?: ""; editDesc = true }.padding(vertical = 8.dp)
-                        )
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(end = 4.dp))
+                            Text(tr("Описание", "Description", "Beschreibung"), color = Accent)
+                        }
                     }
                 }
                 if (!chat.inviteCode.isNullOrBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                        Text(tr("Код приглашения: ", "Invite code: ", "Einladungscode: "), color = TextSecondary, fontSize = 13.sp)
-                        Text(chat.inviteCode, color = Txt, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(tr("Код приглашения: ", "Invite code: ", "Einladungscode: "), color = TextSecondary, fontSize = 11.sp)
+                        Text(chat.inviteCode, color = Txt, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         TextButton(onClick = {
                             val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             cm.setPrimaryClip(android.content.ClipData.newPlainText("neirox", chat.inviteCode))
@@ -193,10 +209,13 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                     }
                 }
                 if (isAdmin) {
-                    Text(
-                        "🖼 " + tr("Сменить аватарку", "Change avatar", "Avatar ändern"), color = Accent,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { avPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }.padding(vertical = 8.dp)
-                    )
+                    ) {
+                        Icon(Icons.Filled.Photo, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(end = 4.dp))
+                        Text(tr("Сменить аватарку", "Change avatar", "Avatar ändern"), color = Accent)
+                    }
                 }
                 if (chat.kind == "group" && isAdmin) {
                     Text(
@@ -231,19 +250,22 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                         val p = Store.profiles[m.userId]
                         Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(p, 32.dp)
-                            Text(
-                                (if (m.userId == Store.myId) tr("Вы", "You", "Du") else Store.dname(p)) +
-                                    (if (m.role == "owner") " 👑" else if (m.role == "admin") " ★" else ""),
-                                color = Txt, modifier = Modifier.padding(start = 10.dp).weight(1f)
-                            )
+                            Row(modifier = Modifier.padding(start = 10.dp).weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (m.userId == Store.myId) tr("Вы", "You", "Du") else Store.dname(p), color = Txt)
+                                if (m.role == "owner") {
+                                    Icon(Icons.Filled.WorkspacePremium, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(start = 4.dp))
+                                } else if (m.role == "admin") {
+                                    Icon(Icons.Filled.Star, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(start = 4.dp))
+                                }
+                            }
                             if (isOwner && m.userId != Store.myId) {
-                                Text(
-                                    if (m.role == "admin") "★" else "☆", color = Accent, fontSize = 20.sp,
-                                    modifier = Modifier.clickable {
+                                Icon(
+                                    if (m.role == "admin") Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null, tint = Accent,
+                                    modifier = Modifier.size(18.dp).clickable {
                                         scope.launch { try { Store.setRole(cid, m.userId, if (m.role == "admin") "member" else "admin") } catch (e: Exception) { } }
                                     }.padding(8.dp)
                                 )
-                                Text("✕", color = TextSecondary, modifier = Modifier.clickable {
+                                Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable {
                                     scope.launch { try { Store.kickMember(cid, m.userId) } catch (e: Exception) { } }
                                 }.padding(8.dp))
                             }
@@ -314,7 +336,7 @@ fun SearchDialog(only: String?, onClose: () -> Unit, onPick: (String, Long) -> U
                     val title = Store.chatByKey(k)?.title ?: Store.dname(k)
                     Column(Modifier.fillMaxWidth().clickable { onPick(k, m.id) }.padding(vertical = 8.dp)) {
                         Text(title + " · " + timeOf(m.createdAt), color = Accent, fontSize = 12.sp)
-                        Text(m.body ?: "", color = Txt, fontSize = 14.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(m.body ?: "", color = Txt, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
                 if (found.isEmpty() && needle.length >= 2) Text(tr("Ничего не найдено", "Nothing found", "Nichts gefunden"), color = TextSecondary, modifier = Modifier.padding(top = 10.dp))

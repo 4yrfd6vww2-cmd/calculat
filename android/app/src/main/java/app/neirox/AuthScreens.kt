@@ -69,7 +69,7 @@ fun LoginScreen(go: (Int) -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp),
+            .padding(horizontal = 25.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = FieldSpacing
     ) {
@@ -82,7 +82,7 @@ fun LoginScreen(go: (Int) -> Unit) {
         NxLink(tr("Забыли пароль?", "Forgot password?", "Passwort vergessen?")) { go(2) }
         NxLink(tr("Создать аккаунт", "Create account", "Konto erstellen")) { go(1) }
         Text("v$version", color = TextSecondary, fontSize = 12.sp)
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(26.dp))
     }
 }
 
@@ -117,7 +117,7 @@ fun RegisterScreen(go: (Int) -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp),
+            .padding(horizontal = 25.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = FieldSpacing
     ) {
@@ -137,7 +137,7 @@ fun RegisterScreen(go: (Int) -> Unit) {
         NxError(error)
         NxButton(tr("Создать аккаунт", "Create account", "Konto erstellen"), busy) { submit() }
         NxLink(tr("Уже есть аккаунт? Войти", "Have an account? Sign in", "Schon ein Konto? Anmelden")) { go(0) }
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(26.dp))
     }
 }
 
@@ -190,7 +190,7 @@ fun ForgotScreen(go: (Int) -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp),
+            .padding(horizontal = 25.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = FieldSpacing
     ) {
@@ -231,6 +231,6 @@ fun ForgotScreen(go: (Int) -> Unit) {
             NxLink(tr("Отправить код ещё раз", "Send code again", "Code erneut senden")) { sendCode() }
         }
         NxLink(tr("Назад ко входу", "Back to sign in", "Zurück zur Anmeldung")) { go(0) }
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(26.dp))
     }
 }

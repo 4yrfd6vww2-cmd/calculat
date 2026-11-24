@@ -19,9 +19,9 @@ struct FriendsView: View {
     private func row<T: View>(_ p: Profile, @ViewBuilder trailing: () -> T) -> some View {
         GlassCard {
             HStack(spacing: 12) {
-                Avatar(nick: p.nick, url: p.avatarUrl, size: 42)
+                Avatar(nick: p.nick, url: p.avatarUrl, size: 37)
                 Text(Store.shared.dname(p) + (Store.shared.alias[p.id] != nil ? " (" + p.nick + ")" : ""))
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Theme.text)
                 Spacer()
                 trailing()
@@ -32,7 +32,7 @@ struct FriendsView: View {
     private func smallButton(_ title: String, filled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(filled ? .white : Theme.text)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
@@ -63,7 +63,7 @@ struct FriendsView: View {
                             sectionTitle(tr("Результаты", "Results", "Ergebnisse"))
                             if results.isEmpty {
                                 Text(tr("Никого не найдено", "Nobody found", "Niemand gefunden"))
-                                    .font(.system(size: 14)).foregroundColor(Theme.textSecondary)
+                                    .font(.system(size: 12)).foregroundColor(Theme.textSecondary)
                             }
                             ForEach(results) { p in
                                 row(p) {
@@ -71,7 +71,7 @@ struct FriendsView: View {
                                         Text(f.status == "accepted"
                                              ? tr("Друг", "Friend", "Freund")
                                              : tr("Заявка", "Pending", "Anfrage"))
-                                            .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                                            .font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                                     } else {
                                         smallButton(tr("Добавить", "Add", "Hinzufügen")) {
                                             run { try await store.sendRequest(to: p.id) }
@@ -101,7 +101,7 @@ struct FriendsView: View {
                             Text(tr("Пока нет друзей. Найди человека по нику и отправь заявку.",
                                     "No friends yet. Find someone by nick and send a request.",
                                     "Noch keine Freunde. Suche jemanden per Nick und sende eine Anfrage."))
-                                .font(.system(size: 14)).foregroundColor(Theme.textSecondary)
+                                .font(.system(size: 12)).foregroundColor(Theme.textSecondary)
                         }
                         ForEach(friends) { p in
                             row(p) {

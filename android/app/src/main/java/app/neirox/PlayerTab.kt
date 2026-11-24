@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,7 +84,7 @@ fun PlayerTab() {
         if (importing || info.isNotEmpty()) {
             Text(
                 if (importing) tr("Копирую файлы…", "Copying files…", "Dateien werden kopiert …") else info,
-                color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
         }
 
@@ -90,7 +93,7 @@ fun PlayerTab() {
                 tr("Добавь MP3- или MP4-файлы с телефона. Они сохранятся в приложении и не пропадут после перезапуска.",
                     "Add MP3 or MP4 files from your device. They are stored in the app and stay after restart.",
                     "Füge MP3- oder MP4-Dateien von deinem Gerät hinzu. Sie bleiben in der App gespeichert."),
-                color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(20.dp).weight(1f)
+                color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(20.dp).weight(1f)
             )
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
@@ -100,16 +103,16 @@ fun PlayerTab() {
                         Modifier.fillMaxWidth().clickable { Player.play(i) }.padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(if (current && Player.playing) "▶" else "♪", color = if (current) Accent else TextSecondary, fontSize = 18.sp)
+                        Text(if (current && Player.playing) "▶" else "♪", color = if (current) Accent else TextSecondary, fontSize = 16.sp)
                         Text(
                             f.nameWithoutExtension,
                             color = if (current) Accent else Txt,
-                            fontSize = 16.sp,
+                            fontSize = 14.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(start = 12.dp).weight(1f)
                         )
-                        Text("🗑", fontSize = 20.sp, modifier = Modifier.clickable { Player.delete(i) }.padding(8.dp))
+                        Icon(Icons.Filled.Delete, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp).clickable { Player.delete(i) }.padding(8.dp))
                     }
                 }
             }
@@ -121,7 +124,7 @@ fun PlayerTab() {
         ) {
             Text(
                 Player.currentTitle ?: tr("Ничего не играет", "Nothing playing", "Nichts läuft"),
-                color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Slider(
                 value = Player.position.coerceIn(0f, maxOf(Player.duration, 0.1f)),
@@ -134,9 +137,9 @@ fun PlayerTab() {
                 Text(fmt(Player.duration), color = TextSecondary, fontSize = 12.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("⏮", fontSize = 30.sp, modifier = Modifier.clickable { Player.prev() }.padding(8.dp))
-                Text(if (Player.playing) "⏸" else "▶️", fontSize = 40.sp, modifier = Modifier.clickable { Player.toggle() }.padding(8.dp))
-                Text("⏭", fontSize = 30.sp, modifier = Modifier.clickable { Player.next() }.padding(8.dp))
+                Text("⏮", fontSize = 24.sp, modifier = Modifier.clickable { Player.prev() }.padding(8.dp))
+                Text(if (Player.playing) "⏸" else "▶️", fontSize = 32.sp, modifier = Modifier.clickable { Player.toggle() }.padding(8.dp))
+                Text("⏭", fontSize = 24.sp, modifier = Modifier.clickable { Player.next() }.padding(8.dp))
             }
         }
     }

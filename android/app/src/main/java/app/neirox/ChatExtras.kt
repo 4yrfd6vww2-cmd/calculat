@@ -34,7 +34,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -112,7 +117,7 @@ fun EmojiPanel(onPick: (String) -> Unit) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
             EMOJI_GROUPS.forEachIndexed { i, g ->
                 Text(
-                    g[0], fontSize = 22.sp,
+                    g[0], fontSize = 18.sp,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp))
                         .background(if (i == cat) Accent.copy(alpha = 0.25f) else Color.Transparent)
                         .clickable { cat = i }.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -126,7 +131,7 @@ fun EmojiPanel(onPick: (String) -> Unit) {
         ) {
             items(EMOJI_GROUPS[cat]) { e ->
                 Text(
-                    e, fontSize = 26.sp, textAlign = TextAlign.Center,
+                    e, fontSize = 21.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable { onPick(e) }.padding(vertical = 6.dp)
                 )
             }
@@ -217,17 +222,17 @@ fun PendingTray(items: List<PendingItem>, onRemove: (Int) -> Unit) {
             Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(CardBg)) {
                 when (p.kind) {
                     "image" -> PendingThumb(p.uri)
-                    "video" -> Text("🎬", fontSize = 30.sp, modifier = Modifier.align(Alignment.Center))
+                    "video" -> Icon(Icons.Filled.Videocam, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(24.dp).align(Alignment.Center))
                     else -> Column(Modifier.align(Alignment.Center).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("📎", fontSize = 22.sp)
+                        Icon(Icons.Filled.AttachFile, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
                         Text(p.name, color = TextSecondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     }
                 }
                 Box(
-                    Modifier.align(Alignment.TopEnd).padding(3.dp).size(22.dp).clip(CircleShape)
+                    Modifier.align(Alignment.TopEnd).padding(3.dp).size(19.dp).clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.65f)).clickable { onRemove(i) },
                     contentAlignment = Alignment.Center
-                ) { Text("✕", color = Color.White, fontSize = 11.sp) }
+                ) { Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp)) }
             }
         }
     }
@@ -291,7 +296,7 @@ fun VoicePlayer(path: String, textColor: Color, onTap: (() -> Unit) -> Unit) {
             CircularProgressIndicator(Modifier.padding(8.dp).size(20.dp), color = textColor, strokeWidth = 2.dp)
         } else {
             Text(
-                if (state == 2) "⏸" else "▶", fontSize = 24.sp, color = textColor,
+                if (state == 2) "⏸" else "▶", fontSize = 19.sp, color = textColor,
                 modifier = Modifier.clickable { onTap { toggle() } }.padding(6.dp)
             )
         }
@@ -336,7 +341,7 @@ fun AlbumContent(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            Text("▶", color = Color.White, fontSize = 34.sp)
+                            Text("▶", color = Color.White, fontSize = 27.sp)
                         }
                     }
                 }
@@ -349,12 +354,12 @@ fun AlbumContent(
             Modifier.combinedClickable(onClick = { tap { onFile(a.path) } }, onLongClick = onLong).padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("📎", fontSize = 22.sp)
-            Text(a.name, color = textColor, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
+            Icon(Icons.Filled.AttachFile, contentDescription = null, tint = textColor, modifier = Modifier.size(16.dp))
+            Text(a.name, color = textColor, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
         }
     }
     if (!m.body.isNullOrEmpty()) {
-        Text(linkified(m.body, if (textColor == Color.White) Color.White else Accent), color = textColor, fontSize = 16.sp)
+        Text(linkified(m.body, if (textColor == Color.White) Color.White else Accent), color = textColor, fontSize = 14.sp)
     }
 }
 
@@ -382,7 +387,7 @@ fun VideoDialog(path: String, onClose: () -> Unit) {
             } else {
                 CircularProgressIndicator(color = Accent)
             }
-            Text("✕", color = Color.White, fontSize = 26.sp, modifier = Modifier.align(Alignment.TopEnd).clickable { onClose() }.padding(16.dp))
+            Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(21.dp).align(Alignment.TopEnd).clickable { onClose() }.padding(16.dp))
         }
     }
 }
@@ -405,7 +410,7 @@ fun StickerPanel(onEmoji: (String) -> Unit, onOwn: (Sticker) -> Unit, onAdd: () 
         ) {
             item {
                 Text(
-                    "＋", color = Accent, fontSize = 30.sp, textAlign = TextAlign.Center,
+                    "＋", color = Accent, fontSize = 24.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable { onAdd() }.padding(vertical = 14.dp)
                 )
             }
@@ -424,7 +429,7 @@ fun StickerPanel(onEmoji: (String) -> Unit, onOwn: (Sticker) -> Unit, onAdd: () 
             }
             items(BUILTIN_STICKERS) { e ->
                 Text(
-                    e, fontSize = 34.sp, textAlign = TextAlign.Center,
+                    e, fontSize = 27.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable { onEmoji(e) }.padding(vertical = 8.dp)
                 )
             }

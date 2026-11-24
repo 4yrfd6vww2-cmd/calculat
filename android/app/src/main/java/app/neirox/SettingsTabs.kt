@@ -23,9 +23,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,15 +59,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-private fun SettingsRow(icon: String, title: String, value: String = "", onClick: () -> Unit) {
+private fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String = "", onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(icon, fontSize = 20.sp)
-        Text(title, color = Txt, fontSize = 16.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
-        if (value.isNotEmpty()) Text(value, color = TextSecondary, fontSize = 14.sp)
-        Text("›", color = TextSecondary, fontSize = 20.sp, modifier = Modifier.padding(start = 8.dp))
+        Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
+        Text(title, color = Txt, fontSize = 14.sp, modifier = Modifier.padding(start = 14.dp).weight(1f))
+        if (value.isNotEmpty()) Text(value, color = TextSecondary, fontSize = 12.sp)
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp).padding(start = 8.dp))
     }
 }
 
@@ -65,15 +76,15 @@ private fun SubPage(title: String, onBack: () -> Unit, content: @Composable () -
     BackHandler { onBack() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
-            Text(title, color = Txt, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("‹", color = Accent, fontSize = 27.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
+            Text(title, color = Txt, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             content()
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(26.dp))
         }
     }
 }
@@ -103,25 +114,25 @@ fun SettingsTab() {
                 ) {
                     Avatar(Store.me, 54.dp)
                     Column(Modifier.padding(start = 14.dp)) {
-                        Text(Store.me?.nick ?: "", color = Txt, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(tr("Профиль", "Profile", "Profil"), color = TextSecondary, fontSize = 13.sp)
+                        Text(Store.me?.nick ?: "", color = Txt, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Профиль", "Profile", "Profil"), color = TextSecondary, fontSize = 11.sp)
                     }
                 }
                 SettingsRow(
-                    "✉️", tr("Почта", "Email", "E-Mail"),
+                    Icons.Filled.Email, tr("Почта", "Email", "E-Mail"),
                     if (Store.recoveryEmail == null) tr("не привязана", "not bound", "nicht verknüpft") else tr("привязана", "bound", "verknüpft")
                 ) { page = 2 }
-                SettingsRow("🎨", tr("Оформление", "Appearance", "Aussehen")) { page = 3 }
-                SettingsRow("🔊", tr("Звуки", "Sounds", "Töne")) { page = 4 }
-                SettingsRow("🌐", tr("Язык", "Language", "Sprache"), langTitle(Settings.lang)) { page = 5 }
-                SettingsRow("⚡", tr("Мой nox", "My nox", "Mein nox")) { page = 6 }
-                SettingsRow("📊", tr("Статистика", "Statistics", "Statistik")) { page = 7 }
-                SettingsRow("ℹ️", tr("О приложении", "About", "Über die App"), "v" + versionName()) { page = 8 }
+                SettingsRow(Icons.Filled.Palette, tr("Оформление", "Appearance", "Aussehen")) { page = 3 }
+                SettingsRow(Icons.Filled.VolumeUp, tr("Звуки", "Sounds", "Töne")) { page = 4 }
+                SettingsRow(Icons.Filled.Language, tr("Язык", "Language", "Sprache"), langTitle(Settings.lang)) { page = 5 }
+                SettingsRow(Icons.Filled.Bolt, tr("Мой nox", "My nox", "Mein nox")) { page = 6 }
+                SettingsRow(Icons.Filled.BarChart, tr("Статистика", "Statistics", "Statistik")) { page = 7 }
+                SettingsRow(Icons.Filled.Info, tr("О приложении", "About", "Über die App"), "v" + versionName()) { page = 8 }
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { Store.logout() }.padding(16.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Text(tr("Выйти", "Sign out", "Abmelden"), color = ErrorRed, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text(tr("Выйти", "Sign out", "Abmelden"), color = ErrorRed, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(20.dp))
             }
@@ -177,8 +188,8 @@ private fun ProfilePage() {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Box(Modifier.clickable { picker.launch("image/*") }) { Avatar(Store.me, 110.dp) }
         NxSmallButton(tr("Сменить фото", "Change photo", "Foto ändern")) { picker.launch("image/*") }
-        Text(Store.me?.nick ?: "", color = Txt, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("★ " + levelStr(Store.levels[Store.myId] ?: 0), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(Store.me?.nick ?: "", color = Txt, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("★ " + levelStr(Store.levels[Store.myId] ?: 0), color = Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
     NxField(nick, { nick = it }, tr("Новый ник", "New nick", "Neuer Nick"))
     NxCard(
@@ -187,7 +198,7 @@ private fun ProfilePage() {
             "Nick: 3–20 Zeichen, a–z, Ziffern und _. Vergebene Nicks sind nicht möglich. Die Anmeldung erfolgt per Nick, nutze nach der Änderung den neuen.")
     )
     NxError(error)
-    if (msg.isNotEmpty()) Text(msg, color = Accent, fontSize = 14.sp)
+    if (msg.isNotEmpty()) Text(msg, color = Accent, fontSize = 12.sp)
     NxButton(tr("Сменить ник", "Change nick", "Nick ändern"), busy) {
         val n = nick.trim().lowercase()
         if (n.isEmpty()) return@NxButton
@@ -254,25 +265,25 @@ private fun EmailPage() {
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun LookPage() {
-    Text(tr("Тема", "Theme", "Design"), color = TextSecondary, fontSize = 13.sp)
+    Text(tr("Тема", "Theme", "Design"), color = TextSecondary, fontSize = 11.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         NxSmallButton(tr("Тёмная", "Dark", "Dunkel"), filled = Settings.mode == 0) { Settings.updateMode(0) }
         NxSmallButton(tr("Чёрная", "Black", "Schwarz"), filled = Settings.mode == 1) { Settings.updateMode(1) }
         NxSmallButton(tr("Светлая", "Light", "Hell"), filled = Settings.mode == 2) { Settings.updateMode(2) }
     }
-    Text(tr("Размер текста", "Text size", "Textgröße"), color = TextSecondary, fontSize = 13.sp)
+    Text(tr("Размер текста", "Text size", "Textgröße"), color = TextSecondary, fontSize = 11.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         NxSmallButton(tr("Мелкий", "Small", "Klein"), filled = Settings.textSize == 0) { Settings.updateTextSize(0) }
         NxSmallButton(tr("Обычный", "Normal", "Normal"), filled = Settings.textSize == 1) { Settings.updateTextSize(1) }
         NxSmallButton(tr("Крупный", "Large", "Groß"), filled = Settings.textSize == 2) { Settings.updateTextSize(2) }
     }
-    Text(tr("Акцентный цвет", "Accent color", "Akzentfarbe"), color = TextSecondary, fontSize = 13.sp)
+    Text(tr("Акцентный цвет", "Accent color", "Akzentfarbe"), color = TextSecondary, fontSize = 11.sp)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         for (c in AccentPalette) {
             val selected = Settings.accent == c
             Box(
                 Modifier
-                    .size(44.dp)
+                    .size(39.dp)
                     .clip(CircleShape)
                     .background(Color(c))
                     .then(if (selected) Modifier.border(3.dp, Txt, CircleShape) else Modifier)
@@ -285,7 +296,7 @@ private fun LookPage() {
             val selected = Settings.accent == c
             Box(
                 Modifier
-                    .size(44.dp)
+                    .size(39.dp)
                     .clip(CircleShape)
                     .background(Color(c))
                     .then(if (selected) Modifier.border(3.dp, Txt, CircleShape) else Modifier)
@@ -304,7 +315,7 @@ private fun SoundPage() {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, color = Txt, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Text(title, color = Txt, fontSize = 14.sp, modifier = Modifier.weight(1f))
             Switch(checked = value, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = Accent))
         }
     }
@@ -319,8 +330,8 @@ private fun LangPage() {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).clickable { Settings.updateLang(code) }.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(langTitle(code), color = Txt, fontSize = 16.sp, modifier = Modifier.weight(1f))
-            if (Settings.lang == code) Text("✓", color = Accent, fontSize = 18.sp)
+            Text(langTitle(code), color = Txt, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            if (Settings.lang == code) Icon(Icons.Filled.Check, contentDescription = null, tint = Accent, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -336,8 +347,8 @@ private fun StatsPage() {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, color = TextSecondary, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Text(value, color = Txt, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(value, color = Txt, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
     StatCard(tr("Отправлено", "Sent", "Gesendet"), "$sent")
@@ -353,12 +364,12 @@ private fun AboutPage() {
             "neirox",
             style = androidx.compose.ui.text.TextStyle(
                 brush = Brush.horizontalGradient(listOf(Accent, Accent2)),
-                fontSize = 40.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.Bold
             )
         )
-        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = TextSecondary, fontSize = 16.sp)
-        Text("v" + versionName(), color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = TextSecondary, fontSize = 14.sp)
+        Text("v" + versionName(), color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
@@ -385,19 +396,23 @@ private fun NoxPage() {
         }
     }
     val w = Store.wallet ?: Wallet(0, 0, 0, 0)
-    NxCard("⚡ ${w.balance} nox\n" + tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + w.earned + "\n" +
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Bolt, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp).padding(end = 4.dp))
+        Text("${w.balance} nox", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    }
+    NxCard(tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + w.earned + "\n" +
         tr("Серия входов: ", "Login streak: ", "Login-Serie: ") + w.streak + " / 3 · " + tr("за 3 дня подряд +5 nox", "+5 nox for 3 days in a row", "+5 nox für 3 Tage in Folge"), Txt)
     if (error.isNotEmpty()) NxError(error)
 
-    Text(tr("Свои цвета темы", "Custom theme colors", "Eigene Themenfarben"), color = Txt, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-    Text(tr("10 nox за один цвет. Покупки хранятся на сервере.", "10 nox per color. Purchases are stored on the server.", "10 nox pro Farbe. Käufe werden auf dem Server gespeichert."), color = TextSecondary, fontSize = 13.sp)
+    Text(tr("Свои цвета темы", "Custom theme colors", "Eigene Themenfarben"), color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    Text(tr("10 nox за один цвет. Покупки хранятся на сервере.", "10 nox per color. Purchases are stored on the server.", "10 nox pro Farbe. Käufe werden auf dem Server gespeichert."), color = TextSecondary, fontSize = 11.sp)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         for (tc in Store.colors) {
             val hex = tc.color
             if (hex != null) {
                 val c = 0xFF000000L or java.lang.Long.parseLong(hex.removePrefix("#"), 16)
                 Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(Color(c))
+                    Modifier.size(39.dp).clip(CircleShape).background(Color(c))
                         .then(if (Settings.accent == c) Modifier.border(3.dp, Txt, CircleShape) else Modifier)
                         .clickable { Settings.updateAccent(c) }
                 )
@@ -410,25 +425,25 @@ private fun NoxPage() {
         act { pickId = Store.buyColor() }
     }
 
-    Text(tr("Уровень: ★ ", "Level: ★ ", "Level: ★ ") + levelStr(w.level) + " / 100.0", color = Txt, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-    Text(tr("Виден всем. 0.01 уровня = 1 nox.", "Visible to everyone. 0.01 level = 1 nox.", "Für alle sichtbar. 0.01 Level = 1 nox."), color = TextSecondary, fontSize = 13.sp)
+    Text(tr("Уровень: ★ ", "Level: ★ ", "Level: ★ ") + levelStr(w.level) + " / 100.0", color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    Text(tr("Виден всем. 0.01 уровня = 1 nox.", "Visible to everyone. 0.01 level = 1 nox.", "Für alle sichtbar. 0.01 Level = 1 nox."), color = TextSecondary, fontSize = 11.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         NxSmallButton("+0.01", filled = false) { act { Store.buyLevel(1) } }
         NxSmallButton("+0.10", filled = false) { act { Store.buyLevel(10) } }
         NxSmallButton("+1.00", filled = false) { act { Store.buyLevel(100) } }
     }
 
-    Text(tr("Таблица лидеров", "Leaderboard", "Bestenliste"), color = Txt, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-    if (Store.board.isEmpty()) Text(tr("Пока никого нет", "Nobody yet", "Noch niemand"), color = TextSecondary, fontSize = 14.sp)
+    Text(tr("Таблица лидеров", "Leaderboard", "Bestenliste"), color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    if (Store.board.isEmpty()) Text(tr("Пока никого нет", "Nobody yet", "Noch niemand"), color = TextSecondary, fontSize = 12.sp)
     Store.board.forEachIndexed { i, r ->
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardBg).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("${i + 1}", color = TextSecondary, fontSize = 15.sp, modifier = Modifier.width(28.dp))
+            Text("${i + 1}", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(25.dp))
             Avatar(Profile(r.userId, r.nick, r.avatarUrl, null), 36.dp)
             Text(
                 r.nick + (if (r.level > 0) "  ★ " + levelStr(r.level) else ""),
-                color = Txt, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 10.dp).weight(1f)
+                color = Txt, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 10.dp).weight(1f)
             )
-            Text("${r.earned} nox", color = Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("${r.earned} nox", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 
@@ -443,8 +458,8 @@ private fun NoxPage() {
             title = { Text(tr("Свой цвет", "Custom color", "Eigene Farbe")) },
             text = {
                 Column {
-                    Text(tr("Цвет выбирается один раз, потом он сохранится в палитре.", "You pick the color once, then it stays in your palette.", "Die Farbe wird einmal gewählt und bleibt in deiner Palette."), fontSize = 13.sp)
-                    Box(Modifier.fillMaxWidth().height(56.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(col))
+                    Text(tr("Цвет выбирается один раз, потом он сохранится в палитре.", "You pick the color once, then it stays in your palette.", "Die Farbe wird einmal gewählt und bleibt in deiner Palette."), fontSize = 11.sp)
+                    Box(Modifier.fillMaxWidth().height(49.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(col))
                     androidx.compose.material3.Slider(h, { h = it }, valueRange = 0f..360f)
                     androidx.compose.material3.Slider(sat, { sat = it })
                     androidx.compose.material3.Slider(v, { v = it })

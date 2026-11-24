@@ -170,10 +170,10 @@ fun UpdateBanner() {
     ) {
         Text(
             tr("Доступно новое обновление ", "New update available ", "Neues Update verfügbar ") + Updater.newVersion,
-            color = Txt, fontSize = 15.sp
+            color = Txt, fontSize = 13.sp
         )
         if (Updater.progress in 0..99) {
-            Text(tr("Скачиваю… ", "Downloading… ", "Lade … ") + Updater.progress + "%", color = Accent, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(tr("Скачиваю… ", "Downloading… ", "Lade … ") + Updater.progress + "%", color = Accent, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         }
         if (Updater.error.isNotEmpty()) Text(Updater.error, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {

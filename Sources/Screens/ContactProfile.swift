@@ -36,16 +36,16 @@ struct ContactProfileSheet: View {
                         .padding(.top, 10)
 
                         Text(store.dname(friend))
-                            .font(.system(size: 22, weight: .bold)).foregroundColor(Theme.text)
+                            .font(.system(size: 18, weight: .bold)).foregroundColor(Theme.text)
                         if friend.nick != store.dname(friend) {
-                            Text("@" + friend.nick).font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                            Text("@" + friend.nick).font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                         }
                         let lb = store.levelBadge(friendId)
                         if !lb.isEmpty {
-                            Text(lb).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.accent)
+                            Text(lb).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.accent)
                         }
                         Text(store.isOnline(friend) ? tr("в сети", "online", "online") : tr("был(а) недавно", "last seen recently", "zuletzt online"))
-                            .font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                            .font(.system(size: 11)).foregroundColor(Theme.textSecondary)
 
                         HStack(spacing: 14) {
                             profilePill("phone.fill", tr("Звонок", "Call", "Anruf"), enabled: !blockedByMe) { onCall(); onClose() }
@@ -68,14 +68,14 @@ struct ContactProfileSheet: View {
 
                         VStack(spacing: 10) {
                             HStack {
-                                Text(tr("Имя контакта", "Contact name", "Kontaktname")).font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                                Text(tr("Имя контакта", "Contact name", "Kontaktname")).font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                                 Spacer()
-                                Text(store.alias[friendId] ?? tr("не задано", "not set", "nicht gesetzt")).font(.system(size: 13)).foregroundColor(Theme.accent)
+                                Text(store.alias[friendId] ?? tr("не задано", "not set", "nicht gesetzt")).font(.system(size: 11)).foregroundColor(Theme.accent)
                             }
                             HStack {
-                                Text(tr("Сообщений", "Messages", "Nachrichten")).font(.system(size: 13)).foregroundColor(Theme.textSecondary)
+                                Text(tr("Сообщений", "Messages", "Nachrichten")).font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                                 Spacer()
-                                Text("\(store.thread(with: friendId).count)").font(.system(size: 13)).foregroundColor(Theme.text)
+                                Text("\(store.thread(with: friendId).count)").font(.system(size: 11)).foregroundColor(Theme.text)
                             }
                         }
                         .padding(16)
@@ -88,11 +88,11 @@ struct ContactProfileSheet: View {
                         if !media.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text(tr("Общие медиа", "Shared media", "Geteilte Medien")).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
+                                    Text(tr("Общие медиа", "Shared media", "Geteilte Medien")).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
                                     Spacer()
                                     if media.count > 8 {
                                         Button(tr("Показать все", "Show all", "Alle anzeigen")) { showAllMedia = true }
-                                            .font(.system(size: 13)).foregroundColor(Theme.accent)
+                                            .font(.system(size: 11)).foregroundColor(Theme.accent)
                                     }
                                 }
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -147,7 +147,7 @@ struct ContactProfileSheet: View {
     private func profilePill(_ icon: String, _ label: String, enabled: Bool, danger: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: enabled ? action : {}) {
             VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 18))
+                Image(systemName: icon).font(.system(size: 16))
                 Text(label).font(.system(size: 11)).lineLimit(1)
             }
             .foregroundColor(danger ? .red : Theme.textSecondary)

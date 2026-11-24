@@ -88,19 +88,38 @@ private fun parseAttachments(o: JSONObject): List<Attachment> {
     return out
 }
 
+/** Имя Material-иконки для превью сообщения в списке чатов, если есть. */
+fun previewIconOf(m: Message?): String? {
+    if (m == null) return null
+    return when (m.kind) {
+        "image" -> if ((m.fileName ?: "").startsWith("sticker.")) "tag" else "photo"
+        "file" -> "attach"
+        "album" -> {
+            val a = m.attachments
+            when {
+                a.isNotEmpty() && a.all { it.type == "voice" } -> "mic"
+                a.isNotEmpty() && a.all { it.type == "image" } -> "photo"
+                a.isNotEmpty() && a.all { it.type == "video" } -> "video"
+                else -> "attach"
+            }
+        }
+        else -> null
+    }
+}
+
 /** Короткое описание сообщения для списка чатов и уведомлений. */
 fun previewOf(m: Message?): String {
     if (m == null) return tr("Нет сообщений", "No messages", "Keine Nachrichten")
     return when (m.kind) {
-        "image" -> if ((m.fileName ?: "").startsWith("sticker.")) "🏷 " + tr("Стикер", "Sticker", "Sticker") else "🖼 " + tr("Фото", "Photo", "Foto")
-        "file" -> "📎 " + (m.fileName ?: tr("Файл", "File", "Datei"))
+        "image" -> if ((m.fileName ?: "").startsWith("sticker.")) tr("Стикер", "Sticker", "Sticker") else tr("Фото", "Photo", "Foto")
+        "file" -> m.fileName ?: tr("Файл", "File", "Datei")
         "album" -> {
             val a = m.attachments
             val base = when {
-                a.isNotEmpty() && a.all { it.type == "voice" } -> "🎤 " + tr("Голосовое сообщение", "Voice message", "Sprachnachricht")
-                a.isNotEmpty() && a.all { it.type == "image" } -> "🖼 " + tr("Фото", "Photo", "Foto") + (if (a.size > 1) " (${a.size})" else "")
-                a.isNotEmpty() && a.all { it.type == "video" } -> "🎬 " + tr("Видео", "Video", "Video") + (if (a.size > 1) " (${a.size})" else "")
-                else -> "📎 " + tr("Вложения", "Attachments", "Anhänge") + " (${a.size})"
+                a.isNotEmpty() && a.all { it.type == "voice" } -> tr("Голосовое сообщение", "Voice message", "Sprachnachricht")
+                a.isNotEmpty() && a.all { it.type == "image" } -> tr("Фото", "Photo", "Foto") + (if (a.size > 1) " (${a.size})" else "")
+                a.isNotEmpty() && a.all { it.type == "video" } -> tr("Видео", "Video", "Video") + (if (a.size > 1) " (${a.size})" else "")
+                else -> tr("Вложения", "Attachments", "Anhänge") + " (${a.size})"
             }
             if (m.body.isNullOrEmpty()) base else base + ": " + m.body
         }

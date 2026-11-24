@@ -8,7 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -102,7 +108,7 @@ fun MainScreen() {
             tr("Плеер", "Player", "Player"),
             tr("Настройки", "Settings", "Einstellungen")
         )
-        val icons = listOf("💬", "👥", "🎵", "⚙️")
+        val icons = listOf(Icons.Filled.ChatBubble, Icons.Filled.People, Icons.Filled.MusicNote, Icons.Filled.Settings)
         NavigationBar(containerColor = BgBottom) {
             for (i in labels.indices) {
                 val badge = when (i) {
@@ -115,7 +121,7 @@ fun MainScreen() {
                     onClick = { tab = i },
                     icon = {
                         BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) {
-                            Text(icons[i], fontSize = 22.sp)
+                            Icon(icons[i], contentDescription = null, modifier = Modifier.size(20.dp))
                         }
                     },
                     label = { Text(labels[i], fontSize = 11.sp) },

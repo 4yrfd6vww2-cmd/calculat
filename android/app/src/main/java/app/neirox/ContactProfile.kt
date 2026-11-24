@@ -22,8 +22,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +73,7 @@ fun ContactProfileDialog(friendId: String, onClose: () -> Unit, onCall: () -> Un
         Box(Modifier.fillMaxSize().background(BgTop)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
                 Row(Modifier.fillMaxWidth().padding(8.dp)) {
-                    Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onClose() }.padding(horizontal = 12.dp))
+                    Text("‹", color = Accent, fontSize = 27.sp, modifier = Modifier.clickable { onClose() }.padding(horizontal = 12.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -76,27 +84,27 @@ fun ContactProfileDialog(friendId: String, onClose: () -> Unit, onCall: () -> Un
                     Avatar(friend, 108.dp)
                 }
                 Spacer(Modifier.height(14.dp))
-                Text(Store.dname(friend), color = Txt, fontWeight = FontWeight.Bold, fontSize = 22.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(Store.dname(friend), color = Txt, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 if (friend.nick != Store.dname(friend)) {
-                    Text("@" + friend.nick, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text("@" + friend.nick, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
                 val lb = Store.levelBadge(friendId)
                 if (lb.isNotEmpty()) {
-                    Text(lb, color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(lb, color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
-                Text(Store.statusLine(friend), color = TextSecondary, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(top = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(Store.statusLine(friend), color = TextSecondary, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(top = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
 
                 Spacer(Modifier.height(18.dp))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ProfilePill("📞", tr("Звонок", "Call", "Anruf"), enabled = !blockedByMe) { onCall(); onClose() }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 21.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    ProfilePill(Icons.Filled.Call, tr("Звонок", "Call", "Anruf"), enabled = !blockedByMe) { onCall(); onClose() }
                     ProfilePill(
-                        if (Store.isMuted(friendId)) "🔔" else "🔕",
+                        if (Store.isMuted(friendId)) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsOff,
                         if (Store.isMuted(friendId)) tr("Звук", "Unmute", "Ton an") else tr("Без звука", "Mute", "Stumm"),
                         enabled = true
                     ) { scope.launch { try { Store.setPref(friendId, "muted", !Store.isMuted(friendId)) } catch (e: Exception) { } } }
-                    ProfilePill("🔍", tr("Поиск", "Search", "Suche"), enabled = true) { onSearch(); onClose() }
+                    ProfilePill(Icons.Filled.Search, tr("Поиск", "Search", "Suche"), enabled = true) { onSearch(); onClose() }
                     ProfilePill(
-                        if (blockedByMe) "✅" else "⛔",
+                        if (blockedByMe) Icons.Filled.CheckCircle else Icons.Filled.Block,
                         if (blockedByMe) tr("Разблок.", "Unblock", "Entsperren") else tr("Блок.", "Block", "Blockieren"),
                         enabled = true,
                         danger = !blockedByMe
@@ -108,20 +116,20 @@ fun ContactProfileDialog(friendId: String, onClose: () -> Unit, onCall: () -> Un
                         }
                     }
                 }
-                if (error.isNotEmpty()) Text(error, color = ErrorRed, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, start = 24.dp))
+                if (error.isNotEmpty()) Text(error, color = ErrorRed, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp, start = 24.dp))
 
                 Spacer(Modifier.height(20.dp))
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardBg)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
                             Row(Modifier.fillMaxWidth().clickable { nameText = Store.alias[friendId] ?: ""; showName = true }, horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(tr("Имя контакта", "Contact name", "Kontaktname"), color = TextSecondary, fontSize = 13.sp)
-                                Text(Store.alias[friendId] ?: tr("не задано", "not set", "nicht gesetzt"), color = Accent, fontSize = 13.sp)
+                                Text(tr("Имя контакта", "Contact name", "Kontaktname"), color = TextSecondary, fontSize = 11.sp)
+                                Text(Store.alias[friendId] ?: tr("не задано", "not set", "nicht gesetzt"), color = Accent, fontSize = 11.sp)
                             }
                             Spacer(Modifier.height(10.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(tr("Сообщений", "Messages", "Nachrichten"), color = TextSecondary, fontSize = 13.sp)
-                                Text("$msgCount", color = Txt, fontSize = 13.sp)
+                                Text(tr("Сообщений", "Messages", "Nachrichten"), color = TextSecondary, fontSize = 11.sp)
+                                Text("$msgCount", color = Txt, fontSize = 11.sp)
                             }
                         }
                     }
@@ -130,8 +138,8 @@ fun ContactProfileDialog(friendId: String, onClose: () -> Unit, onCall: () -> Un
                 if (media.isNotEmpty()) {
                     Spacer(Modifier.height(18.dp))
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(tr("Общие медиа", "Shared media", "Geteilte Medien"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                        if (media.size > 8) Text(tr("Показать все", "Show all", "Alle anzeigen"), color = Accent, fontSize = 13.sp, modifier = Modifier.clickable { showAllMedia = true })
+                        Text(tr("Общие медиа", "Shared media", "Geteilte Medien"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        if (media.size > 8) Text(tr("Показать все", "Show all", "Alle anzeigen"), color = Accent, fontSize = 11.sp, modifier = Modifier.clickable { showAllMedia = true })
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -169,8 +177,8 @@ fun ContactProfileDialog(friendId: String, onClose: () -> Unit, onCall: () -> Un
             Box(Modifier.fillMaxSize().background(BgTop)) {
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(8.dp)) {
-                        Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { showAllMedia = false }.padding(horizontal = 12.dp))
-                        Text(tr("Общие медиа", "Shared media", "Geteilte Medien"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.padding(top = 6.dp))
+                        Text("‹", color = Accent, fontSize = 27.sp, modifier = Modifier.clickable { showAllMedia = false }.padding(horizontal = 12.dp))
+                        Text(tr("Общие медиа", "Shared media", "Geteilte Medien"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                     LazyVerticalGrid(columns = GridCells.Fixed(3), contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)) {
                         items(media.reversed()) { m ->
@@ -189,7 +197,7 @@ fun ContactProfileDialog(friendId: String, onClose: () -> Unit, onCall: () -> Un
 }
 
 @Composable
-private fun ProfilePill(icon: String, label: String, enabled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+private fun ProfilePill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
@@ -198,7 +206,7 @@ private fun ProfilePill(icon: String, label: String, enabled: Boolean, danger: B
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(icon, fontSize = 20.sp)
+        Icon(icon, contentDescription = null, tint = if (danger) ErrorRed else Txt, modifier = Modifier.size(18.dp))
         Spacer(Modifier.height(4.dp))
         Text(label, color = if (danger) ErrorRed else TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

@@ -45,10 +45,10 @@ struct AuthHeader: View {
     var body: some View {
         VStack(spacing: 6) {
             Text("neirox")
-                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(Theme.accentGradient)
             Text(subtitle)
-                .font(.system(size: 15))
+                .font(.system(size: 13))
                 .foregroundColor(Theme.textSecondary)
         }
         .padding(.bottom, 20)
@@ -74,17 +74,17 @@ struct LoginView: View {
                 NeonButton(title: tr("Войти", "Sign in", "Anmelden"), busy: busy) { submit() }
                     .padding(.top, 4)
                 Button(tr("Забыли пароль?", "Forgot password?", "Passwort vergessen?")) { go(2) }
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .foregroundColor(Theme.textSecondary)
                 Button(tr("Создать аккаунт", "Create account", "Konto erstellen")) { go(1) }
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Theme.accent)
                 Spacer(minLength: 30)
                 Text("neirox \(Config.appVersion)")
                     .font(.system(size: 12))
                     .foregroundColor(Theme.textSecondary.opacity(0.6))
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 25)
         }
     }
 
@@ -125,17 +125,17 @@ struct RegisterView: View {
                     Text(tr("Почта нужна, чтобы восстановить пароль. Без неё забытый пароль вернуть не получится. Привязать почту можно и позже в настройках, но изменить её после привязки нельзя.",
                             "Email is used to recover your password. Without it a forgotten password cannot be restored. You can bind it later in settings, but it cannot be changed afterwards.",
                             "Die E-Mail dient zur Passwort-Wiederherstellung. Ohne sie kann ein vergessenes Passwort nicht zurückgesetzt werden. Du kannst sie später in den Einstellungen hinzufügen, aber nicht mehr ändern."))
-                        .font(.system(size: 13))
+                        .font(.system(size: 11))
                         .foregroundColor(Color(hex: 0xFFC857))
                 }
                 ErrorText(text: error)
                 NeonButton(title: tr("Создать аккаунт", "Create account", "Konto erstellen"), busy: busy) { submit() }
                 Button(tr("Уже есть аккаунт? Войти", "Have an account? Sign in", "Schon ein Konto? Anmelden")) { go(0) }
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Theme.accent)
                 Spacer(minLength: 30)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 25)
         }
     }
 
@@ -178,7 +178,7 @@ struct ForgotView: View {
                         Text(tr("Пароль изменён. Теперь можно войти с новым паролем.",
                                 "Password changed. You can sign in with the new password now.",
                                 "Passwort geändert. Du kannst dich jetzt mit dem neuen Passwort anmelden."))
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
                             .foregroundColor(Theme.text)
                     }
                 } else if step == 0 {
@@ -187,7 +187,7 @@ struct ForgotView: View {
                         Text(tr("Код придёт на почту, привязанную к аккаунту. Если почта не привязана, пароль восстановить нельзя.",
                                 "The code is sent to the email bound to the account. If none is bound, the password cannot be recovered.",
                                 "Der Code geht an die verknüpfte E-Mail. Ist keine verknüpft, kann das Passwort nicht wiederhergestellt werden."))
-                            .font(.system(size: 13))
+                            .font(.system(size: 11))
                             .foregroundColor(Theme.textSecondary)
                     }
                     ErrorText(text: error)
@@ -197,7 +197,7 @@ struct ForgotView: View {
                         Text(tr("Если к нику привязана почта, мы отправили на неё 6-значный код. Он действует 15 минут. Проверь и папку «Спам».",
                                 "If an email is bound to this nick, a 6-digit code was sent. It is valid for 15 minutes. Check Spam too.",
                                 "Ist eine E-Mail verknüpft, wurde ein 6-stelliger Code gesendet. Er gilt 15 Minuten. Prüfe auch den Spam-Ordner."))
-                            .font(.system(size: 13))
+                            .font(.system(size: 11))
                             .foregroundColor(Theme.textSecondary)
                     }
                     GlassField(placeholder: tr("Код из письма", "Code from email", "Code aus der E-Mail"), text: $code)
@@ -205,15 +205,15 @@ struct ForgotView: View {
                     ErrorText(text: error)
                     NeonButton(title: tr("Сменить пароль", "Change password", "Passwort ändern"), busy: busy) { confirm() }
                     Button(tr("Отправить код ещё раз", "Send code again", "Code erneut senden")) { sendCode() }
-                        .font(.system(size: 14))
+                        .font(.system(size: 12))
                         .foregroundColor(Theme.textSecondary)
                 }
                 Button(tr("Назад ко входу", "Back to sign in", "Zurück zur Anmeldung")) { go(0) }
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Theme.accent)
                     .padding(.top, 8)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 25)
         }
     }
 

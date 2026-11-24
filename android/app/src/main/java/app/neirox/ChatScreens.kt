@@ -50,8 +50,35 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Forward
+import androidx.compose.material.icons.filled.Reply
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,15 +136,15 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
-                        Modifier.size(48.dp).clip(CircleShape)
+                        Modifier.size(42.dp).clip(CircleShape)
                             .background(Brush.linearGradient(listOf(Accent, Accent2))),
                         contentAlignment = Alignment.Center
-                    ) { Text("✨", fontSize = 22.sp) }
+                    ) { Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp)) }
                     Column(Modifier.padding(start = 14.dp)) {
-                        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                         Text(
                             tr("Вопросы и картинки от ИИ", "Questions and images from AI", "Fragen und Bilder von der KI"),
-                            color = TextSecondary, fontSize = 13.sp
+                            color = TextSecondary, fontSize = 11.sp
                         )
                     }
                 }
@@ -125,25 +152,34 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
             item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
                     Text(
-                        "＋ " + tr("Группа / канал", "Group / channel", "Gruppe / Kanal"), color = Accent, fontSize = 14.sp,
+                        "＋ " + tr("Группа / канал", "Group / channel", "Gruppe / Kanal"), color = Accent, fontSize = 12.sp,
                         modifier = Modifier.clickable { showCreate = true }.padding(vertical = 8.dp, horizontal = 4.dp)
                     )
-                    Text(
-                        "🔍 " + tr("Найти канал", "Find channel", "Kanal suchen"), color = Accent, fontSize = 14.sp,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(start = 16.dp).clickable { showFind = true }.padding(vertical = 8.dp, horizontal = 4.dp)
-                    )
+                    ) {
+                        Icon(Icons.Filled.Search, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp))
+                        Text(tr("Найти канал", "Find channel", "Kanal suchen"), color = Accent, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                    }
                 }
             }
             item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 0.dp)) {
-                    Text(
-                        "🔎 " + tr("Поиск сообщений", "Search messages", "Nachrichten suchen"), color = Accent, fontSize = 14.sp,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { showSearch = true }.padding(vertical = 8.dp, horizontal = 4.dp)
-                    )
-                    Text(
-                        "🔑 " + tr("Войти по коду", "Join by code", "Per Code"), color = Accent, fontSize = 14.sp,
+                    ) {
+                        Icon(Icons.Filled.Search, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp))
+                        Text(tr("Поиск сообщений", "Search messages", "Nachrichten suchen"), color = Accent, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(start = 16.dp).clickable { showCode = true }.padding(vertical = 8.dp, horizontal = 4.dp)
-                    )
+                    ) {
+                        Icon(Icons.Filled.VpnKey, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp))
+                        Text(tr("Войти по коду", "Join by code", "Per Code"), color = Accent, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                    }
                 }
             }
             items(sorted, key = { it.key }) { r ->
@@ -157,14 +193,35 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                     else if (r.chat != null) Avatar(r.chat.asProfile(), 48.dp)
                     Column(Modifier.padding(start = 14.dp).weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text((if (Store.isPinned(r.key)) "📌 " else "") + r.title + (if (Store.isMuted(r.key)) " 🔕" else ""), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (Store.isPinned(r.key)) {
+                                Icon(Icons.Filled.PushPin, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(11.dp).padding(end = 3.dp))
+                            }
+                            Text(r.title, color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                             if (r.profile != null) {
                                 val lb = Store.levelBadge(r.key)
                                 if (lb.isNotEmpty()) Text(lb, color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
                             }
+                            if (Store.isMuted(r.key)) {
+                                Icon(Icons.Filled.NotificationsOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(11.dp).padding(start = 3.dp))
+                            }
                         }
                         val who = if (r.chat != null && last != null && last.sender != Store.myId) Store.dname(last.sender) + ": " else ""
-                        Text(who + previewOf(last), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val icon = previewIconOf(last)
+                            if (icon != null) {
+                                Icon(
+                                    when (icon) {
+                                        "photo" -> Icons.Filled.Photo
+                                        "video" -> Icons.Filled.Videocam
+                                        "mic" -> Icons.Filled.Mic
+                                        "tag" -> Icons.Filled.LocalOffer
+                                        else -> Icons.Filled.AttachFile
+                                    },
+                                    contentDescription = null, tint = TextSecondary, modifier = Modifier.size(10.dp).padding(end = 3.dp)
+                                )
+                            }
+                            Text(who + previewOf(last), color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     DropdownMenu(expanded = ctxKey == r.key, onDismissRequest = { ctxKey = null }) {
                         DropdownMenuItem(
@@ -190,7 +247,7 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                         tr("Добавь друзей во вкладке «Друзья», и здесь появятся чаты.",
                             "Add friends in the Friends tab and chats will appear here.",
                             "Füge Freunde im Tab „Freunde“ hinzu, dann erscheinen hier Chats."),
-                        color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(24.dp)
+                        color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(21.dp)
                     )
                 }
             }
@@ -563,23 +620,23 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     Column(Modifier.fillMaxSize().imePadding()) {
         if (selected.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("✕", color = Txt, fontSize = 22.sp, modifier = Modifier.clickable { selected = emptySet() }.padding(12.dp))
-                Text("${selected.size}", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Close, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { selected = emptySet() }.padding(12.dp))
+                Text("${selected.size}", color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
                 val one = selMsgs.singleOrNull()
                 if (one != null && one.sender == Store.myId && one.kind == "text") {
-                    Text("✏️", fontSize = 22.sp, modifier = Modifier.clickable {
+                    Icon(Icons.Filled.Edit, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable {
                         editing = one
                         input = one.body ?: ""
                         selected = emptySet()
                     }.padding(12.dp))
                 }
-                Text("📋", fontSize = 22.sp, modifier = Modifier.clickable { copySelected() }.padding(12.dp))
-                Text("↪️", fontSize = 22.sp, modifier = Modifier.clickable { showForward = true }.padding(12.dp))
-                Text("🗑", fontSize = 22.sp, modifier = Modifier.clickable { showDelete = true }.padding(12.dp))
+                Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { copySelected() }.padding(12.dp))
+                Icon(Icons.Filled.Forward, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { showForward = true }.padding(12.dp))
+                Icon(Icons.Filled.Delete, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { showDelete = true }.padding(12.dp))
             }
         } else {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
+                Text("‹", color = Accent, fontSize = 27.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
                 if (chat != null) Avatar(chat.asProfile(), 38.dp) else Avatar(friend, 38.dp)
                 val typers = Store.typingIn(friendId)
                 val sub = when {
@@ -590,15 +647,15 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 Column(
                     Modifier.padding(start = 10.dp).weight(1f).clickable { if (chat != null) showInfo = true else showProfile = true }
                 ) {
-                    Text(chat?.title ?: Store.dname(friend), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(chat?.title ?: Store.dname(friend), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(sub, color = if (typers.isNotEmpty() || (chat == null && Store.isOnline(friend))) Accent else TextSecondary, fontSize = 12.sp)
                 }
                 if (chat == null && !Store.iBlocked(friendId)) {
-                    Text("🎥", fontSize = 22.sp, modifier = Modifier.clickable { videoCallClick() }.padding(8.dp))
-                    Text("📞", fontSize = 22.sp, modifier = Modifier.clickable { callClick() }.padding(8.dp))
+                    Icon(Icons.Filled.Videocam, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { videoCallClick() }.padding(8.dp))
+                    Icon(Icons.Filled.Call, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { callClick() }.padding(8.dp))
                 }
                 Box {
-                    Text("⋮", color = Txt, fontSize = 24.sp, modifier = Modifier.clickable { hdrMenu = true }.padding(horizontal = 10.dp, vertical = 4.dp))
+                    Text("⋮", color = Txt, fontSize = 19.sp, modifier = Modifier.clickable { hdrMenu = true }.padding(horizontal = 10.dp, vertical = 4.dp))
                     DropdownMenu(expanded = hdrMenu, onDismissRequest = { hdrMenu = false }) {
                         DropdownMenuItem(text = { Text(tr("Поиск в чате", "Search in chat", "Im Chat suchen")) }, onClick = { hdrMenu = false; showSearch = true })
                         if (chat == null) {
@@ -626,12 +683,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 Modifier.fillMaxWidth().background(CardBg).clickable { Store.jumpTo = pm.id }.padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("📌", fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
+                Icon(Icons.Filled.PushPin, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(end = 8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(Store.dname(pm.sender), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text(previewOf(pm), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(previewOf(pm), color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                if (isAdm) Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable {
+                if (isAdm) Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable {
                     scope.launch { try { Store.pinMessage(chat!!.id, null) } catch (e: Exception) { } }
                 }.padding(6.dp))
             }
@@ -699,11 +756,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 Modifier.fillMaxWidth().background(CardBg).padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(Icons.Filled.Reply, contentDescription = null, tint = Accent, modifier = Modifier.size(14.dp).padding(end = 6.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("↩ " + (if (rt.sender == Store.myId) tr("Вы", "You", "Du") else Store.dname(rt.sender)), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text(previewOf(rt), color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (rt.sender == Store.myId) tr("Вы", "You", "Du") else Store.dname(rt.sender), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(previewOf(rt), color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable { replyTo = null }.padding(6.dp))
+                Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable { replyTo = null }.padding(6.dp))
             }
         }
         if (editing != null) {
@@ -711,8 +769,9 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 Modifier.fillMaxWidth().background(CardBg).padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("✏️ " + tr("Редактирование", "Editing", "Bearbeiten"), color = Accent, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Text("✕", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.clickable { editing = null; input = "" }.padding(6.dp))
+                Icon(Icons.Filled.Edit, contentDescription = null, tint = Accent, modifier = Modifier.size(13.dp).padding(end = 4.dp))
+                Text(tr("Редактирование", "Editing", "Bearbeiten"), color = Accent, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable { editing = null; input = "" }.padding(6.dp))
             }
         }
 
@@ -745,10 +804,10 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("🔴", fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
-                Text(fmtSecs(recSecs), color = Txt, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                Text("🗑", fontSize = 24.sp, modifier = Modifier.clickable { cancelRecording() }.padding(10.dp))
-                Text("➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { finishRecording() }.padding(10.dp))
+                Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = Color.Red, modifier = Modifier.size(14.dp).padding(horizontal = 12.dp))
+                Text(fmtSecs(recSecs), color = Txt, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Delete, contentDescription = null, tint = Txt, modifier = Modifier.size(19.dp).clickable { cancelRecording() }.padding(10.dp))
+                Icon(Icons.Filled.Send, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp).clickable { finishRecording() }.padding(10.dp))
             }
         } else if (chat == null && Store.iBlocked(friendId)) {
             Row(
@@ -757,7 +816,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             ) {
                 Text(
                     tr("Пользователь заблокирован", "User is blocked", "Nutzer ist blockiert") + " · " + tr("Разблокировать", "Unblock", "Entsperren"),
-                    color = Accent, fontSize = 14.sp,
+                    color = Accent, fontSize = 12.sp,
                     modifier = Modifier.clickable { scope.launch { try { Store.unblockUser(friendId) } catch (e: Exception) { } } }.padding(8.dp)
                 )
             }
@@ -768,11 +827,11 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             ) {
                 if (Store.myMember(friendId) == null) {
                     Text(
-                        tr("Подписаться", "Subscribe", "Abonnieren"), color = Accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                        tr("Подписаться", "Subscribe", "Abonnieren"), color = Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { scope.launch { try { Store.joinChat(Store.cidOf(friendId)) } catch (e: Exception) { error = friendlyError(e.message ?: "") } } }.padding(8.dp)
                     )
                 } else {
-                    Text(tr("Писать в канал может только владелец", "Only the owner can post", "Nur der Besitzer kann posten"), color = TextSecondary, fontSize = 13.sp)
+                    Text(tr("Писать в канал может только владелец", "Only the owner can post", "Nur der Besitzer kann posten"), color = TextSecondary, fontSize = 11.sp)
                 }
             }
         } else {
@@ -782,7 +841,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             ) {
                 if (editing == null) {
                     Box {
-                        Text("📎", fontSize = 26.sp, modifier = Modifier.clickable { menu = true }.padding(8.dp))
+                        Icon(Icons.Filled.AttachFile, contentDescription = null, tint = Txt, modifier = Modifier.size(21.dp).clickable { menu = true }.padding(8.dp))
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
                                 text = { Text(tr("Фото и видео", "Photos and videos", "Fotos und Videos")) },
@@ -793,16 +852,16 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                         }
                     }
                 }
-                Text("😊", fontSize = 26.sp, modifier = Modifier.clickable { showEmoji = !showEmoji; if (showEmoji) showStk = false }.padding(6.dp))
-                if (editing == null) Text("⭐", fontSize = 24.sp, modifier = Modifier.clickable { showStk = !showStk; if (showStk) showEmoji = false }.padding(4.dp))
+                Icon(Icons.Filled.EmojiEmotions, contentDescription = null, tint = Txt, modifier = Modifier.size(21.dp).clickable { showEmoji = !showEmoji; if (showEmoji) showStk = false }.padding(6.dp))
+                if (editing == null) Icon(Icons.Filled.Star, contentDescription = null, tint = Txt, modifier = Modifier.size(19.dp).clickable { showStk = !showStk; if (showStk) showEmoji = false }.padding(4.dp))
                 NxField(
                     input, { input = it }, tr("Сообщение", "Message", "Nachricht"),
                     modifier = Modifier.weight(1f), singleLine = false
                 )
                 if (editing == null && input.isBlank() && pending.isEmpty()) {
-                    Text("🎤", fontSize = 26.sp, modifier = Modifier.clickable { micClick() }.padding(10.dp))
+                    Icon(Icons.Filled.Mic, contentDescription = null, tint = Txt, modifier = Modifier.size(21.dp).clickable { micClick() }.padding(10.dp))
                 } else {
-                    Text(if (editing != null) "✓" else "➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { sendText() }.padding(10.dp))
+                    Icon(if (editing != null) Icons.Filled.Check else Icons.Filled.Send, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp).clickable { sendText() }.padding(10.dp))
                 }
             }
         }
@@ -829,16 +888,16 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                         Modifier.fillMaxWidth().clickable { forwardToAI() }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("✨", fontSize = 26.sp, modifier = Modifier.padding(end = 12.dp))
-                        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), fontSize = 16.sp)
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Accent, modifier = Modifier.size(21.dp).padding(end = 12.dp))
+                        Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), fontSize = 14.sp)
                     }
                     for (c in Store.chats.filter { Store.canPost("c:" + it.id) }) {
                         Row(
                             Modifier.fillMaxWidth().clickable { forwardTo("c:" + c.id) }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(if (c.kind == "channel") "📢" else "👥", fontSize = 26.sp, modifier = Modifier.padding(end = 12.dp))
-                            Text(c.title, fontSize = 16.sp)
+                            Icon(if (c.kind == "channel") Icons.Filled.Campaign else Icons.Filled.Group, contentDescription = null, tint = Accent, modifier = Modifier.size(21.dp).padding(end = 12.dp))
+                            Text(c.title, fontSize = 14.sp)
                         }
                     }
                     for (p in friends) {
@@ -847,7 +906,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Avatar(p, 36.dp)
-                            Text(Store.dname(p), fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
+                            Text(Store.dname(p), fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp))
                         }
                     }
                 }
@@ -886,7 +945,7 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             title = { Text(tr("Имя контакта", "Contact name", "Kontaktname")) },
             text = {
                 Column {
-                    Text(tr("Ник: ", "Nick: ", "Nick: ") + (friend?.nick ?: "") + ". " + tr("Видно только вам.", "Only you can see it.", "Nur für dich sichtbar."), color = TextSecondary, fontSize = 13.sp)
+                    Text(tr("Ник: ", "Nick: ", "Nick: ") + (friend?.nick ?: "") + ". " + tr("Видно только вам.", "Only you can see it.", "Nur für dich sichtbar."), color = TextSecondary, fontSize = 11.sp)
                     NxField(nameText, { if (it.length <= 40) nameText = it }, tr("Например: папа, начальник", "E.g. dad, boss", "z. B. Papa, Chef"))
                 }
             },
@@ -1006,8 +1065,8 @@ fun MessageBubble(
                 )
             } else if (m.kind == "file" && path != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("📎", fontSize = 22.sp)
-                    Text(m.fileName ?: tr("Файл", "File", "Datei"), color = textColor, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
+                    Icon(Icons.Filled.AttachFile, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
+                    Text(m.fileName ?: tr("Файл", "File", "Datei"), color = textColor, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
                 }
             } else if (m.kind == "album") {
                 AlbumContent(
@@ -1024,19 +1083,23 @@ fun MessageBubble(
                     }
                 )
             } else {
-                if (m.kind == "text" && isBigEmoji(m.body)) Text(m.body ?: "", fontSize = 48.sp)
-                else Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 16.sp)
+                if (m.kind == "text" && isBigEmoji(m.body)) Text(m.body ?: "", fontSize = 38.sp)
+                else Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 14.sp)
             }
-            Text(
-                (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt) + if (mine && m.readAt != null) " ✓✓" else "",
-                color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.End)
-            )
+            Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt),
+                    color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
+                )
+                if (mine && m.readAt != null) {
+                    Icon(Icons.Filled.DoneAll, contentDescription = null, tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(12.dp).padding(start = 3.dp))
+                }
+            }
             if (reactions.isNotEmpty()) {
                 Row(Modifier.padding(top = 4.dp)) {
                     for ((e, list) in reactions.groupBy { it.emoji }) {
                         Text(
-                            e + (if (list.size > 1) " ${list.size}" else ""), color = textColor, fontSize = 13.sp,
+                            e + (if (list.size > 1) " ${list.size}" else ""), color = textColor, fontSize = 11.sp,
                             modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(10.dp))
                                 .background(Color.Black.copy(alpha = 0.2f)).clickable { onReact(e) }.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
@@ -1046,7 +1109,7 @@ fun MessageBubble(
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 Row(Modifier.padding(horizontal = 8.dp)) {
                     for (e in listOf("👍", "❤️", "😂", "😮", "😢", "🔥")) {
-                        Text(e, fontSize = 22.sp, modifier = Modifier.clickable { menuOpen = false; onReact(e) }.padding(6.dp))
+                        Text(e, fontSize = 18.sp, modifier = Modifier.clickable { menuOpen = false; onReact(e) }.padding(6.dp))
                     }
                 }
                 DropdownMenuItem(text = { Text(tr("Ответить", "Reply", "Antworten")) }, onClick = { menuOpen = false; onReply() })
@@ -1121,7 +1184,7 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
                 if (asImage) {
                     val data = Api.aiImage(t)
                     val bmp = withContext(Dispatchers.IO) { decodeBitmap(data) }
-                    msgs.add(AiMsg("assistant", "🖼", bmp))
+                    msgs.add(AiMsg("assistant", tr("[Изображение]", "[Image]", "[Bild]"), bmp))
                 } else {
                     msgs.add(AiMsg("assistant", Api.aiText(history)))
                 }
@@ -1139,9 +1202,9 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", color = Accent, fontSize = 34.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
-            Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.weight(1f))
-            Text("🗑", fontSize = 22.sp, modifier = Modifier.clickable { msgs.clear(); save() }.padding(10.dp))
+            Text("‹", color = Accent, fontSize = 27.sp, modifier = Modifier.clickable { onBack() }.padding(horizontal = 12.dp))
+            Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = Txt, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.Delete, contentDescription = null, tint = Txt, modifier = Modifier.size(18.dp).clickable { msgs.clear(); save() }.padding(10.dp))
         }
         LazyColumn(
             state = listState,
@@ -1155,7 +1218,7 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
                         tr("Задай вопрос или переключись на «Картинка» и опиши, что нарисовать.",
                             "Ask a question, or switch to “Image” and describe what to draw.",
                             "Stelle eine Frage oder wechsle zu „Bild“ und beschreibe, was gezeichnet werden soll."),
-                        color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 30.dp)
+                        color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 30.dp)
                     )
                 }
             }
@@ -1180,13 +1243,13 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
                         if (m.image != null) {
                             Image(m.image.asImageBitmap(), null, Modifier.widthIn(max = 260.dp), contentScale = ContentScale.Fit)
                         } else {
-                            Text(linkified(m.text, if (mine) Color.White else Accent), color = if (mine) Color.White else Txt, fontSize = 16.sp)
+                            Text(linkified(m.text, if (mine) Color.White else Accent), color = if (mine) Color.White else Txt, fontSize = 14.sp)
                         }
                     }
                 }
             }
             if (busy) {
-                item { CircularProgressIndicator(Modifier.size(22.dp), color = Accent, strokeWidth = 2.dp) }
+                item { CircularProgressIndicator(Modifier.size(19.dp), color = Accent, strokeWidth = 2.dp) }
             }
         }
         if (error.isNotEmpty()) Box(Modifier.padding(horizontal = 14.dp)) { NxError(error) }
@@ -1199,13 +1262,13 @@ fun AIChatScreen(onBack: () -> Unit, initial: String = "") {
             Modifier.fillMaxWidth().background(BgBottom).navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("😊", fontSize = 26.sp, modifier = Modifier.clickable { showEmoji = !showEmoji }.padding(6.dp))
+            Icon(Icons.Filled.EmojiEmotions, contentDescription = null, tint = Txt, modifier = Modifier.size(21.dp).clickable { showEmoji = !showEmoji }.padding(6.dp))
             NxField(
                 input, { input = it },
                 if (imageMode) tr("Что нарисовать?", "What to draw?", "Was zeichnen?") else tr("Сообщение", "Message", "Nachricht"),
                 modifier = Modifier.weight(1f), singleLine = false
             )
-            Text("➤", color = Accent, fontSize = 28.sp, modifier = Modifier.clickable { send() }.padding(10.dp))
+            Icon(Icons.Filled.Send, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp).clickable { send() }.padding(10.dp))
         }
     }
 }

@@ -53,14 +53,14 @@ fun FriendsTab() {
 
     @Composable
     fun Section(title: String) {
-        Text(title, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+        Text(title, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
     }
 
     @Composable
     fun PersonRow(p: Profile?, content: @Composable () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(p, 44.dp)
-            Text(Store.dname(p) + (if (p != null && Store.alias.containsKey(p.id)) " (${p.nick})" else ""), color = Txt, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp).weight(1f))
+            Text(Store.dname(p) + (if (p != null && Store.alias.containsKey(p.id)) " (${p.nick})" else ""), color = Txt, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 12.dp).weight(1f))
             content()
         }
     }
@@ -77,7 +77,7 @@ fun FriendsTab() {
             if (query.trim().length >= 2) {
                 Section(tr("Результаты", "Results", "Ergebnisse"))
                 if (results.isEmpty()) {
-                    Text(tr("Никого не найдено", "Nobody found", "Niemand gefunden"), color = TextSecondary, fontSize = 14.sp)
+                    Text(tr("Никого не найдено", "Nobody found", "Niemand gefunden"), color = TextSecondary, fontSize = 12.sp)
                 }
                 for (p in results) {
                     val f = Store.friendship(p.id)
@@ -85,7 +85,7 @@ fun FriendsTab() {
                         if (f != null) {
                             Text(
                                 if (f.status == "accepted") tr("Друг", "Friend", "Freund") else tr("Заявка", "Pending", "Anfrage"),
-                                color = TextSecondary, fontSize = 13.sp
+                                color = TextSecondary, fontSize = 11.sp
                             )
                         } else {
                             NxSmallButton(tr("Добавить", "Add", "Hinzufügen")) { run { Store.sendRequest(p.id) } }
@@ -112,7 +112,7 @@ fun FriendsTab() {
                     tr("Пока нет друзей. Найди человека по нику и отправь заявку.",
                         "No friends yet. Find someone by nick and send a request.",
                         "Noch keine Freunde. Suche jemanden per Nick und sende eine Anfrage."),
-                    color = TextSecondary, fontSize = 14.sp
+                    color = TextSecondary, fontSize = 12.sp
                 )
             }
             for (id in Store.friendIds) {

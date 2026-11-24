@@ -23,7 +23,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.FlipCameraAndroid
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -529,33 +539,33 @@ fun CallScreen() {
             }
         }
         Column(
-            Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),
+            Modifier.fillMaxSize().statusBarsPadding().padding(21.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(if (rv != null) 20.dp else 80.dp))
             if (rv == null) Avatar(peer, 120.dp)
             Spacer(Modifier.height(20.dp))
-            Text(Store.dname(peer), color = Txt, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            Text(Store.dname(peer), color = Txt, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            Text(status, color = TextSecondary, fontSize = 17.sp)
+            Text(status, color = TextSecondary, fontSize = 15.sp)
             Box(Modifier.weight(1f))
             if (st == CallState.INCOMING) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    CallBtn("📵", Color(0xFFE5484D)) { Calls.decline() }
-                    CallBtn("📞", Color(0xFF30A46C)) {
+                    CallBtn(Icons.Filled.CallEnd, Color(0xFFE5484D)) { Calls.decline() }
+                    CallBtn(Icons.Filled.Call, Color(0xFF30A46C)) {
                         val need = if (Calls.video) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA) else arrayOf(Manifest.permission.RECORD_AUDIO)
                         if (Calls.hasMic(ctx) && (!Calls.video || Calls.hasCam(ctx))) Calls.accept() else perm.launch(need)
                     }
                 }
             } else {
                 Row(Modifier.fillMaxWidth().padding(bottom = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    CallBtn(if (Calls.muted) "🔇" else "🎤", if (Calls.muted) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleMute() }
-                    CallBtn("📵", Color(0xFFE5484D)) { Calls.hangUp() }
+                    CallBtn(if (Calls.muted) Icons.Filled.MicOff else Icons.Filled.Mic, if (Calls.muted) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleMute() }
+                    CallBtn(Icons.Filled.CallEnd, Color(0xFFE5484D)) { Calls.hangUp() }
                     if (Calls.video) {
-                        CallBtn(if (Calls.camOff) "🚫" else "📷", if (Calls.camOff) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleCam() }
-                        CallBtn("🔄", Color.White.copy(alpha = 0.18f)) { Calls.switchCam() }
+                        CallBtn(if (Calls.camOff) Icons.Filled.VideocamOff else Icons.Filled.Videocam, if (Calls.camOff) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleCam() }
+                        CallBtn(Icons.Filled.FlipCameraAndroid, Color.White.copy(alpha = 0.18f)) { Calls.switchCam() }
                     }
-                    CallBtn("🔊", if (Calls.speaker) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleSpeaker() }
+                    CallBtn(Icons.Filled.VolumeUp, if (Calls.speaker) Accent else Color.White.copy(alpha = 0.18f)) { Calls.toggleSpeaker() }
                 }
             }
         }
@@ -563,11 +573,11 @@ fun CallScreen() {
 }
 
 @Composable
-private fun CallBtn(icon: String, bg: Color, onClick: () -> Unit) {
+private fun CallBtn(icon: androidx.compose.ui.graphics.vector.ImageVector, bg: Color, onClick: () -> Unit) {
     Box(
         Modifier.size(70.dp).clip(CircleShape).background(bg).clickable { onClick() },
         contentAlignment = Alignment.Center
-    ) { Text(icon, fontSize = 28.sp) }
+    ) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp)) }
 }
 
 @Composable

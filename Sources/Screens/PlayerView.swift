@@ -232,7 +232,7 @@ struct PlayerView: View {
                         HStack(spacing: 8) {
                             if importing { ProgressView() }
                             Text(importing ? tr("Копирую файлы…", "Copying files…", "Dateien werden kopiert …") : importMsg)
-                                .font(.system(size: 13))
+                                .font(.system(size: 11))
                                 .foregroundColor(Theme.textSecondary)
                         }
                         .padding(.top, 8)
@@ -243,7 +243,7 @@ struct PlayerView: View {
                                 Text(tr("Добавь MP3- или MP4-файлы с телефона. Они сохранятся в приложении и не пропадут после перезапуска.",
                                         "Add MP3 or MP4 files from your phone. They are stored in the app and stay after restart.",
                                         "Füge MP3- oder MP4-Dateien vom Handy hinzu. Sie bleiben in der App gespeichert."))
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 12))
                                     .foregroundColor(Theme.textSecondary)
                                     .multilineTextAlignment(.center)
                                     .padding(.top, 30)
@@ -256,7 +256,7 @@ struct PlayerView: View {
                                                 .foregroundColor(pl.current == t ? Theme.accent : Theme.textSecondary)
                                                 .frame(width: 24)
                                             Text(t.title)
-                                                .font(.system(size: 15, weight: pl.current == t ? .semibold : .regular))
+                                                .font(.system(size: 13, weight: pl.current == t ? .semibold : .regular))
                                                 .foregroundColor(Theme.text)
                                                 .lineLimit(1)
                                             Spacer()
@@ -276,7 +276,7 @@ struct PlayerView: View {
 
                     VStack(spacing: 8) {
                         Text(pl.current?.title ?? tr("Ничего не играет", "Nothing playing", "Nichts läuft"))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(Theme.text)
                             .lineLimit(1)
                         Slider(value: Binding(get: { pl.position }, set: { pl.seek($0) }),
@@ -288,12 +288,12 @@ struct PlayerView: View {
                             Text(fmt(pl.duration)).font(.system(size: 11)).foregroundColor(Theme.textSecondary)
                         }
                         HStack(spacing: 34) {
-                            Button { pl.prev() } label: { Image(systemName: "backward.fill").font(.system(size: 24)) }
+                            Button { pl.prev() } label: { Image(systemName: "backward.fill").font(.system(size: 19)) }
                             Button { pl.toggle() } label: {
                                 Image(systemName: pl.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                    .font(.system(size: 52))
+                                    .font(.system(size: 42))
                             }
-                            Button { pl.next() } label: { Image(systemName: "forward.fill").font(.system(size: 24)) }
+                            Button { pl.next() } label: { Image(systemName: "forward.fill").font(.system(size: 19)) }
                         }
                         .foregroundColor(Theme.accent)
                     }

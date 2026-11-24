@@ -13,9 +13,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,11 +67,11 @@ fun NxHeader(subtitle: String) {
             "neirox",
             style = TextStyle(
                 brush = Brush.horizontalGradient(listOf(Accent, Accent2)),
-                fontSize = 40.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.Bold
             )
         )
-        Text(subtitle, color = TextSecondary, fontSize = 15.sp)
+        Text(subtitle, color = TextSecondary, fontSize = 13.sp)
     }
 }
 
@@ -96,7 +99,7 @@ fun NxField(
             keyboardType = if (secret) KeyboardType.Password else keyboard
         ),
         trailingIcon = if (clearable && value.isNotEmpty()) {
-            { Text("✕", color = TextSecondary, modifier = Modifier.clickable { onChange("") }.padding(10.dp)) }
+            { Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable { onChange("") }.padding(10.dp)) }
         } else null,
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Txt,
@@ -115,16 +118,16 @@ fun NxButton(title: String, busy: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(46.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Brush.horizontalGradient(listOf(Accent, Accent2)))
             .clickable(enabled = !busy, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (busy) {
-            CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.size(19.dp), color = Color.White, strokeWidth = 2.dp)
         } else {
-            Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
     }
 }
@@ -140,7 +143,7 @@ fun NxSmallButton(title: String, filled: Boolean = true, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(title, color = if (filled) Color.White else Txt, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(title, color = if (filled) Color.White else Txt, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -153,14 +156,14 @@ fun NxCard(text: String, color: Color = TextSecondary) {
             .background(CardBg)
             .padding(14.dp)
     ) {
-        Text(text, color = color, fontSize = 13.sp)
+        Text(text, color = color, fontSize = 11.sp)
     }
 }
 
 @Composable
 fun NxError(text: String) {
     if (text.isNotEmpty()) {
-        Text(text, color = ErrorRed, fontSize = 14.sp, modifier = Modifier.fillMaxWidth())
+        Text(text, color = ErrorRed, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -169,7 +172,7 @@ fun NxLink(title: String, onClick: () -> Unit) {
     Text(
         title,
         color = Accent,
-        fontSize = 15.sp,
+        fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -182,7 +185,7 @@ fun ScreenTitle(text: String) {
     Text(
         text,
         color = Txt,
-        fontSize = 28.sp,
+        fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 10.dp)
     )

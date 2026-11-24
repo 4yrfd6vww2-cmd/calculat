@@ -30,14 +30,14 @@ struct CreateChatSheet: View {
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: picked.contains(p.id) ? "checkmark.circle.fill" : "circle")
-                                    Avatar(nick: p.nick, url: p.avatarUrl, size: 32)
+                                    Avatar(nick: p.nick, url: p.avatarUrl, size: 28)
                                     Text(store.dname(p))
                                 }
                             }
                         }
                     }
                 }
-                if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 13)) }
+                if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 11)) }
             }
             .navigationTitle(tr("Новый чат", "New chat", "Neuer Chat"))
             .navigationBarTitleDisplayMode(.inline)
@@ -86,7 +86,10 @@ struct FindChannelSheet: View {
                 ForEach(results) { c in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("📢 " + c.title)
+                            HStack(spacing: 6) {
+                                Image(systemName: "megaphone.fill").font(.system(size: 12)).foregroundColor(Theme.accent)
+                                Text(c.title)
+                            }
                             Text(subLine(c)).font(.system(size: 12)).foregroundColor(.secondary).lineLimit(2)
                         }
                         .contentShape(Rectangle())
@@ -144,12 +147,12 @@ struct ChatInfoSheet: View {
                     let mem = store.members.filter { $0.chatId == c.id }
                     Section {
                         HStack(spacing: 12) {
-                            Avatar(nick: c.title, url: c.avatarUrl, size: 56)
+                            Avatar(nick: c.title, url: c.avatarUrl, size: 49)
                             Text((c.kind == "channel" ? tr("Канал", "Channel", "Kanal") : tr("Группа", "Group", "Gruppe")) + " · \(mem.count)")
                                 .foregroundColor(.secondary)
                         }
                         if let d = c.description, !d.isEmpty, !editDesc {
-                            Text(d).font(.system(size: 14))
+                            Text(d).font(.system(size: 12))
                         }
                         if isAdmin {
                             if editDesc {
@@ -158,7 +161,9 @@ struct ChatInfoSheet: View {
                                     Task { try? await store.setDescription(c.id, descText); editDesc = false }
                                 }
                             } else {
-                                Button("✏️ " + tr("Описание", "Description", "Beschreibung")) { descText = c.description ?? ""; editDesc = true }
+                                Button { descText = c.description ?? ""; editDesc = true } label: {
+                                    Label(tr("Описание", "Description", "Beschreibung"), systemImage: "pencil")
+                                }
                             }
                         }
                         if let code = c.inviteCode, !code.isEmpty {
@@ -175,7 +180,7 @@ struct ChatInfoSheet: View {
                         }
                         if isAdmin {
                             PhotosPicker(selection: $avItem, matching: .images) {
-                                Text("🖼 " + tr("Сменить аватарку", "Change avatar", "Avatar ändern"))
+                                Label(tr("Сменить аватарку", "Change avatar", "Avatar ändern"), systemImage: "photo.fill")
                             }
                         }
                     }
@@ -187,15 +192,21 @@ struct ChatInfoSheet: View {
                             }
                             TextField(tr("Или ник", "Or nick", "Oder Nick"), text: $nick).autocapitalization(.none)
                             Button(tr("Добавить по нику", "Add by nick", "Per Nick hinzufügen")) { addByNick(c.id) }
-                            if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 13)) }
+                            if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 11)) }
                         }
                     }
                     if c.kind == "group" || isAdmin {
                         Section(tr("Участники", "Members", "Mitglieder")) {
                             ForEach(mem, id: \.userId) { m in
                                 HStack {
-                                    Text((m.userId == store.myId ? tr("Вы", "You", "Du") : store.dnameId(m.userId))
-                                         + (m.role == "owner" ? " 👑" : (m.role == "admin" ? " ★" : "")))
+                                    HStack(spacing: 4) {
+                                        Text(m.userId == store.myId ? tr("Вы", "You", "Du") : store.dnameId(m.userId))
+                                        if m.role == "owner" {
+                                            Image(systemName: "crown.fill").font(.system(size: 11)).foregroundColor(Theme.accent)
+                                        } else if m.role == "admin" {
+                                            Image(systemName: "star.fill").font(.system(size: 11)).foregroundColor(Theme.accent)
+                                        }
+                                    }
                                     Spacer()
                                     if isOwner && m.userId != store.myId {
                                         Button { Task { await store.setRole(c.id, m.userId, m.role == "admin" ? "member" : "admin") } } label: {
@@ -263,7 +274,7 @@ struct JoinCodeSheet: View {
                 TextField(tr("Код приглашения", "Invite code", "Einladungscode"), text: $code)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
-                if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 13)) }
+                if !error.isEmpty { Text(error).foregroundColor(.red).font(.system(size: 11)) }
             }
             .navigationTitle(tr("Войти по коду", "Join by code", "Per Code beitreten"))
             .navigationBarTitleDisplayMode(.inline)
@@ -326,7 +337,7 @@ struct SearchSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(titleOf(keyOf(m)) + " · " + timeFormatter.string(from: m.createdAt))
                                 .font(.system(size: 12)).foregroundColor(Theme.accent)
-                            Text(m.body ?? "").font(.system(size: 14)).lineLimit(2).foregroundColor(.primary)
+                            Text(m.body ?? "").font(.system(size: 12)).lineLimit(2).foregroundColor(.primary)
                         }
                     }
                 }

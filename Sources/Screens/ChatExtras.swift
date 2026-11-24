@@ -41,7 +41,7 @@ struct EmojiPanel: View {
             HStack(spacing: 2) {
                 ForEach(EMOJI_GROUPS.indices, id: \.self) { i in
                     Button { cat = i } label: {
-                        Text(EMOJI_GROUPS[i][0]).font(.system(size: 22)).padding(6)
+                        Text(EMOJI_GROUPS[i][0]).font(.system(size: 18)).padding(6)
                             .background(cat == i ? Theme.accent.opacity(0.25) : Color.clear)
                             .cornerRadius(8)
                     }
@@ -52,7 +52,7 @@ struct EmojiPanel: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 42))], spacing: 4) {
                     ForEach(EMOJI_GROUPS[cat], id: \.self) { e in
-                        Button { onPick(e) } label: { Text(e).font(.system(size: 28)) }
+                        Button { onPick(e) } label: { Text(e).font(.system(size: 22)) }
                     }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 4)
@@ -84,13 +84,13 @@ struct StickerPanel: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 62))], spacing: 6) {
                     PhotosPicker(selection: $addItem, matching: .images) {
-                        Text("＋").font(.system(size: 30)).foregroundColor(Theme.accent).frame(width: 58, height: 58)
+                        Text("＋").font(.system(size: 24)).foregroundColor(Theme.accent).frame(width: 51, height: 51)
                     }
                     ForEach(store.stickers) { s in
                         stickerCell(s)
                     }
                     ForEach(StickerPanel.builtin, id: \.self) { e in
-                        Button { onEmoji(e) } label: { Text(e).font(.system(size: 34)) }
+                        Button { onEmoji(e) } label: { Text(e).font(.system(size: 27)) }
                     }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 4)
@@ -106,7 +106,7 @@ struct StickerPanel: View {
 
     private func stickerCell(_ s: Sticker) -> some View {
         MediaImage(path: s.path)
-            .frame(width: 58, height: 58)
+            .frame(width: 51, height: 51)
             .onTapGesture { onOwn(s) }
             .contextMenu {
                 Button(role: .destructive) { Task { await store.deleteSticker(s.id) } } label: {
@@ -231,7 +231,7 @@ struct PendingTray: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                         Button { onRemove(p) } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 20))
+                                .font(.system(size: 18))
                                 .foregroundColor(.white)
                                 .shadow(color: .black.opacity(0.6), radius: 2)
                         }
@@ -250,14 +250,14 @@ struct PendingTray: View {
             Image(uiImage: t).resizable().scaledToFill()
                 .overlay(
                     Group {
-                        if p.kind == "video" { Image(systemName: "play.circle.fill").font(.system(size: 26)).foregroundColor(.white.opacity(0.9)) }
+                        if p.kind == "video" { Image(systemName: "play.circle.fill").font(.system(size: 21)).foregroundColor(.white.opacity(0.9)) }
                     }
                 )
         } else if p.kind == "video" {
-            Image(systemName: "film").font(.system(size: 26)).foregroundColor(Theme.accent)
+            Image(systemName: "film").font(.system(size: 21)).foregroundColor(Theme.accent)
         } else {
             VStack(spacing: 4) {
-                Image(systemName: "doc.fill").font(.system(size: 22)).foregroundColor(Theme.accent)
+                Image(systemName: "doc.fill").font(.system(size: 18)).foregroundColor(Theme.accent)
                 Text(p.name).font(.system(size: 9)).lineLimit(2).multilineTextAlignment(.center)
                     .foregroundColor(Theme.textSecondary).padding(.horizontal, 3)
             }
@@ -395,10 +395,10 @@ struct VoiceBubble: View {
         HStack(spacing: 10) {
             Button { model.toggle(path: path) } label: {
                 if model.loading {
-                    ProgressView().tint(color).frame(width: 28, height: 28)
+                    ProgressView().tint(color).frame(width: 25, height: 25)
                 } else {
                     Image(systemName: model.playing ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 28)).foregroundColor(color)
+                        .font(.system(size: 22)).foregroundColor(color)
                 }
             }
             .buttonStyle(.plain)
@@ -444,7 +444,7 @@ struct AlbumVideo: View {
         ZStack {
             Color.black.opacity(0.35)
             if let t = thumb { Image(uiImage: t).resizable().scaledToFill() }
-            Image(systemName: "play.circle.fill").font(.system(size: 38)).foregroundColor(.white.opacity(0.92))
+            Image(systemName: "play.circle.fill").font(.system(size: 30)).foregroundColor(.white.opacity(0.92))
         }
         .frame(width: side, height: side)
         .clipped()

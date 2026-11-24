@@ -70,7 +70,7 @@ struct GlassField: View {
         }
         .foregroundColor(Theme.text)
         .padding(.horizontal, 16)
-        .frame(height: 52)
+        .frame(height: 46)
         .background(Theme.card)
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke, lineWidth: 1))
         .overlay(alignment: .trailing) {
@@ -80,7 +80,7 @@ struct GlassField: View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
                         .foregroundColor(Theme.textSecondary)
                         .padding(.trailing, 14)
                 }
@@ -102,11 +102,11 @@ struct NeonButton: View {
                 if busy {
                     ProgressView().tint(.white)
                 } else {
-                    Text(title).font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                    Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(height: 46)
             .background(Theme.accentGradient)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: Theme.accent.opacity(0.45), radius: 14, y: 4)
@@ -135,7 +135,7 @@ struct ErrorText: View {
             EmptyView()
         } else {
             Text(text)
-                .font(.system(size: 13))
+                .font(.system(size: 11))
                 .foregroundColor(Color(hex: 0xFF6B6B))
                 .multilineTextAlignment(.center)
         }
