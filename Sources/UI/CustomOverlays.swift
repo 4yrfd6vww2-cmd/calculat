@@ -140,7 +140,7 @@ struct ConfirmDialogOverlay: View {
                                     .foregroundColor(b.destructive ? Color(hex: 0xFF6B6B) : (b.cancel ? Theme.textSecondary : .white))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 44)
-                                    .background(b.cancel ? Theme.card : (b.destructive ? Color(hex: 0xFF6B6B, opacity: 0.15) : Theme.accentGradient))
+                                    .background(b.cancel ? AnyShapeStyle(Theme.card) : (b.destructive ? AnyShapeStyle(Color(hex: 0xFF6B6B, opacity: 0.15)) : AnyShapeStyle(Theme.accentGradient)))
                                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.stroke, lineWidth: (b.cancel || b.destructive) ? 1 : 0))
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
                             }
