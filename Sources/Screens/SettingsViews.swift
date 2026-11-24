@@ -646,6 +646,7 @@ struct StatsView: View {
 
 struct AboutView: View {
     @ObservedObject private var st = Settings.shared
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ZStack {
@@ -661,6 +662,16 @@ struct AboutView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Theme.text)
                     .padding(.top, 6)
+                VStack(spacing: 10) {
+                    Button { if let u = URL(string: "https://4yrfd6vww2-cmd.github.io/calculat/") { openURL(u) } } label: {
+                        SettingsRow(icon: "globe", title: tr("Сайт", "Website", "Webseite"))
+                    }
+                    Button { if let u = URL(string: "https://github.com/4yrfd6vww2-cmd/calculat") { openURL(u) } } label: {
+                        SettingsRow(icon: "chevron.left.forwardslash.chevron.right", title: "GitHub")
+                    }
+                }
+                .padding(.top, 24)
+                .padding(.horizontal, 16)
                 Spacer()
             }
         }

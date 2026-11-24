@@ -50,7 +50,9 @@ const IC = {
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
   pinfill: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="currentColor"/>',
-  belloff: '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/>'
+  belloff: '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
 };
 function icons(html) {
   return html.replace(/\{i:([a-z]+)\}/g, (all, n) => IC[n]
@@ -1359,7 +1361,9 @@ function renderSettings() {
   } else if (tab === 'nox') {
     h += noxHtml();
   } else {
-    h += '<div class="card"><div class="title">neirox · ' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><div class="muted" style="margin-top:4px">' + t('Версия', 'Version', 'Version') + ' ' + esc(VERSION) + '</div></div>';
+    h += '<div class="card"><div class="title">neirox · ' + t('Умный Чат', 'Smart Chat', 'Smarter Chat') + '</div><div class="muted" style="margin-top:4px">' + t('Версия', 'Version', 'Version') + ' ' + esc(VERSION) + '</div></div>' +
+      '<button class="card row" data-act="open-url" data-url="https://4yrfd6vww2-cmd.github.io/calculat/" style="text-align:left;width:100%">{i:globe}<span class="grow">' + t('Сайт', 'Website', 'Webseite') + '</span></button>' +
+      '<button class="card row" data-act="open-url" data-url="https://github.com/4yrfd6vww2-cmd/calculat" style="text-align:left;width:100%;margin-top:8px">{i:code}<span class="grow">GitHub</span></button>';
   }
   if ($('#page')._h === h) return;
   setHTML($('#page'), h);
@@ -1588,6 +1592,7 @@ document.addEventListener('click', async e => {
       renderAll(); break;
     }
     case 'logout': logout(); break;
+    case 'open-url': { const u = el.dataset.url; if (u) window.open(u); break; }
     case 'call-start': callStart(U.chat, false); break;
     case 'call-video': callStart(U.chat, true); break;
     case 'call-cam': callCam(); break;

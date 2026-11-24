@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -359,6 +360,7 @@ private fun StatsPage() {
 
 @Composable
 private fun AboutPage() {
+    val ctx = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             "neirox",
@@ -370,6 +372,14 @@ private fun AboutPage() {
         )
         Text(tr("Умный Чат", "Smart Chat", "Smarter Chat"), color = TextSecondary, fontSize = 14.sp)
         Text("v" + versionName(), color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        Column(Modifier.fillMaxWidth().padding(top = 24.dp, start = 16.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsRow(Icons.Filled.Language, tr("Сайт", "Website", "Webseite")) {
+                ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://4yrfd6vww2-cmd.github.io/calculat/")))
+            }
+            SettingsRow(Icons.Filled.Code, "GitHub") {
+                ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/4yrfd6vww2-cmd/calculat")))
+            }
+        }
     }
 }
 
