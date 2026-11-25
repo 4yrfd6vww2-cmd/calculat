@@ -281,6 +281,13 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .pinbar .pinx{background:none;border:0;color:inherit;cursor:pointer;font-size:12px}
 .mrow.flash .bubble{outline:2px solid var(--accent)}
 .bigemo{font-size:45px;line-height:1.15}
+.poll{width:260px;max-width:100%}
+.pollq{display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:8px}
+.pollq .ic{width:16px;height:16px}
+.pollopt{position:relative;border-radius:8px;background:rgba(127,127,127,.14);margin-bottom:6px;cursor:pointer;overflow:hidden}
+.pollopt.mine{outline:1px solid var(--accent)}
+.pollbar{position:absolute;left:0;top:0;bottom:0;background:rgba(127,127,127,.22);transition:width .2s}
+.pollrow{position:relative;display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-size:13px}
 .pic.stk{max-width:160px;max-height:160px;background:none}
 .stk-wrap{padding:8px 10px;max-height:260px;overflow:auto}
 .stk-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}

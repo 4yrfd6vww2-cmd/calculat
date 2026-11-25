@@ -54,7 +54,8 @@ const IC = {
   globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
   code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
   clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  poll: '<line x1="4" y1="20" x2="4" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="20" y1="20" x2="20" y2="14"/>'
 };
 function icons(html) {
   return html.replace(/\{i:([a-z]+)\}/g, (all, n) => IC[n]
@@ -234,7 +235,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, dmPrefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set() };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, dmPrefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set(), bans: {}, pollVotes: {} };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -271,6 +272,16 @@ async function refresh() {
       const dm = {}; dp.forEach(x => { dm[x.user_a === myId() ? x.user_b : x.user_a] = x; }); D.dmPrefs = dm;
     } catch (e) { }
     try { D.blocked = new Set((await sel('blocked_users', { select: 'blocked_id' })).map(r => r.blocked_id)); } catch (e) { }
+    try {
+      const bb = await sel('chat_bans', { select: '*' });
+      const bm = {}; bb.forEach(x => { (bm[x.chat_id] = bm[x.chat_id] || []).push(x); });
+      D.bans = bm;
+    } catch (e) { }
+    try {
+      const pv = await sel('poll_votes', { select: '*', limit: '5000' });
+      const pm = {}; pv.forEach(x => { (pm[x.message_id] = pm[x.message_id] || []).push(x); });
+      D.pollVotes = pm;
+    } catch (e) { }
     if (!D.stkLoaded) { try { D.stickers = await sel('my_stickers', { select: '*', order: 'id.desc' }); D.stkLoaded = true; } catch (e) { } }
     const ids = new Set();
     D.friendships.forEach(f => { ids.add(f.requester); ids.add(f.addressee); });
@@ -515,7 +526,7 @@ function compress(file) {
 }
 
 /* ---------- UI-состояние ---------- */
-const U = { tab: 'chats', chat: null, selected: new Set(), editing: null, error: '', busy: false, query: '', results: [], aiImageMode: false, authScreen: 'login', authErr: '', authBusy: false, folderFilter: null };
+const U = { tab: 'chats', chat: null, selected: new Set(), editing: null, error: '', busy: false, query: '', results: [], aiImageMode: false, authScreen: 'login', authErr: '', authBusy: false, folderFilter: null, pollKey: null };
 const A = { msgs: [], images: {}, busy: false, err: '' };
 try { A.msgs = JSON.parse(lsGet('neirox.ai.history', '[]')); } catch (e) { A.msgs = []; }
 const P = { tracks: [], cur: -1, playing: false };
@@ -659,6 +670,7 @@ function preview(m, noPre) {
     else x = t('Вложения', 'Attachments', 'Anhänge') + ' (' + a.length + ')';
     return pre + x + (m.body ? ': ' + m.body : '');
   }
+  if (m.kind === 'poll') return pre + t('Опрос: ', 'Poll: ', 'Umfrage: ') + (m.body || '');
   return pre + (m.body || '');
 }
 /* ---------- nox ---------- */
@@ -901,6 +913,7 @@ function chatTools() {
   return '<button class="icon-btn" data-act="s-open" title="' + t('Поиск', 'Search', 'Suche') + '">{i:search}</button>' +
     (isKey(k) ? '' : '<button class="icon-btn" data-act="cname" data-id="' + esc(k) + '" title="' + t('Имя контакта', 'Contact name', 'Kontaktname') + '">{i:edit}</button>') +
     '<button class="icon-btn" data-act="folder-open" data-id="' + esc(k) + '" title="' + t('Папка', 'Folder', 'Ordner') + '">{i:folder}</button>' +
+    (canPostTo(k) ? '<button class="icon-btn" data-act="poll-open" data-id="' + esc(k) + '" title="' + t('Опрос', 'Poll', 'Umfrage') + '">{i:poll}</button>' : '') +
     (canDisappear ? '<button class="icon-btn" data-act="disappear-open" data-id="' + esc(k) + '" title="' + t('Исчезающие сообщения', 'Disappearing messages', 'Verschwindende Nachrichten') + '">{i:clock}</button>' : '') +
     '<button class="icon-btn" data-act="cp-pin" data-id="' + esc(k) + '" title="' + t('Закрепить чат', 'Pin chat', 'Chat anheften') + '">' + (isPinned(k) ? '{i:pinfill}' : '{i:pin}') + '</button>' +
     '<button class="icon-btn" data-act="cp-mute" data-id="' + esc(k) + '" title="' + t('Уведомления', 'Notifications', 'Benachrichtigungen') + '">' + (isMuted(k) ? '{i:belloff}' : '{i:bell}') + '</button>';
@@ -995,6 +1008,18 @@ function openDisappearPicker(k) {
   const body = opts.map(([sec, label]) => '<div class="pick" data-act="disappear-pick" data-id="' + esc(k) + '" data-v="' + sec + '">' + (cur === sec ? '✓ ' : '') + esc(label) + '</div>').join('');
   openDialog(t('Исчезающие сообщения', 'Disappearing messages', 'Verschwindende Nachrichten'), body, [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
 }
+function openPollCompose(k, n, q, vals) {
+  U.pollKey = k;
+  const count = n || 2;
+  const question = q != null ? q : '';
+  const optVals = vals || [];
+  let body = '<input class="field" id="d-pollq" maxlength="200" placeholder="' + t('Вопрос', 'Question', 'Frage') + '" value="' + esc(question) + '">';
+  for (let i = 0; i < count; i++) {
+    body += '<input class="field" id="d-pollo' + i + '" maxlength="80" style="margin-top:8px" placeholder="' + t('Вариант ', 'Option ', 'Option ') + (i + 1) + '" value="' + esc(optVals[i] || '') + '">';
+  }
+  if (count < 10) body += '<div class="pick" data-act="poll-addopt" style="margin-top:8px">{i:plus} ' + t('Добавить вариант', 'Add option', 'Option hinzufügen') + '</div>';
+  openDialog(t('Опрос', 'Poll', 'Umfrage'), body, [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['poll-go', t('Отправить', 'Send', 'Senden'), '']]);
+}
 function chatDesc() {
   const c = chatByKey(U.chat); if (!c) return;
   openDialog(t('Описание', 'Description', 'Beschreibung'), '<textarea class="field" id="d-desc" rows="4" maxlength="300">' + esc(c.description || '') + '</textarea>',
@@ -1049,7 +1074,24 @@ function msgContentBase(m) {
     return h;
   }
   if (m.kind === 'text' && isBigEmoji(m.body)) return '<div class="bigemo">' + esc(m.body) + '</div>';
+  if (m.kind === 'poll') return pollHtml(m);
   return linkify(m.body || '');
+}
+function pollHtml(m) {
+  const opts = m.poll_options || [];
+  const votes = votesFor(m.id);
+  const total = votes.length;
+  const mine = myVote(m.id);
+  const rows = opts.map((o, i) => {
+    const n = votes.filter(v => v.option_idx === i).length;
+    const pct = total ? Math.round(n * 100 / total) : 0;
+    return '<div class="pollopt' + (mine === i ? ' mine' : '') + '" data-act="poll-vote" data-id="' + m.id + '" data-i="' + i + '">' +
+      '<div class="pollbar" style="width:' + pct + '%"></div>' +
+      '<div class="pollrow"><span>' + (mine === i ? '✓ ' : '') + esc(o) + '</span><span class="muted">' + n + ' (' + pct + '%)</span></div>' +
+      '</div>';
+  }).join('');
+  return '<div class="poll"><div class="pollq">{i:poll} ' + esc(m.body || '') + '</div>' + rows +
+    '<div class="muted" style="margin-top:4px">' + total + ' ' + t('голосов', 'votes', 'Stimmen') + '</div></div>';
 }
 function quoteHtml(m) {
   if (!m.reply_to) return '';
@@ -1684,6 +1726,7 @@ document.addEventListener('click', async e => {
     case 'call-video': callStart(U.chat, true); break;
     case 'call-cam': callCam(); break;
     case 'rx': hideCtx(); reactTo(Number(id), el.dataset.e); break;
+    case 'poll-vote': pollVote(Number(id), Number(el.dataset.i)); break;
     case 'c-reply': hideCtx(); U.replyTo = Number(id); renderAll(); { const i = $('#inp'); if (i) i.focus(); } break;
     case 'reply-cancel': U.replyTo = null; renderAll(); break;
     case 'new-chat': openCreateChat(); break;
@@ -1703,6 +1746,24 @@ document.addEventListener('click', async e => {
     case 'folder-pick': { const k = id, fv = v || null; closeDialog(); try { await setFolder(k, fv); } catch (er) { toast(friendly(er)); } break; }
     case 'disappear-open': hideCtx(); openDisappearPicker(id); break;
     case 'disappear-pick': { const k = id, sec = Number(v); closeDialog(); try { await setDisappear(k, sec || null); } catch (er) { toast(friendly(er)); } break; }
+    case 'poll-open': hideCtx(); openPollCompose(id); break;
+    case 'poll-addopt': {
+      const q = val('d-pollq');
+      const cur = [];
+      for (let i = 0; ; i++) { const e = $('#d-pollo' + i); if (!e) break; cur.push(e.value); }
+      openPollCompose(U.pollKey, cur.length + 1, q, cur);
+      break;
+    }
+    case 'poll-go': {
+      const q = val('d-pollq');
+      const opts = [];
+      for (let i = 0; ; i++) { const e = $('#d-pollo' + i); if (!e) break; const vv = e.value.trim(); if (vv) opts.push(vv); }
+      const k = U.pollKey;
+      closeDialog();
+      if (!q || opts.length < 2 || !k) { toast(t('Нужен вопрос и минимум 2 варианта', 'Need a question and at least 2 options', 'Frage und mindestens 2 Optionen nötig')); break; }
+      try { await sendPoll(k, q, opts); } catch (er) { toast(friendly(er)); }
+      break;
+    }
     case 'sched-open': {
       if (!U.chat || U.chat === 'ai') return;
       const d = new Date(Date.now() + 3600000);
@@ -1767,6 +1828,8 @@ document.addEventListener('click', async e => {
     case 'm-add': memberAdd(id); break;
     case 'm-add-nick': memberAddNick(); break;
     case 'm-kick': memberKick(id); break;
+    case 'm-ban': memberBan(id); break;
+    case 'm-unban': memberUnban(id); break;
     case 'chat-leave': chatLeave(); break;
     case 'chat-del': chatDelete(); break;
     case 'chat-rename': chatRename(); break;
@@ -1981,7 +2044,12 @@ function openChatInfo() {
     (c.invite_code ? '<div class="row" style="gap:8px;margin-bottom:8px;align-items:center"><span class="muted">' + t('Код приглашения:', 'Invite code:', 'Einladungscode:') + '</span> <b>' + esc(c.invite_code) + '</b> <button class="btn sm ghost" data-act="code-copy" data-id="' + esc(c.invite_code) + '">' + t('Копировать', 'Copy', 'Kopieren') + '</button></div>' : '') +
     '<div class="muted" style="margin-bottom:8px">' + (c.kind === 'channel' ? t('Канал', 'Channel', 'Kanal') : t('Группа', 'Group', 'Gruppe')) + ' · ' + mem.length + '</div>' +
     '<div class="pickbox">' + mem.map(x => '<div class="pick">' + avatarHtml(D.profiles[x.user_id], 30) + '<div style="flex:1">' + esc(nickOf(x.user_id)) + (x.role === 'owner' ? ' <span class="tag">' + t('создатель', 'owner', 'Besitzer') + '</span>' : x.role === 'admin' ? ' <span class="tag">' + t('админ', 'admin', 'Admin') + '</span>' : '') + '</div>' +
-      (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-role" data-id="' + esc(x.user_id) + '" data-r="' + (x.role === 'admin' ? 'member' : 'admin') + '">' + (x.role === 'admin' ? t('Снять админа', 'Remove admin', 'Admin entfernen') : t('Админ', 'Admin', 'Admin')) + '</button> <button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button>' : '') + '</div>').join('') + '</div>';
+      (owner && x.user_id !== myId() ? '<button class="btn sm ghost" data-act="m-role" data-id="' + esc(x.user_id) + '" data-r="' + (x.role === 'admin' ? 'member' : 'admin') + '">' + (x.role === 'admin' ? t('Снять админа', 'Remove admin', 'Admin entfernen') : t('Админ', 'Admin', 'Admin')) + '</button> <button class="btn sm ghost" data-act="m-kick" data-id="' + esc(x.user_id) + '">' + t('Убрать', 'Remove', 'Entfernen') + '</button> <button class="btn sm ghost" data-act="m-ban" data-id="' + esc(x.user_id) + '">' + t('Бан', 'Ban', 'Bannen') + '</button>' : '') + '</div>').join('') + '</div>';
+  const banned = owner ? bansFor(c.id) : [];
+  if (banned.length) {
+    h += '<div class="muted" style="margin:10px 0 4px">' + t('Заблокированные', 'Banned', 'Gesperrt') + '</div><div class="pickbox">' +
+      banned.map(b => '<div class="pick"><div style="flex:1">' + esc(nickOf(b.user_id)) + '</div><button class="btn sm ghost" data-act="m-unban" data-id="' + esc(b.user_id) + '">' + t('Разблокировать', 'Unban', 'Entsperren') + '</button></div>').join('') + '</div>';
+  }
   if (owner && c.kind === 'group') {
     h += '<div class="muted" style="margin:10px 0 4px">' + t('Добавить', 'Add', 'Hinzufügen') + '</div><div class="pickbox">' +
       (fr.map(p => '<div class="pick" data-act="m-add" data-id="' + esc(p.id) + '">' + avatarHtml(p, 28) + '<div style="flex:1">' + esc(dname(p)) + '</div><span class="muted">+</span></div>').join('') || '<div class="muted">' + t('Все друзья уже в группе', 'All friends are in the group', 'Alle Freunde sind in der Gruppe') + '</div>') + '</div>' +
@@ -2009,6 +2077,39 @@ async function memberRole(uid, r) {
 async function memberKick(uid) {
   try { await del('chat_members', { chat_id: 'eq.' + cidOf(U.chat), user_id: 'eq.' + uid }); await refresh(); } catch (e) { toast(friendly(e)); }
   openChatInfo();
+}
+/* ---------- бан участников ---------- */
+const bansFor = cid => D.bans[cid] || [];
+const isBanned = (cid, uid) => bansFor(cid).some(x => x.user_id === uid);
+async function memberBan(uid) {
+  const cid = cidOf(U.chat);
+  try {
+    await del('chat_members', { chat_id: 'eq.' + cid, user_id: 'eq.' + uid });
+    await ins('chat_bans', { chat_id: cid, user_id: uid, banned_by: myId() });
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+  openChatInfo();
+}
+async function memberUnban(uid) {
+  const cid = cidOf(U.chat);
+  try { await del('chat_bans', { chat_id: 'eq.' + cid, user_id: 'eq.' + uid }); await refresh(); } catch (e) { toast(friendly(e)); }
+  openChatInfo();
+}
+/* ---------- опросы ---------- */
+const votesFor = mid => D.pollVotes[mid] || [];
+const myVote = mid => { const v = votesFor(mid).find(x => x.user_id === myId()); return v ? v.option_idx : null; };
+async function pollVote(mid, idx) {
+  try {
+    if (myVote(mid) != null) await upd('poll_votes', { message_id: 'eq.' + mid, user_id: 'eq.' + myId() }, { option_idx: idx });
+    else await ins('poll_votes', { message_id: mid, user_id: myId(), option_idx: idx });
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+}
+async function sendPoll(to, question, options) {
+  try {
+    await ins('messages', withTiming(to, Object.assign({ sender: myId(), kind: 'poll', body: question, poll_options: options }, tgt(to)), null));
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
 }
 async function chatLeave() {
   const key = U.chat; closeDialog();
