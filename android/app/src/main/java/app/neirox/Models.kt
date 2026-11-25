@@ -29,10 +29,12 @@ data class Message(
     val editedAt: String?,
     val attachments: List<Attachment> = emptyList(),
     val chatId: String? = null,
-    val replyTo: Long? = null
+    val replyTo: Long? = null,
+    val sendAt: String? = null,
+    val expiresAt: String? = null
 )
 
-data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String, val avatarUrl: String? = null, val inviteCode: String? = null, val pinnedMsg: Long? = null) {
+data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String, val avatarUrl: String? = null, val inviteCode: String? = null, val pinnedMsg: Long? = null, val disappearSec: Int? = null) {
     fun asProfile() = Profile(id, title, avatarUrl, null)
 }
 
@@ -48,13 +50,23 @@ fun parseWallet(o: JSONObject) = Wallet(o.optInt("balance"), o.optInt("earned"),
 
 fun levelStr(n: Int): String = String.format(java.util.Locale.US, "%.2f", n / 100.0)
 
-data class ChatPref(val key: String, val muted: Boolean, val pinned: Boolean)
+data class ChatPref(val key: String, val muted: Boolean, val pinned: Boolean, val folder: String? = null)
+
+data class DmPref(val userA: String, val userB: String, val disappearSec: Int?)
 
 data class Sticker(val id: Long, val path: String)
 
 data class Reaction(val messageId: Long, val userId: String, val emoji: String)
 
-fun parseChat(o: JSONObject) = Chat(o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"), o.str("avatar_url"), o.str("invite_code"), if (o.isNull("pinned_msg")) null else o.optLong("pinned_msg"))
+fun parseChat(o: JSONObject) = Chat(
+    o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"),
+    o.str("avatar_url"), o.str("invite_code"), if (o.isNull("pinned_msg")) null else o.optLong("pinned_msg"),
+    if (o.isNull("disappear_sec")) null else o.optInt("disappear_sec")
+)
+
+fun parseChatPref(o: JSONObject) = ChatPref(o.getString("key"), o.optBoolean("muted", false), o.optBoolean("pinned", false), o.str("folder"))
+
+fun parseDmPref(o: JSONObject) = DmPref(o.getString("user_a"), o.getString("user_b"), if (o.isNull("disappear_sec")) null else o.optInt("disappear_sec"))
 
 fun parseMember(o: JSONObject) = Member(o.getString("chat_id"), o.getString("user_id"), o.optString("role", "member"), o.optLong("last_read", 0L))
 
@@ -73,7 +85,9 @@ fun parseMessage(o: JSONObject) = Message(
     o.str("body"), o.str("media_path"), o.str("file_name"), o.getString("created_at"), o.str("read_at"), o.str("edited_at"),
     parseAttachments(o),
     o.str("chat_id"),
-    if (o.isNull("reply_to")) null else o.optLong("reply_to")
+    if (o.isNull("reply_to")) null else o.optLong("reply_to"),
+    o.str("send_at"),
+    o.str("expires_at")
 )
 
 private fun parseAttachments(o: JSONObject): List<Attachment> {
@@ -125,6 +139,12 @@ fun previewOf(m: Message?): String {
         }
         else -> m.body ?: ""
     }
+}
+
+fun isFuture(iso: String?): Boolean = try {
+    iso != null && OffsetDateTime.parse(iso).toInstant().isAfter(java.time.Instant.now())
+} catch (e: Exception) {
+    false
 }
 
 fun timeOf(iso: String): String = try {

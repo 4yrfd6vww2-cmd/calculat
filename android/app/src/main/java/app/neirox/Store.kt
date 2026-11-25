@@ -40,6 +40,7 @@ object Store {
     var reactions by mutableStateOf<List<Reaction>>(emptyList())
 
     var prefs by mutableStateOf<Map<String, ChatPref>>(emptyMap())
+    var dmPrefs by mutableStateOf<Map<String, DmPref>>(emptyMap())
 
     var jumpTo by mutableStateOf<Long?>(null)
 
@@ -100,6 +101,7 @@ object Store {
         members = emptyList()
         reactions = emptyList()
         prefs = emptyMap()
+        dmPrefs = emptyMap()
         alias = emptyMap()
         wallet = null
         colors = emptyList()
@@ -161,7 +163,17 @@ object Store {
                 val pr = Api.select("chat_prefs?select=*")
                 prefs = (0 until pr.length()).associate {
                     val o = pr.getJSONObject(it)
-                    o.getString("key") to ChatPref(o.getString("key"), o.optBoolean("muted", false), o.optBoolean("pinned", false))
+                    o.getString("key") to parseChatPref(o)
+                }
+            } catch (e: ApiError) {
+            }
+            try {
+                val dp = Api.select("dm_prefs?select=*")
+                dmPrefs = (0 until dp.length()).associate {
+                    val o = dp.getJSONObject(it)
+                    val x = parseDmPref(o)
+                    val other = if (x.userA == uid) x.userB else x.userA
+                    other to x
                 }
             } catch (e: ApiError) {
             }
@@ -464,8 +476,9 @@ object Store {
 
     suspend fun sendSticker(path: String, to: String, reply: Long? = null) {
         val ext = path.substringAfterLast('.', "png")
-        val o = tgt(to, JSONObject().put("sender", myId).put("kind", "image").put("media_path", path).put("file_name", "sticker.$ext"))
+        var o = tgt(to, JSONObject().put("sender", myId).put("kind", "image").put("media_path", path).put("file_name", "sticker.$ext"))
         if (reply != null) o.put("reply_to", reply)
+        o = withTiming(to, o, null)
         Api.insert("messages", o)
         refresh()
     }
@@ -479,6 +492,51 @@ object Store {
 
     private fun tgt(to: String, o: JSONObject): JSONObject =
         if (isKey(to)) o.put("chat_id", cidOf(to)) else o.put("receiver", to)
+
+    // MARK: Папки, исчезающие сообщения, отложенная отправка
+
+    fun folderOf(k: String): String? = prefs[k]?.folder
+
+    fun allFolders(): List<String> = prefs.values.mapNotNull { it.folder }.distinct().sorted()
+
+    suspend fun setFolder(k: String, folder: String?) {
+        val cur = prefs[k]
+        val clean = folder?.trim()?.ifEmpty { null }
+        val v: Any = clean ?: JSONObject.NULL
+        if (cur != null) Api.update("chat_prefs?user_id=eq.$myId&key=eq.$k", JSONObject().put("folder", v))
+        else Api.insert("chat_prefs", JSONObject().put("user_id", myId).put("key", k).put("folder", v))
+        prefs = prefs + (k to ChatPref(k, cur?.muted ?: false, cur?.pinned ?: false, clean))
+    }
+
+    private fun dmPair(other: String): Pair<String, String> = if (myId < other) myId to other else other to myId
+
+    /** Таймер исчезающих сообщений (в секундах) для чата/диалога. 0 — выключено. */
+    fun disappearFor(k: String): Int =
+        if (isKey(k)) chatByKey(k)?.disappearSec ?: 0 else dmPrefs[k]?.disappearSec ?: 0
+
+    suspend fun setDisappear(k: String, sec: Int?) {
+        val v: Any = sec ?: JSONObject.NULL
+        if (isKey(k)) {
+            Api.update("chats?id=eq.${cidOf(k)}", JSONObject().put("disappear_sec", v))
+        } else {
+            val (a, b) = dmPair(k)
+            val cur = dmPrefs[k]
+            if (cur != null) Api.update("dm_prefs?user_a=eq.$a&user_b=eq.$b", JSONObject().put("disappear_sec", v))
+            else Api.insert("dm_prefs", JSONObject().put("user_a", a).put("user_b", b).put("disappear_sec", v))
+        }
+        refresh()
+    }
+
+    /** Добавляет к строке сообщения время отложенной отправки и/или срок исчезновения. */
+    private fun withTiming(to: String, row: JSONObject, sendAt: Long?): JSONObject {
+        if (sendAt != null) row.put("send_at", Instant.ofEpochMilli(sendAt).toString())
+        val sec = disappearFor(to)
+        if (sec > 0) {
+            val base = if (sendAt != null) Instant.ofEpochMilli(sendAt) else Instant.now()
+            row.put("expires_at", base.plusSeconds(sec.toLong()).toString())
+        }
+        return row
+    }
 
     fun thread(with: String): List<Message> =
         if (isKey(with)) messages.filter { it.chatId == cidOf(with) }
@@ -610,29 +668,30 @@ object Store {
         else -> tr("был(а) недавно", "last seen recently", "zuletzt online")
     }
 
-    suspend fun sendText(text: String, to: String, reply: Long? = null) {
-        val o = tgt(to, JSONObject().put("sender", myId).put("kind", "text").put("body", text))
+    suspend fun sendText(text: String, to: String, reply: Long? = null, sendAt: Long? = null) {
+        var o = tgt(to, JSONObject().put("sender", myId).put("kind", "text").put("body", text))
         if (reply != null) o.put("reply_to", reply)
+        o = withTiming(to, o, sendAt)
         Api.insert("messages", o)
         refresh()
     }
 
-    suspend fun sendMedia(data: ByteArray, mime: String, fileName: String, kind: String, to: String, reply: Long? = null) {
+    suspend fun sendMedia(data: ByteArray, mime: String, fileName: String, kind: String, to: String, reply: Long? = null, sendAt: Long? = null) {
         val ext = fileName.substringAfterLast('.', "")
         val path = "$myId/${UUID.randomUUID()}" + (if (ext.isEmpty()) "" else ".$ext")
         Api.upload("chat-media", path, data, mime)
-        Api.insert(
-            "messages",
-            tgt(to, JSONObject().put("sender", myId).put("kind", kind)
-                .put("media_path", path).put("file_name", fileName)).also { if (reply != null) it.put("reply_to", reply) }
-        )
+        var o = tgt(to, JSONObject().put("sender", myId).put("kind", kind)
+            .put("media_path", path).put("file_name", fileName))
+        if (reply != null) o.put("reply_to", reply)
+        o = withTiming(to, o, sendAt)
+        Api.insert("messages", o)
         refresh()
     }
 
     /** Одно вложение для отправки альбомом. kind: image / video / file / voice. */
     class OutItem(val data: ByteArray, val mime: String, val name: String, val kind: String)
 
-    suspend fun sendAlbum(items: List<OutItem>, caption: String, to: String, reply: Long? = null) {
+    suspend fun sendAlbum(items: List<OutItem>, caption: String, to: String, reply: Long? = null, sendAt: Long? = null) {
         val atts = org.json.JSONArray()
         for (it in items) {
             val ext = it.name.substringAfterLast('.', "")
@@ -640,9 +699,10 @@ object Store {
             Api.upload("chat-media", path, it.data, it.mime)
             atts.put(JSONObject().put("path", path).put("name", it.name).put("type", it.kind).put("mime", it.mime).put("size", it.data.size))
         }
-        val row = tgt(to, JSONObject().put("sender", myId).put("kind", "album").put("attachments", atts))
+        var row = tgt(to, JSONObject().put("sender", myId).put("kind", "album").put("attachments", atts))
         if (reply != null) row.put("reply_to", reply)
         if (caption.isNotEmpty()) row.put("body", caption)
+        row = withTiming(to, row, sendAt)
         Api.insert("messages", row)
         refresh()
     }

@@ -107,6 +107,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import java.util.Calendar
 
 private const val MAX_FILE = 50 * 1024 * 1024
 
@@ -118,17 +121,52 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
     val rows = ArrayList<ChatRow>()
     for (id in Store.friendIds) Store.profiles[id]?.let { rows.add(ChatRow(it.id, Store.dname(it), it, null)) }
     for (c in Store.chats) rows.add(ChatRow("c:" + c.id, c.title, null, c))
-    val lastOf = { k: String -> Store.thread(k).lastOrNull() }
-    val sorted = rows.sortedWith(compareByDescending<ChatRow> { Store.isPinned(it.key) }.thenByDescending { lastOf(it.key)?.createdAt ?: "" })
+    val lastOf = { k: String -> Store.thread(k).lastOrNull { (it.sendAt == null || !isFuture(it.sendAt)) } }
+    var activeFolder by remember { mutableStateOf<String?>(null) }
+    val folders = Store.allFolders()
+    val filteredRows = if (activeFolder == null) rows else rows.filter { Store.folderOf(it.key) == activeFolder }
+    val sorted = filteredRows.sortedWith(compareByDescending<ChatRow> { Store.isPinned(it.key) }.thenByDescending { lastOf(it.key)?.createdAt ?: "" })
     var showCreate by remember { mutableStateOf(false) }
     var showCode by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var ctxKey by remember { mutableStateOf<String?>(null) }
+    var folderMenuKey by remember { mutableStateOf<String?>(null) }
+    var showFolderName by remember { mutableStateOf(false) }
+    var folderNameInput by remember { mutableStateOf("") }
+    var folderNameKey by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var showFind by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         ScreenTitle(tr("Чаты", "Chats", "Chats"))
+        if (folders.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Box(
+                    Modifier.clip(RoundedCornerShape(14.dp))
+                        .background(if (activeFolder == null) Accent else Color.Transparent)
+                        .clickable { activeFolder = null }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        tr("Все", "All", "Alle"),
+                        color = if (activeFolder == null) Color.White else TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+                for (f in folders) {
+                    Box(
+                        Modifier.padding(start = 6.dp).clip(RoundedCornerShape(14.dp))
+                            .background(if (activeFolder == f) Accent else Color.Transparent)
+                            .clickable { activeFolder = f }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(f, color = if (activeFolder == f) Color.White else TextSecondary, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 Row(
@@ -232,6 +270,28 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                             text = { Text(if (Store.isMuted(r.key)) tr("Включить уведомления", "Unmute", "Ton an") else tr("Выключить уведомления", "Mute", "Stummschalten")) },
                             onClick = { val k = r.key; ctxKey = null; scope.launch { try { Store.setPref(k, "muted", !Store.isMuted(k)) } catch (e: Exception) { } } }
                         )
+                        DropdownMenuItem(
+                            text = { Text(tr("Папка", "Folder", "Ordner")) },
+                            onClick = { val k = r.key; ctxKey = null; folderMenuKey = k }
+                        )
+                    }
+                    DropdownMenu(expanded = folderMenuKey == r.key, onDismissRequest = { folderMenuKey = null }) {
+                        for (f in folders) {
+                            DropdownMenuItem(
+                                text = { Text(f + if (Store.folderOf(r.key) == f) " ✓" else "") },
+                                onClick = { val k = r.key; folderMenuKey = null; scope.launch { try { Store.setFolder(k, f) } catch (e: Exception) { } } }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(tr("Новая папка…", "New folder…", "Neuer Ordner…")) },
+                            onClick = { val k = r.key; folderMenuKey = null; folderNameKey = k; folderNameInput = ""; showFolderName = true }
+                        )
+                        if (Store.folderOf(r.key) != null) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Без папки", "No folder", "Kein Ordner"), color = Color.Red) },
+                                onClick = { val k = r.key; folderMenuKey = null; scope.launch { try { Store.setFolder(k, null) } catch (e: Exception) { } } }
+                            )
+                        }
                     }
                     if (unread > 0) {
                         Box(
@@ -257,6 +317,21 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
     if (showFind) FindChannelDialog({ showFind = false }) { showFind = false; onOpen(it) }
     if (showCode) JoinCodeDialog({ showCode = false }) { showCode = false; onOpen(it) }
     if (showSearch) SearchDialog(null, { showSearch = false }) { k, id -> showSearch = false; Store.jumpTo = id; onOpen(k) }
+    if (showFolderName) {
+        AlertDialog(
+            onDismissRequest = { showFolderName = false },
+            title = { Text(tr("Новая папка", "New folder", "Neuer Ordner")) },
+            text = { NxField(folderNameInput, { if (it.length <= 30) folderNameInput = it }, tr("Название папки", "Folder name", "Ordnername")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showFolderName = false
+                    val k = folderNameKey
+                    if (k != null) scope.launch { try { Store.setFolder(k, folderNameInput) } catch (e: Exception) { } }
+                }) { Text(tr("Сохранить", "Save", "Speichern")) }
+            },
+            dismissButton = { TextButton(onClick = { showFolderName = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -291,6 +366,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     var hdrMenu by remember { mutableStateOf(false) }
     var showName by remember { mutableStateOf(false) }
     var nameText by remember { mutableStateOf("") }
+    var folderMenu by remember { mutableStateOf(false) }
+    var disappearMenu by remember { mutableStateOf(false) }
+    var showFolder by remember { mutableStateOf(false) }
+    var folderText by remember { mutableStateOf("") }
+    var showSchedule by remember { mutableStateOf(false) }
+    var scheduleMillis by remember { mutableStateOf(System.currentTimeMillis() + 3600_000L) }
     val myRole = Store.myMember(friendId)?.role
     val isAdm = chat != null && (chat.owner == Store.myId || myRole == "admin" || myRole == "owner")
     val pending = remember { mutableStateListOf<PendingItem>() }
@@ -672,6 +753,47 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                             text = { Text(if (Store.isPinned(friendId)) tr("Открепить чат", "Unpin chat", "Chat lösen") else tr("Закрепить чат", "Pin chat", "Chat anheften")) },
                             onClick = { hdrMenu = false; scope.launch { try { Store.setPref(friendId, "pinned", !Store.isPinned(friendId)) } catch (e: Exception) { } } }
                         )
+                        DropdownMenuItem(text = { Text(tr("Папка", "Folder", "Ordner")) }, onClick = { hdrMenu = false; folderMenu = true })
+                        if (chat == null || isAdm) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Исчезающие сообщения", "Disappearing messages", "Verschwindende Nachrichten")) },
+                                onClick = { hdrMenu = false; disappearMenu = true }
+                            )
+                        }
+                    }
+                    DropdownMenu(expanded = folderMenu, onDismissRequest = { folderMenu = false }) {
+                        val cur = Store.folderOf(friendId)
+                        for (f in Store.allFolders()) {
+                            DropdownMenuItem(
+                                text = { Text((if (f == cur) "✓ " else "") + f) },
+                                onClick = { folderMenu = false; scope.launch { try { Store.setFolder(friendId, f) } catch (e: Exception) { } } }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(tr("Новая папка…", "New folder…", "Neuer Ordner…")) },
+                            onClick = { folderMenu = false; folderText = ""; showFolder = true }
+                        )
+                        if (cur != null) {
+                            DropdownMenuItem(
+                                text = { Text(tr("Без папки", "No folder", "Kein Ordner"), color = Color(0xFFE5484D)) },
+                                onClick = { folderMenu = false; scope.launch { try { Store.setFolder(friendId, null) } catch (e: Exception) { } } }
+                            )
+                        }
+                    }
+                    DropdownMenu(expanded = disappearMenu, onDismissRequest = { disappearMenu = false }) {
+                        val cur = Store.disappearFor(friendId)
+                        val options = listOf(
+                            tr("Выключено", "Off", "Aus") to 0,
+                            tr("1 час", "1 hour", "1 Stunde") to 3600,
+                            tr("1 день", "1 day", "1 Tag") to 86400,
+                            tr("1 неделя", "1 week", "1 Woche") to 604800
+                        )
+                        for ((title, sec) in options) {
+                            DropdownMenuItem(
+                                text = { Text((if (sec == cur) "✓ " else "") + title) },
+                                onClick = { disappearMenu = false; scope.launch { try { Store.setDisappear(friendId, if (sec > 0) sec else null) } catch (e: Exception) { } } }
+                            )
+                        }
                     }
                 }
             }
@@ -861,6 +983,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 if (editing == null && input.isBlank() && pending.isEmpty()) {
                     Icon(Icons.Filled.Mic, contentDescription = null, tint = Txt, modifier = Modifier.size(21.dp).clickable { micClick() }.padding(10.dp))
                 } else {
+                    if (editing == null && input.isNotBlank() && pending.isEmpty()) {
+                        Text("🕒", fontSize = 18.sp, modifier = Modifier.clickable {
+                            scheduleMillis = System.currentTimeMillis() + 3600_000L
+                            showSchedule = true
+                        }.padding(8.dp))
+                    }
                     Icon(if (editing != null) Icons.Filled.Check else Icons.Filled.Send, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp).clickable { sendText() }.padding(10.dp))
                 }
             }
@@ -956,6 +1084,65 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                 }) { Text(tr("Сохранить", "Save", "Speichern")) }
             },
             dismissButton = { TextButton(onClick = { showName = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
+    if (showFolder) {
+        AlertDialog(
+            onDismissRequest = { showFolder = false },
+            title = { Text(tr("Новая папка", "New folder", "Neuer Ordner")) },
+            text = { NxField(folderText, { if (it.length <= 30) folderText = it }, tr("Название папки", "Folder name", "Ordnername")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showFolder = false
+                    scope.launch { try { Store.setFolder(friendId, folderText) } catch (e: Exception) { } }
+                }) { Text(tr("Сохранить", "Save", "Speichern")) }
+            },
+            dismissButton = { TextButton(onClick = { showFolder = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
+    if (showSchedule) {
+        val cal = Calendar.getInstance().apply { timeInMillis = scheduleMillis }
+        AlertDialog(
+            onDismissRequest = { showSchedule = false },
+            title = { Text(tr("Отложенная отправка", "Scheduled send", "Geplanter Versand")) },
+            text = {
+                Column {
+                    Text(
+                        tr("Будет отправлено: ", "Will send: ", "Wird gesendet: ") + timeOf(java.time.Instant.ofEpochMilli(scheduleMillis).toString()) +
+                            ", " + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(cal.time),
+                        color = TextSecondary, fontSize = 12.sp
+                    )
+                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NxSmallButton(tr("Дата", "Date", "Datum")) {
+                            DatePickerDialog(ctx, { _, y, m, d ->
+                                cal.set(y, m, d)
+                                scheduleMillis = cal.timeInMillis
+                            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                        }
+                        NxSmallButton(tr("Время", "Time", "Zeit")) {
+                            TimePickerDialog(ctx, { _, h, mi ->
+                                cal.set(Calendar.HOUR_OF_DAY, h)
+                                cal.set(Calendar.MINUTE, mi)
+                                scheduleMillis = cal.timeInMillis
+                            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSchedule = false
+                    val at = scheduleMillis
+                    val t = input.trim()
+                    if (t.isNotEmpty()) {
+                        input = ""
+                        val rid = replyTo?.id
+                        replyTo = null
+                        scope.launch { try { Store.sendText(t, friendId, rid, at) } catch (e: Exception) { error = friendlyError(e.message ?: "") } }
+                    }
+                }) { Text(tr("Запланировать", "Schedule", "Planen")) }
+            },
+            dismissButton = { TextButton(onClick = { showSchedule = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
         )
     }
     if (showSearch) SearchDialog(friendId, { showSearch = false }) { _, id -> showSearch = false; Store.jumpTo = id }
@@ -1091,12 +1278,19 @@ fun MessageBubble(
                 }
             }
             Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt),
-                    color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
-                )
-                if (mine && m.readAt != null) {
-                    Icon(Icons.Filled.DoneAll, contentDescription = null, tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(12.dp).padding(start = 3.dp))
+                if (mine && isFuture(m.sendAt)) {
+                    Text(
+                        "🕒 " + tr("будет отправлено ", "will send ", "wird gesendet ") + timeOf(m.sendAt!!),
+                        color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
+                    )
+                } else {
+                    Text(
+                        (if (m.editedAt != null) tr("изм. ", "edited ", "bearb. ") else "") + timeOf(m.createdAt),
+                        color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
+                    )
+                    if (mine && m.readAt != null) {
+                        Icon(Icons.Filled.DoneAll, contentDescription = null, tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(12.dp).padding(start = 3.dp))
+                    }
                 }
             }
             if (reactions.isNotEmpty()) {
