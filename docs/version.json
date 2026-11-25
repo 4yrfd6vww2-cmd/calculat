@@ -1,16 +1,16 @@
 {
   "win": {
     "version": "0.6.8",
-    "x64": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-22/Neirox-Windows.exe",
-    "ia32": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-22/Neirox-Windows-32.exe"
+    "x64": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-23/Neirox-Windows.exe",
+    "ia32": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-23/Neirox-Windows-32.exe"
   },
   "linux": {
     "version": "0.6.8",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-22/Neirox-Linux.AppImage"
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-23/Neirox-Linux.AppImage"
   },
   "mac": {
     "version": "0.10.8",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-22/Neirox-Mac.dmg"
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-23/Neirox-Mac.dmg"
   },
   "android": {
     "version": "0.10.8",
