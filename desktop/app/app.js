@@ -52,7 +52,9 @@ const IC = {
   pinfill: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="currentColor"/>',
   belloff: '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/>',
   globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
-  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
+  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
 };
 function icons(html) {
   return html.replace(/\{i:([a-z]+)\}/g, (all, n) => IC[n]
@@ -232,7 +234,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set() };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, dmPrefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set() };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -264,6 +266,10 @@ async function refresh() {
     } catch (e) { }
     try { const cn = await sel('contact_names', { select: '*' }); const am = {}; cn.forEach(x => { am[x.contact_id] = x.name; }); D.alias = am; } catch (e) { }
     try { const pr = await sel('chat_prefs', { select: '*' }); const pm = {}; pr.forEach(x => { pm[x.key] = x; }); D.prefs = pm; } catch (e) { }
+    try {
+      const dp = await sel('dm_prefs', { select: '*' });
+      const dm = {}; dp.forEach(x => { dm[x.user_a === myId() ? x.user_b : x.user_a] = x; }); D.dmPrefs = dm;
+    } catch (e) { }
     try { D.blocked = new Set((await sel('blocked_users', { select: 'blocked_id' })).map(r => r.blocked_id)); } catch (e) { }
     if (!D.stkLoaded) { try { D.stickers = await sel('my_stickers', { select: '*', order: 'id.desc' }); D.stkLoaded = true; } catch (e) { } }
     const ids = new Set();
@@ -303,6 +309,49 @@ async function setPref(k, field, v) {
     D.prefs[k] = Object.assign({ key: k }, cur || {}, o);
   } catch (e) { toast(friendly(e)); }
   renderAll();
+}
+/* ---------- папки, исчезающие сообщения, отложенная отправка ---------- */
+const folderOf = k => (D.prefs[k] && D.prefs[k].folder) || null;
+const allFolders = () => Array.from(new Set(Object.values(D.prefs).map(p => p.folder).filter(Boolean))).sort();
+async function setFolder(k, folder) {
+  const cur = D.prefs[k];
+  const clean = folder ? String(folder).trim().slice(0, 30) || null : null;
+  try {
+    const o = { folder: clean };
+    if (cur) await upd('chat_prefs', { user_id: 'eq.' + myId(), key: 'eq.' + k }, o);
+    else await ins('chat_prefs', Object.assign({ user_id: myId(), key: k }, o));
+    D.prefs[k] = Object.assign({ key: k }, cur || {}, o);
+  } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+const dmPair = other => (myId() < other ? [myId(), other] : [other, myId()]);
+const disappearFor = k => {
+  if (isKey(k)) { const c = chatByKey(k); return (c && c.disappear_sec) || 0; }
+  return (D.dmPrefs[k] && D.dmPrefs[k].disappear_sec) || 0;
+};
+async function setDisappear(k, sec) {
+  try {
+    if (isKey(k)) {
+      await upd('chats', { id: 'eq.' + cidOf(k) }, { disappear_sec: sec || null });
+    } else {
+      const [a, b] = dmPair(k);
+      const cur = D.dmPrefs[k];
+      const o = { disappear_sec: sec || null };
+      if (cur) await upd('dm_prefs', { user_a: 'eq.' + a, user_b: 'eq.' + b }, o);
+      else await ins('dm_prefs', Object.assign({ user_a: a, user_b: b }, o));
+    }
+  } catch (e) { toast(friendly(e)); }
+  await refresh();
+}
+function isFuture(iso) { try { return !!iso && new Date(iso).getTime() > Date.now(); } catch (e) { return false; } }
+function withTiming(to, row, sendAt) {
+  if (sendAt) row.send_at = new Date(sendAt).toISOString();
+  const sec = disappearFor(to);
+  if (sec > 0) {
+    const base = sendAt ? new Date(sendAt).getTime() : Date.now();
+    row.expires_at = new Date(base + sec * 1000).toISOString();
+  }
+  return row;
 }
 const BIGEMO = /^(?:[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2190-\u2BFF\u00A9\u00AE\u203C-\u3299]|\u200D|\uFE0F|\s)+$/;
 function isBigEmoji(b) {
@@ -386,15 +435,15 @@ async function markReadIfOpen() {
 }
 
 /* ---------- сообщения: операции ---------- */
-async function sendText(text, to, extra) {
-  await ins('messages', Object.assign({ sender: myId(), kind: 'text', body: text }, tgt(to), extra || {}));
+async function sendText(text, to, extra, sendAt) {
+  await ins('messages', withTiming(to, Object.assign({ sender: myId(), kind: 'text', body: text }, tgt(to), extra || {}), sendAt));
   await refresh();
 }
-async function sendMedia(blob, mime, fileName, kind, to, extra) {
+async function sendMedia(blob, mime, fileName, kind, to, extra, sendAt) {
   const ext = (fileName.split('.').pop() || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
   const path = myId() + '/' + crypto.randomUUID() + (ext && ext !== fileName ? '.' + ext : '');
   await uploadFile('chat-media', path, blob, mime, false);
-  await ins('messages', Object.assign({ sender: myId(), kind, media_path: path, file_name: fileName }, tgt(to), extra || {}));
+  await ins('messages', withTiming(to, Object.assign({ sender: myId(), kind, media_path: path, file_name: fileName }, tgt(to), extra || {}), sendAt));
   await refresh();
 }
 async function uploadAtt(blob, mime, fileName) {
@@ -403,7 +452,7 @@ async function uploadAtt(blob, mime, fileName) {
   await uploadFile('chat-media', path, blob, mime, false);
   return path;
 }
-async function sendAlbum(items, caption, to, extra) {
+async function sendAlbum(items, caption, to, extra, sendAt) {
   const atts = [];
   for (const it of items) {
     let blob = it.blob || it.file, mime = it.mime || blob.type || 'application/octet-stream', name = it.name;
@@ -412,7 +461,7 @@ async function sendAlbum(items, caption, to, extra) {
     const path = await uploadAtt(blob, mime, name);
     atts.push({ path, name, type: it.type, mime, size: blob.size });
   }
-  await ins('messages', Object.assign({ sender: myId(), kind: 'album', body: caption || null, attachments: atts }, tgt(to), extra || {}));
+  await ins('messages', withTiming(to, Object.assign({ sender: myId(), kind: 'album', body: caption || null, attachments: atts }, tgt(to), extra || {}), sendAt));
   await refresh();
 }
 async function editMessage(id, text) {
@@ -466,7 +515,7 @@ function compress(file) {
 }
 
 /* ---------- UI-состояние ---------- */
-const U = { tab: 'chats', chat: null, selected: new Set(), editing: null, error: '', busy: false, query: '', results: [], aiImageMode: false, authScreen: 'login', authErr: '', authBusy: false };
+const U = { tab: 'chats', chat: null, selected: new Set(), editing: null, error: '', busy: false, query: '', results: [], aiImageMode: false, authScreen: 'login', authErr: '', authBusy: false, folderFilter: null };
 const A = { msgs: [], images: {}, busy: false, err: '' };
 try { A.msgs = JSON.parse(lsGet('neirox.ai.history', '[]')); } catch (e) { A.msgs = []; }
 const P = { tracks: [], cur: -1, playing: false };
@@ -676,19 +725,28 @@ function noxHtml() {
 }
 function dname(p) { return p ? ((D.alias && D.alias[p.id]) || p.nick) : '?'; }
 function nickOf(id) { const p = D.profiles[id]; return p ? dname(p) : '?'; }
-function lastOf(id) { return thread(id).slice(-1)[0]; }
+function lastOf(id) { const l = thread(id); for (let i = l.length - 1; i >= 0; i--) { if (!l[i].send_at || !isFuture(l[i].send_at)) return l[i]; } return null; }
 function chatAvatar(c, size) { return avatarHtml({ nick: c.title, avatar_url: c.avatar_url }, size); }
 function renderList() {
   const items = [];
   friendIds().forEach(id => { const p = D.profiles[id]; if (p) items.push({ key: id, title: dname(p), av: avatarHtml(p, 46), tag: '' }); });
   myChatKeys().forEach(k => { const c = D.chats[cidOf(k)]; items.push({ key: k, title: c.title, av: chatAvatar(c, 46), tag: c.kind === 'channel' ? t('канал', 'channel', 'Kanal') : '' }); });
   items.forEach(it => { const l = lastOf(it.key); it.last = l; it.at = l ? l.created_at : ''; });
-  items.sort((a, b) => (isPinned(b.key) - isPinned(a.key)) || (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
-  let h = '<div class="chat-item ' + (U.chat === 'ai' ? 'on' : '') + '" data-act="open" data-v="ai">' +
+  const folders = allFolders();
+  const filtered = U.folderFilter ? items.filter(it => folderOf(it.key) === U.folderFilter) : items;
+  filtered.sort((a, b) => (isPinned(b.key) - isPinned(a.key)) || (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.title.localeCompare(b.title)));
+  let chips = '';
+  if (folders.length) {
+    chips = '<div class="seg" style="margin:10px 16px;flex-wrap:wrap;width:auto">' +
+      '<button data-act="folder-filter" data-v="" class="' + (!U.folderFilter ? 'on' : '') + '">' + t('Все', 'All', 'Alle') + '</button>' +
+      folders.map(f => '<button data-act="folder-filter" data-v="' + esc(f) + '" class="' + (U.folderFilter === f ? 'on' : '') + '">' + esc(f) + '</button>').join('') +
+      '</div>';
+  }
+  let h = chips + '<div class="chat-item ' + (U.chat === 'ai' ? 'on' : '') + '" data-act="open" data-v="ai">' +
     '<div class="avatar" style="width:40px;height:40px;font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2))">{i:sparkles}</div>' +
     '<div class="grow" style="min-width:0"><div class="title">' + t('Умный Чат (ИИ)', 'Smart Chat (AI)', 'Smarter Chat (KI)') + '</div><div class="prev">' + t('Вопросы и картинки', 'Questions and images', 'Fragen und Bilder') + '</div></div></div>';
   h += '<div class="chat-item" data-act="s-open"><div class="avatar" style="width:40px;height:40px;font-size:18px;background:var(--card)">{i:search}</div><div class="grow" style="min-width:0"><div class="title">' + t('Поиск по сообщениям', 'Search messages', 'Nachrichten suchen') + '</div></div></div>';
-  items.forEach(it => {
+  filtered.forEach(it => {
     const u = unread(it.key);
     const who = isKey(it.key) && it.last && it.last.sender !== myId() ? nickOf(it.last.sender) + ': ' : '';
     h += '<div class="chat-item ' + (U.chat === it.key ? 'on' : '') + '" data-act="open" data-v="' + esc(it.key) + '">' + it.av +
@@ -696,6 +754,7 @@ function renderList() {
       (u ? '<span class="unread">' + u + '</span>' : '') + '</div>';
   });
   if (!items.length) h += '<div class="empty">' + t('Добавь друзей на вкладке «Друзья», чтобы начать переписку.', 'Add friends in the Friends tab to start chatting.', 'Füge im Tab „Freunde“ Freunde hinzu, um zu chatten.') + '</div>';
+  else if (!filtered.length) h += '<div class="empty">' + t('В этой папке пока нет чатов.', 'No chats in this folder yet.', 'In diesem Ordner gibt es noch keine Chats.') + '</div>';
   setHTML($('#list'), h);
 }
 
@@ -722,6 +781,7 @@ function buildPane() {
       '<button class="icon-btn" data-act="ai-pic" title="' + t('Картинка от ИИ', 'AI image', 'KI-Bild') + '">{i:sparkles}</button>') +
     '<button class="icon-btn" data-act="emoji" title="' + t('Смайлики', 'Emoji', 'Emojis') + '">{i:smile}</button>' +
     '<textarea id="inp" rows="1" placeholder="' + t('Сообщение', 'Message', 'Nachricht') + '"></textarea>' +
+    (ai ? '' : '<button class="icon-btn" data-act="sched-open" title="' + t('Запланировать отправку', 'Schedule send', 'Senden planen') + '">{i:clock}</button>') +
     (ai ? '' : '<button class="icon-btn" data-act="rec-start" title="' + t('Голосовое сообщение', 'Voice message', 'Sprachnachricht') + '">{i:mic}</button>') +
     '<button class="icon-btn send" id="sendbtn" data-act="send">{i:send}</button>' +
     '<div id="recbar"><span class="recdot"></span><span id="rec-t">0:00</span><span class="grow" style="flex:1"></span>' +
@@ -837,8 +897,11 @@ function renderPane() {
 const myAdmin = k => { const m = myMember(k); return !!m && (m.role === 'owner' || m.role === 'admin'); };
 function chatTools() {
   const k = U.chat;
+  const canDisappear = !isKey(k) || myAdmin(k);
   return '<button class="icon-btn" data-act="s-open" title="' + t('Поиск', 'Search', 'Suche') + '">{i:search}</button>' +
     (isKey(k) ? '' : '<button class="icon-btn" data-act="cname" data-id="' + esc(k) + '" title="' + t('Имя контакта', 'Contact name', 'Kontaktname') + '">{i:edit}</button>') +
+    '<button class="icon-btn" data-act="folder-open" data-id="' + esc(k) + '" title="' + t('Папка', 'Folder', 'Ordner') + '">{i:folder}</button>' +
+    (canDisappear ? '<button class="icon-btn" data-act="disappear-open" data-id="' + esc(k) + '" title="' + t('Исчезающие сообщения', 'Disappearing messages', 'Verschwindende Nachrichten') + '">{i:clock}</button>' : '') +
     '<button class="icon-btn" data-act="cp-pin" data-id="' + esc(k) + '" title="' + t('Закрепить чат', 'Pin chat', 'Chat anheften') + '">' + (isPinned(k) ? '{i:pinfill}' : '{i:pin}') + '</button>' +
     '<button class="icon-btn" data-act="cp-mute" data-id="' + esc(k) + '" title="' + t('Уведомления', 'Notifications', 'Benachrichtigungen') + '">' + (isMuted(k) ? '{i:belloff}' : '{i:bell}') + '</button>';
 }
@@ -869,7 +932,8 @@ function doMsgSearch(q) {
 function showChatCtx(k, x, y) {
   const c = $('#ctx');
   c.innerHTML = icons('<button data-act="cp-pin" data-id="' + esc(k) + '">' + (isPinned(k) ? '{i:pinfill} ' + t('Открепить', 'Unpin', 'Lösen') : '{i:pin} ' + t('Закрепить', 'Pin', 'Anheften')) + '</button>' +
-    '<button data-act="cp-mute" data-id="' + esc(k) + '">' + (isMuted(k) ? '{i:bell} ' + t('Включить уведомления', 'Unmute', 'Ton an') : '{i:belloff} ' + t('Выключить уведомления', 'Mute', 'Stumm')) + '</button>');
+    '<button data-act="cp-mute" data-id="' + esc(k) + '">' + (isMuted(k) ? '{i:bell} ' + t('Включить уведомления', 'Unmute', 'Ton an') : '{i:belloff} ' + t('Выключить уведомления', 'Mute', 'Stumm')) + '</button>' +
+    '<button data-act="folder-open" data-id="' + esc(k) + '">{i:folder} ' + t('Папка', 'Folder', 'Ordner') + '</button>');
   c.classList.remove('hidden');
   const w = c.offsetWidth, h = c.offsetHeight;
   c.style.left = Math.max(6, Math.min(x, innerWidth - w - 6)) + 'px';
@@ -910,6 +974,26 @@ async function contactNameGo() {
     else { await ins('contact_names', { user_id: myId(), contact_id: id, name: v }); D.alias[id] = v; }
   } catch (e) { toast(friendly(e)); }
   renderAll();
+}
+function openFolderPicker(k) {
+  const folders = allFolders();
+  const cur = folderOf(k);
+  let body = folders.map(f => '<div class="pick" data-act="folder-pick" data-id="' + esc(k) + '" data-v="' + esc(f) + '">' + (cur === f ? '✓ ' : '') + esc(f) + '</div>').join('');
+  body += '<div class="pick" data-act="folder-new" data-id="' + esc(k) + '">{i:plus} ' + t('Новая папка…', 'New folder…', 'Neuer Ordner…') + '</div>';
+  if (cur) body += '<div class="pick" data-act="folder-pick" data-id="' + esc(k) + '" data-v="">{i:x} ' + t('Без папки', 'No folder', 'Kein Ordner') + '</div>';
+  openDialog(t('Папка', 'Folder', 'Ordner'), body, [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
+}
+function openFolderNew(k) {
+  U.folderNewKey = k; closeDialog();
+  openDialog(t('Новая папка', 'New folder', 'Neuer Ordner'), '<input class="field" id="d-folder" maxlength="30" placeholder="' + t('Название папки', 'Folder name', 'Ordnername') + '">',
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['folder-new-go', t('Сохранить', 'Save', 'Speichern'), '']]);
+  setTimeout(() => { const e = $('#d-folder'); if (e) e.focus(); }, 30);
+}
+function openDisappearPicker(k) {
+  const cur = disappearFor(k);
+  const opts = [[0, t('Выключено', 'Off', 'Aus')], [3600, t('1 час', '1 hour', '1 Stunde')], [86400, t('1 день', '1 day', '1 Tag')], [604800, t('1 неделя', '1 week', '1 Woche')]];
+  const body = opts.map(([sec, label]) => '<div class="pick" data-act="disappear-pick" data-id="' + esc(k) + '" data-v="' + sec + '">' + (cur === sec ? '✓ ' : '') + esc(label) + '</div>').join('');
+  openDialog(t('Исчезающие сообщения', 'Disappearing messages', 'Verschwindende Nachrichten'), body, [['cancel', t('Закрыть', 'Close', 'Schließen'), 'ghost']]);
 }
 function chatDesc() {
   const c = chatByKey(U.chat); if (!c) return;
@@ -1044,6 +1128,9 @@ async function statusPoll() {
 setInterval(statusPoll, 2000);
 
 function msgMeta(m, mine) {
+  if (mine && m.send_at && isFuture(m.send_at)) {
+    return '{i:clock} ' + t('будет отправлено ', 'will be sent ', 'wird gesendet ') + timeOf(m.send_at);
+  }
   return (m.edited_at ? t('изм. ', 'edited ', 'bearb. ') : '') + timeOf(m.created_at) + (mine && m.read_at ? ' {i:checks}' : '');
 }
 function syncMsgs(box, list) {
@@ -1605,6 +1692,54 @@ document.addEventListener('click', async e => {
     case 'goto': gotoMsg(Number(id)); break;
     case 'cp-pin': hideCtx(); setPref(id, 'pinned', !isPinned(id)); break;
     case 'cp-mute': hideCtx(); setPref(id, 'muted', !isMuted(id)); break;
+    case 'folder-filter': U.folderFilter = v || null; renderAll(); break;
+    case 'folder-open': hideCtx(); openFolderPicker(id); break;
+    case 'folder-new': openFolderNew(id); break;
+    case 'folder-new-go': {
+      const fv = val('d-folder').trim(); closeDialog();
+      const k = U.folderNewKey; if (k) try { await setFolder(k, fv); } catch (er) { toast(friendly(er)); }
+      break;
+    }
+    case 'folder-pick': { const k = id, fv = v || null; closeDialog(); try { await setFolder(k, fv); } catch (er) { toast(friendly(er)); } break; }
+    case 'disappear-open': hideCtx(); openDisappearPicker(id); break;
+    case 'disappear-pick': { const k = id, sec = Number(v); closeDialog(); try { await setDisappear(k, sec || null); } catch (er) { toast(friendly(er)); } break; }
+    case 'sched-open': {
+      if (!U.chat || U.chat === 'ai') return;
+      const d = new Date(Date.now() + 3600000);
+      const pad = n => String(n).padStart(2, '0');
+      U.schedDate = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      U.schedTime = pad(d.getHours()) + ':' + pad(d.getMinutes());
+      openDialog(t('Запланировать отправку', 'Schedule send', 'Senden planen'),
+        '<input class="field" type="date" id="d-sdate" value="' + U.schedDate + '"><input class="field" type="time" id="d-stime" value="' + U.schedTime + '" style="margin-top:8px">',
+        [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost'], ['sched-go', t('Запланировать', 'Schedule', 'Planen'), '']]);
+      break;
+    }
+    case 'sched-go': {
+      const dv = val('d-sdate'), tv = val('d-stime'); closeDialog();
+      if (!dv || !tv || !U.chat) return;
+      const at = new Date(dv + 'T' + tv);
+      if (isNaN(at.getTime()) || at.getTime() <= Date.now()) { toast(t('Выбери время в будущем', 'Pick a time in the future', 'Wähle einen Zeitpunkt in der Zukunft')); return; }
+      const inp = $('#inp');
+      const text = inp ? inp.value.trim() : '';
+      const queued = PEND[U.chat] || [];
+      if (!text && !queued.length) return;
+      const to = U.chat;
+      U.sending = true; renderAll();
+      try {
+        if (queued.length) {
+          const list = queued.slice();
+          await sendAlbum(list, text, to, replyExtra(), at.getTime());
+          PEND[to] = (PEND[to] || []).filter(x => !list.includes(x));
+          list.forEach(x => { if (x.url) URL.revokeObjectURL(x.url); });
+        } else {
+          await sendText(text, to, replyExtra(), at.getTime());
+        }
+        U.replyTo = null;
+        if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+      } catch (er) { U.error = friendly(er); }
+      U.sending = false; renderAll();
+      break;
+    }
     case 'c-pin': hideCtx(); msgPin(Number(id)); break;
     case 'unpin': msgPin(null); break;
     case 'code-copy': copyText(id); break;
