@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "717424285742",
+    "project_id": "neirox-b704d",
+    "storage_bucket": "neirox-b704d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:717424285742:android:499f669939308c70d327bf",
+        "android_client_info": {
+          "package_name": "com.example.neirox"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5WR3oUyWpk5FOECeN-MHiSDULdfUmT1g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

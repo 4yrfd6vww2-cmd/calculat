@@ -22,6 +22,14 @@ class NeiroxApplication : Application() {
         Settings.init(this)
         Player.init(this)
         Store.init(this)
+        // Push (FCM) живёт в отдельном source set и не собирается в android_old,
+        // поэтому подключаем его через рефлексию: на старой сборке класса просто нет.
+        try {
+            Class.forName("app.neirox.push.PushBridge")
+                .getMethod("install", Context::class.java)
+                .invoke(null, this)
+        } catch (e: Throwable) {
+        }
     }
 }
 

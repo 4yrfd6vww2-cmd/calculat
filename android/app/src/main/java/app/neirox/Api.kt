@@ -171,6 +171,10 @@ object Api {
         request("DELETE", "/rest/v1/$tableAndQuery")
     }
 
+    suspend fun upsert(table: String, row: JSONObject) {
+        request("POST", "/rest/v1/$table", row, headers = mapOf("Prefer" to "resolution=merge-duplicates,return=minimal"))
+    }
+
     // Storage
 
     suspend fun upload(bucket: String, path: String, data: ByteArray, mime: String, upsert: Boolean = false) {

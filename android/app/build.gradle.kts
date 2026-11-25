@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 // Вторая сборка для Android 5.0+: gradle -PoldAndroid=true
@@ -15,14 +16,25 @@ android {
         applicationId = "com.example.neirox"
         minSdk = if (old) 21 else 26
         targetSdk = 34
-        versionCode = if (old) 2 else 22
-        versionName = if (old) "0.0.2 android 5 build" else "0.10.11 android build"
+        versionCode = if (old) 2 else 23
+        versionName = if (old) "0.0.2 android 5 build" else "0.10.12 android build"
         buildConfigField("String", "UPDATE_KEY", if (old) "\"android_old\"" else "\"android\"")
+        // android_old никогда не получает push-сервис (класс даже не компилируется туда).
+        manifestPlaceholders["fcmEnabled"] = if (old) "false" else "true"
     }
 
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Пуш (FCM) живёт в отдельном source set и подключается только к обычной
+    // сборке — на android_old (gradle -PoldAndroid=true) эта директория не
+    // видна, поэтому там нет ни кода, ни зависимости firebase-messaging.
+    sourceSets {
+        getByName("main") {
+            if (!old) kotlin.srcDir("src/push/kotlin")
+        }
     }
 
     if (old) {
@@ -56,5 +68,9 @@ dependencies {
     implementation("io.getstream:stream-webrtc-android:1.3.8")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    if (!old) {
+        implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+        implementation("com.google.firebase:firebase-messaging-ktx")
+    }
     if (old) coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

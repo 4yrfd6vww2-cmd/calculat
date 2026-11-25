@@ -85,12 +85,14 @@ object Store {
         loggedIn = true
         start()
         NeiroxService.start(appCtx)
+        PushHook.onReady?.invoke()
     }
 
     fun logout() {
         job?.cancel()
         job = null
         Calls.reset()
+        PushHook.onLogout?.invoke()
         Api.signOut()
         Player.stopAll()
         NeiroxService.stop(appCtx)

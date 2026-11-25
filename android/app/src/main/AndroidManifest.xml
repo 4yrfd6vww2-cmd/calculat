@@ -47,6 +47,21 @@
             android:exported="false"
             android:foregroundServiceType="dataSync|mediaPlayback" />
 
+        <service
+            android:name="app.neirox.push.NeiroxFcmService"
+            android:exported="false"
+            android:enabled="${fcmEnabled}">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="messages" />
+
         <receiver
             android:name=".MediaActionReceiver"
             android:exported="false" />
