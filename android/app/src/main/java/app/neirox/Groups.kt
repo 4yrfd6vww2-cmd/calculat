@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -269,7 +270,25 @@ fun ChatInfoDialog(key: String, onClose: () -> Unit, onLeft: () -> Unit) {
                                 Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable {
                                     scope.launch { try { Store.kickMember(cid, m.userId) } catch (e: Exception) { } }
                                 }.padding(8.dp))
+                                Icon(Icons.Filled.Block, contentDescription = null, tint = androidx.compose.ui.graphics.Color(0xFFE5484D), modifier = Modifier.size(16.dp).clickable {
+                                    scope.launch { try { Store.banMember(cid, m.userId) } catch (e: Exception) { } }
+                                }.padding(8.dp))
                             }
+                        }
+                    }
+                }
+                val bannedList = if (isOwner) Store.bansFor(cid) else emptyList()
+                if (bannedList.isNotEmpty()) {
+                    Text(
+                        tr("Заблокированные", "Banned", "Gesperrt"), color = TextSecondary, fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp)
+                    )
+                    for (b in bannedList) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(Store.dname(b.userId), color = Txt, modifier = Modifier.weight(1f))
+                            TextButton(onClick = {
+                                scope.launch { try { Store.unbanMember(cid, b.userId) } catch (e: Exception) { } }
+                            }) { Text(tr("Разблокировать", "Unban", "Entsperren")) }
                         }
                     }
                 }

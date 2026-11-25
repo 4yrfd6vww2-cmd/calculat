@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -38,6 +40,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.runtime.Composable
@@ -61,6 +65,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -360,6 +365,47 @@ fun AlbumContent(
     }
     if (!m.body.isNullOrEmpty()) {
         Text(linkified(m.body, if (textColor == Color.White) Color.White else Accent), color = textColor, fontSize = 14.sp)
+    }
+}
+
+@Composable
+fun PollView(m: Message, textColor: Color) {
+    val scope = rememberCoroutineScope()
+    val opts = m.pollOptions ?: emptyList()
+    val votes = Store.votesFor(m.id)
+    val total = votes.size
+    val myIdx = Store.myVote(m.id)
+    Column(Modifier.widthIn(min = 220.dp, max = 260.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+            Icon(Icons.Filled.BarChart, contentDescription = null, tint = textColor, modifier = Modifier.size(16.dp).padding(end = 6.dp))
+            Text(m.body ?: "", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+        for ((i, opt) in opts.withIndex()) {
+            val n = votes.count { it.optionIdx == i }
+            val pct = if (total > 0) n * 100 / total else 0
+            Box(
+                Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(8.dp))
+                    .background(textColor.copy(alpha = 0.12f))
+                    .clickable { scope.launch { try { Store.vote(m.id, i) } catch (e: Exception) { } } }
+            ) {
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val barWidth = maxWidth * (pct / 100f)
+                    Box(Modifier.width(barWidth).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(textColor.copy(alpha = 0.22f)))
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(opt, color = textColor, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    if (myIdx == i) Icon(Icons.Filled.Check, contentDescription = null, tint = textColor, modifier = Modifier.size(14.dp).padding(end = 4.dp))
+                    Text("$n ($pct%)", color = textColor.copy(alpha = 0.7f), fontSize = 11.sp)
+                }
+            }
+        }
+        Text(
+            total.toString() + " " + tr("голосов", "votes", "Stimmen"),
+            color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
+        )
     }
 }
 

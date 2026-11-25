@@ -56,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
@@ -253,6 +254,7 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                                         "video" -> Icons.Filled.Videocam
                                         "mic" -> Icons.Filled.Mic
                                         "tag" -> Icons.Filled.LocalOffer
+                                        "poll" -> Icons.Filled.BarChart
                                         else -> Icons.Filled.AttachFile
                                     },
                                     contentDescription = null, tint = TextSecondary, modifier = Modifier.size(10.dp).padding(end = 3.dp)
@@ -372,6 +374,9 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
     var folderText by remember { mutableStateOf("") }
     var showSchedule by remember { mutableStateOf(false) }
     var scheduleMillis by remember { mutableStateOf(System.currentTimeMillis() + 3600_000L) }
+    var showPoll by remember { mutableStateOf(false) }
+    var pollQuestion by remember { mutableStateOf("") }
+    val pollOptions = remember { mutableStateListOf("", "") }
     val myRole = Store.myMember(friendId)?.role
     val isAdm = chat != null && (chat.owner == Store.myId || myRole == "admin" || myRole == "owner")
     val pending = remember { mutableStateListOf<PendingItem>() }
@@ -971,6 +976,12 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
                             )
                             DropdownMenuItem(text = { Text(tr("Файл", "File", "Datei")) }, onClick = { menu = false; filePicker.launch(arrayOf("*/*")) })
                             DropdownMenuItem(text = { Text(tr("Картинка от ИИ", "AI image", "KI-Bild")) }, onClick = { menu = false; showAI = true })
+                            if (Store.canPost(friendId)) {
+                                DropdownMenuItem(
+                                    text = { Text(tr("Опрос", "Poll", "Umfrage")) },
+                                    onClick = { menu = false; pollQuestion = ""; pollOptions.clear(); pollOptions.addAll(listOf("", "")); showPoll = true }
+                                )
+                            }
                         }
                     }
                 }
@@ -1145,6 +1156,45 @@ fun ChatScreen(friendId: String, onBack: () -> Unit, onForwardToAI: (String) -> 
             dismissButton = { TextButton(onClick = { showSchedule = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
         )
     }
+    if (showPoll) {
+        val canSend = pollQuestion.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2
+        AlertDialog(
+            onDismissRequest = { showPoll = false },
+            title = { Text(tr("Опрос", "Poll", "Umfrage")) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp)) {
+                    NxField(pollQuestion, { pollQuestion = it }, tr("Вопрос", "Question", "Frage"))
+                    for (i in pollOptions.indices) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                            NxField(
+                                pollOptions[i], { pollOptions[i] = it },
+                                tr("Вариант ", "Option ", "Option ") + (i + 1),
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (pollOptions.size > 2) {
+                                Icon(Icons.Filled.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable { pollOptions.removeAt(i) }.padding(8.dp))
+                            }
+                        }
+                    }
+                    if (pollOptions.size < 10) {
+                        Text(
+                            "＋ " + tr("Добавить вариант", "Add option", "Option hinzufügen"), color = Accent,
+                            modifier = Modifier.clickable { pollOptions.add("") }.padding(vertical = 10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = canSend, onClick = {
+                    showPoll = false
+                    val q = pollQuestion.trim()
+                    val opts = pollOptions.map { it.trim() }.filter { it.isNotEmpty() }
+                    scope.launch { try { Store.sendPoll(q, opts, friendId) } catch (e: Exception) { error = friendlyError(e.message ?: "") } }
+                }) { Text(tr("Отправить", "Send", "Senden")) }
+            },
+            dismissButton = { TextButton(onClick = { showPoll = false }) { Text(tr("Отмена", "Cancel", "Abbrechen")) } }
+        )
+    }
     if (showSearch) SearchDialog(friendId, { showSearch = false }) { _, id -> showSearch = false; Store.jumpTo = id }
     if (showInfo && chat != null) ChatInfoDialog(friendId, { showInfo = false }) { showInfo = false; onBack() }
     if (showProfile && chat == null) ContactProfileDialog(friendId, { showProfile = false }, { callClick() }, { showSearch = true })
@@ -1269,6 +1319,8 @@ fun MessageBubble(
                         }
                     }
                 )
+            } else if (m.kind == "poll") {
+                PollView(m, textColor)
             } else {
                 if (m.kind == "text" && isBigEmoji(m.body)) Text(m.body ?: "", fontSize = 38.sp)
                 else {

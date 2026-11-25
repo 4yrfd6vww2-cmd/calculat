@@ -31,7 +31,8 @@ data class Message(
     val chatId: String? = null,
     val replyTo: Long? = null,
     val sendAt: String? = null,
-    val expiresAt: String? = null
+    val expiresAt: String? = null,
+    val pollOptions: List<String>? = null
 )
 
 data class Chat(val id: String, val kind: String, val title: String, val description: String?, val owner: String, val avatarUrl: String? = null, val inviteCode: String? = null, val pinnedMsg: Long? = null, val disappearSec: Int? = null) {
@@ -58,6 +59,10 @@ data class Sticker(val id: Long, val path: String)
 
 data class Reaction(val messageId: Long, val userId: String, val emoji: String)
 
+data class ChatBan(val chatId: String, val userId: String, val bannedBy: String?)
+
+data class PollVote(val messageId: Long, val userId: String, val optionIdx: Int)
+
 fun parseChat(o: JSONObject) = Chat(
     o.getString("id"), o.getString("kind"), o.optString("title", ""), o.str("description"), o.getString("owner"),
     o.str("avatar_url"), o.str("invite_code"), if (o.isNull("pinned_msg")) null else o.optLong("pinned_msg"),
@@ -71,6 +76,17 @@ fun parseDmPref(o: JSONObject) = DmPref(o.getString("user_a"), o.getString("user
 fun parseMember(o: JSONObject) = Member(o.getString("chat_id"), o.getString("user_id"), o.optString("role", "member"), o.optLong("last_read", 0L))
 
 fun parseReaction(o: JSONObject) = Reaction(o.getLong("message_id"), o.getString("user_id"), o.getString("emoji"))
+
+fun parseChatBan(o: JSONObject) = ChatBan(o.getString("chat_id"), o.getString("user_id"), o.str("banned_by"))
+
+fun parsePollVote(o: JSONObject) = PollVote(o.getLong("message_id"), o.getString("user_id"), o.optInt("option_idx", 0))
+
+private fun parsePollOptions(o: JSONObject): List<String>? {
+    val arr = o.optJSONArray("poll_options") ?: return null
+    val out = ArrayList<String>()
+    for (i in 0 until arr.length()) out.add(arr.optString(i, ""))
+    return out
+}
 
 fun parseProfile(o: JSONObject) = Profile(
     o.getString("id"), o.getString("nick"), o.str("avatar_url"), o.str("created_at"),
@@ -87,7 +103,8 @@ fun parseMessage(o: JSONObject) = Message(
     o.str("chat_id"),
     if (o.isNull("reply_to")) null else o.optLong("reply_to"),
     o.str("send_at"),
-    o.str("expires_at")
+    o.str("expires_at"),
+    parsePollOptions(o)
 )
 
 private fun parseAttachments(o: JSONObject): List<Attachment> {
@@ -108,6 +125,7 @@ fun previewIconOf(m: Message?): String? {
     return when (m.kind) {
         "image" -> if ((m.fileName ?: "").startsWith("sticker.")) "tag" else "photo"
         "file" -> "attach"
+        "poll" -> "poll"
         "album" -> {
             val a = m.attachments
             when {
@@ -127,6 +145,7 @@ fun previewOf(m: Message?): String {
     return when (m.kind) {
         "image" -> if ((m.fileName ?: "").startsWith("sticker.")) tr("Стикер", "Sticker", "Sticker") else tr("Фото", "Photo", "Foto")
         "file" -> m.fileName ?: tr("Файл", "File", "Datei")
+        "poll" -> tr("Опрос: ", "Poll: ", "Umfrage: ") + (m.body ?: "")
         "album" -> {
             val a = m.attachments
             val base = when {

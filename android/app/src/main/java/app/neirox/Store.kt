@@ -38,6 +38,8 @@ object Store {
     var members by mutableStateOf<List<Member>>(emptyList())
         private set
     var reactions by mutableStateOf<List<Reaction>>(emptyList())
+    var bans by mutableStateOf<List<ChatBan>>(emptyList())
+    var pollVotes by mutableStateOf<List<PollVote>>(emptyList())
 
     var prefs by mutableStateOf<Map<String, ChatPref>>(emptyMap())
     var dmPrefs by mutableStateOf<Map<String, DmPref>>(emptyMap())
@@ -100,6 +102,8 @@ object Store {
         chats = emptyList()
         members = emptyList()
         reactions = emptyList()
+        bans = emptyList()
+        pollVotes = emptyList()
         prefs = emptyMap()
         dmPrefs = emptyMap()
         alias = emptyMap()
@@ -197,6 +201,16 @@ object Store {
             try {
                 val rr = Api.select("message_reactions?select=*&limit=3000")
                 reactions = (0 until rr.length()).map { parseReaction(rr.getJSONObject(it)) }
+            } catch (e: ApiError) {
+            }
+            try {
+                val bb = Api.select("chat_bans?select=*")
+                bans = (0 until bb.length()).map { parseChatBan(bb.getJSONObject(it)) }
+            } catch (e: ApiError) {
+            }
+            try {
+                val pv = Api.select("poll_votes?select=*&limit=5000")
+                pollVotes = (0 until pv.length()).map { parsePollVote(pv.getJSONObject(it)) }
             } catch (e: ApiError) {
             }
 
@@ -617,6 +631,46 @@ object Store {
 
     suspend fun setRole(cid: String, uid: String, role: String) {
         Api.update("chat_members?chat_id=eq.$cid&user_id=eq.$uid", JSONObject().put("role", role))
+        refresh()
+    }
+
+    // MARK: Бан участников
+
+    fun bansFor(cid: String): List<ChatBan> = bans.filter { it.chatId == cid }
+    fun isBanned(cid: String, uid: String): Boolean = bans.any { it.chatId == cid && it.userId == uid }
+
+    suspend fun banMember(cid: String, uid: String) {
+        Api.delete("chat_members?chat_id=eq.$cid&user_id=eq.$uid")
+        Api.insert("chat_bans", JSONObject().put("chat_id", cid).put("user_id", uid).put("banned_by", myId))
+        refresh()
+    }
+
+    suspend fun unbanMember(cid: String, uid: String) {
+        Api.delete("chat_bans?chat_id=eq.$cid&user_id=eq.$uid")
+        refresh()
+    }
+
+    // MARK: Опросы
+
+    fun votesFor(mid: Long): List<PollVote> = pollVotes.filter { it.messageId == mid }
+    fun myVote(mid: Long): Int? = votesFor(mid).firstOrNull { it.userId == myId }?.optionIdx
+
+    suspend fun vote(mid: Long, idx: Int) {
+        if (myVote(mid) != null) {
+            Api.update("poll_votes?message_id=eq.$mid&user_id=eq.$myId", JSONObject().put("option_idx", idx))
+        } else {
+            Api.insert("poll_votes", JSONObject().put("message_id", mid).put("user_id", myId).put("option_idx", idx))
+        }
+        refresh()
+    }
+
+    suspend fun sendPoll(question: String, options: List<String>, to: String, reply: Long? = null) {
+        val opts = org.json.JSONArray()
+        for (o in options) opts.put(o)
+        var row = tgt(to, JSONObject().put("sender", myId).put("kind", "poll").put("body", question).put("poll_options", opts))
+        if (reply != null) row.put("reply_to", reply)
+        row = withTiming(to, row, null)
+        Api.insert("messages", row)
         refresh()
     }
 
