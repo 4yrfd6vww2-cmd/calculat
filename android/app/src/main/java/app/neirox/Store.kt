@@ -284,6 +284,20 @@ object Store {
         refresh()
     }
 
+    suspend fun sendRequestByNick(nick: String) {
+        val clean = nick.lowercase()
+        if (clean == me?.nick) throw ApiError(tr("Нельзя добавить себя", "Can't add yourself", "Kann dich nicht selbst hinzufügen"))
+        val a = Api.select("profiles?nick=eq.$clean&select=*&limit=1")
+        if (a.length() == 0) throw ApiError(tr("Пользователь не найден", "User not found", "Benutzer nicht gefunden"))
+        val p = parseProfile(a.getJSONObject(0))
+        val f = friendship(p.id)
+        if (f != null) {
+            if (f.status == "accepted") throw ApiError(tr("Уже в друзьях", "Already friends", "Bereits befreundet"))
+            throw ApiError(tr("Заявка уже отправлена", "Request already sent", "Anfrage bereits gesendet"))
+        }
+        sendRequest(p.id)
+    }
+
     suspend fun accept(f: Friendship) {
         Api.update("friendships?id=eq.${f.id}", JSONObject().put("status", "accepted"))
         refresh()

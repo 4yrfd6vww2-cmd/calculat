@@ -1084,7 +1084,11 @@ fun MessageBubble(
                 )
             } else {
                 if (m.kind == "text" && isBigEmoji(m.body)) Text(m.body ?: "", fontSize = 38.sp)
-                else Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 14.sp)
+                else {
+                    Text(linkified(m.body ?: "", if (mine) Color.White else Accent), color = textColor, fontSize = 14.sp)
+                    val link = firstHTTPURL(m.body ?: "")
+                    if (link != null) LinkPreviewView(link, mine)
+                }
             }
             Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 Text(

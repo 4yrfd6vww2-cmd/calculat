@@ -1,6 +1,7 @@
 package app.neirox
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,7 +30,14 @@ fun FriendsTab() {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var error by remember { mutableStateOf("") }
+    var showQR by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    if (showQR) {
+        androidx.activity.compose.BackHandler { showQR = false }
+        AddFriendQRScreen(onBack = { showQR = false })
+        return
+    }
 
     LaunchedEffect(query) {
         if (query.trim().length < 2) {
@@ -66,7 +74,12 @@ fun FriendsTab() {
     }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenTitle(tr("Друзья", "Friends", "Freunde"))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { ScreenTitle(tr("Друзья", "Friends", "Freunde")) }
+            Box(Modifier.padding(end = 20.dp)) {
+                NxSmallButton(tr("QR", "QR", "QR"), filled = false) { showQR = true }
+            }
+        }
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
