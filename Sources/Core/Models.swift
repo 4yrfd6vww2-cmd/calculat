@@ -46,6 +46,8 @@ struct Message: Codable, Identifiable, Hashable {
     var attachments: [Attachment]?
     var chatId: String?
     var replyTo: Int?
+    var sendAt: Date?
+    var expiresAt: Date?
 }
 
 struct Chat: Codable, Identifiable, Hashable {
@@ -57,6 +59,7 @@ struct Chat: Codable, Identifiable, Hashable {
     var avatarUrl: String?
     var inviteCode: String?
     var pinnedMsg: Int?
+    var disappearSec: Int?
 }
 
 struct Member: Codable, Hashable {
@@ -102,6 +105,13 @@ struct ChatPref: Codable, Hashable {
     let key: String
     var muted: Bool?
     var pinned: Bool?
+    var folder: String?
+}
+
+struct DmPref: Codable, Hashable {
+    let userA: String
+    let userB: String
+    var disappearSec: Int?
 }
 
 struct ContactName: Codable, Hashable {

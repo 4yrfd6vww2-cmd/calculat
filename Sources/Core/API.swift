@@ -25,6 +25,7 @@ enum ISO {
     }()
     static func parse(_ s: String) -> Date? { withFraction.date(from: s) ?? plain.date(from: s) }
     static func now() -> String { withFraction.string(from: Date()) }
+    static func string(_ d: Date) -> String { withFraction.string(from: d) }
 }
 
 final class API {

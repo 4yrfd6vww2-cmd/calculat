@@ -15,6 +15,7 @@ final class Store: ObservableObject {
     @Published var members: [Member] = []
     @Published var reactions: [Reaction] = []
     @Published var prefs: [String: ChatPref] = [:]
+    @Published var dmPrefs: [String: DmPref] = [:]
     @Published var stickers: [Sticker] = []
     @Published var jumpTo: Int?
     @Published var alias: [String: String] = [:]
@@ -58,6 +59,7 @@ final class Store: ObservableObject {
         members = []
         reactions = []
         prefs = [:]
+        dmPrefs = [:]
         alias = [:]
         wallet = nil
         colors = []
@@ -115,6 +117,14 @@ final class Store: ObservableObject {
                 var d: [String: ChatPref] = [:]
                 for x in pr { d[x.key] = x }
                 prefs = d
+            }
+            if let dp: [DmPref] = try? await API.shared.select("dm_prefs", [URLQueryItem(name: "select", value: "*")]) {
+                var d: [String: DmPref] = [:]
+                for x in dp {
+                    let other = x.userA == myId ? x.userB : x.userA
+                    d[other] = x
+                }
+                dmPrefs = d
             }
             if !stkLoaded, let st: [Sticker] = try? await API.shared.select("my_stickers", [
                 URLQueryItem(name: "select", value: "*"), URLQueryItem(name: "order", value: "id.desc")]) {
@@ -263,6 +273,67 @@ final class Store: ObservableObject {
     private func tgt(_ to: String, _ o: [String: Any]) -> [String: Any] {
         var r = o
         if isKey(to) { r["chat_id"] = cidOf(to) } else { r["receiver"] = to }
+        return r
+    }
+
+    // MARK: Папки, исчезающие сообщения, отложенная отправка
+
+    func folderOf(_ k: String) -> String? { prefs[k]?.folder }
+
+    func allFolders() -> [String] {
+        Array(Set(prefs.values.compactMap { $0.folder })).sorted()
+    }
+
+    func setFolder(_ k: String, _ folder: String?) async {
+        let cur = prefs[k]
+        let clean = folder?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let v: Any = (clean?.isEmpty ?? true) ? NSNull() : clean!
+        do {
+            if cur != nil {
+                try await API.shared.update("chat_prefs", [
+                    URLQueryItem(name: "user_id", value: "eq.\(myId)"), URLQueryItem(name: "key", value: "eq.\(k)")], ["folder": v])
+            } else {
+                try await API.shared.insert("chat_prefs", ["user_id": myId, "key": k, "folder": v])
+            }
+            prefs[k] = ChatPref(key: k, muted: cur?.muted, pinned: cur?.pinned, folder: (clean?.isEmpty ?? true) ? nil : clean)
+        } catch {
+        }
+    }
+
+    private func dmPair(_ other: String) -> (String, String) { myId < other ? (myId, other) : (other, myId) }
+
+    /// Таймер исчезающих сообщений (в секундах) для чата/диалога. 0 — выключено.
+    func disappearFor(_ k: String) -> Int {
+        if isKey(k) { return chatByKey(k)?.disappearSec ?? 0 }
+        return dmPrefs[k]?.disappearSec ?? 0
+    }
+
+    func setDisappear(_ k: String, _ sec: Int?) async {
+        let v: Any = sec.map { $0 } ?? NSNull()
+        if isKey(k) {
+            try? await API.shared.update("chats", [URLQueryItem(name: "id", value: "eq.\(cidOf(k))")], ["disappear_sec": v])
+        } else {
+            let (a, b) = dmPair(k)
+            let cur = dmPrefs[k]
+            if cur != nil {
+                try? await API.shared.update("dm_prefs", [
+                    URLQueryItem(name: "user_a", value: "eq.\(a)"), URLQueryItem(name: "user_b", value: "eq.\(b)")], ["disappear_sec": v])
+            } else {
+                try? await API.shared.insert("dm_prefs", ["user_a": a, "user_b": b, "disappear_sec": v])
+            }
+        }
+        await refresh()
+    }
+
+    /// Добавляет к строке сообщения время отложенной отправки и/или срок исчезновения.
+    private func withTiming(_ to: String, _ row: [String: Any], sendAt: Date?) -> [String: Any] {
+        var r = row
+        if let s = sendAt { r["send_at"] = ISO.string(s) }
+        let sec = disappearFor(to)
+        if sec > 0 {
+            let base = sendAt ?? Date()
+            r["expires_at"] = ISO.string(base.addingTimeInterval(TimeInterval(sec)))
+        }
         return r
     }
 
@@ -474,6 +545,7 @@ final class Store: ObservableObject {
         let ext = (path as NSString).pathExtension
         var row = tgt(id, ["sender": myId, "kind": "image", "media_path": path, "file_name": "sticker." + (ext.isEmpty ? "png" : ext)])
         if let r = reply { row["reply_to"] = r }
+        row = withTiming(id, row, sendAt: nil)
         try await API.shared.insert("messages", row)
         await refresh()
     }
@@ -571,24 +643,26 @@ final class Store: ObservableObject {
         }
     }
 
-    func sendText(_ text: String, to id: String, reply: Int? = nil) async throws {
+    func sendText(_ text: String, to id: String, reply: Int? = nil, sendAt: Date? = nil) async throws {
         var row = tgt(id, ["sender": myId, "kind": "text", "body": text])
         if let r = reply { row["reply_to"] = r }
+        row = withTiming(id, row, sendAt: sendAt)
         try await API.shared.insert("messages", row)
         await refresh()
     }
 
-    func sendMedia(data: Data, mime: String, fileName: String, kind: String, to id: String, reply: Int? = nil) async throws {
+    func sendMedia(data: Data, mime: String, fileName: String, kind: String, to id: String, reply: Int? = nil, sendAt: Date? = nil) async throws {
         let ext = (fileName as NSString).pathExtension
         let path = "\(myId)/\(UUID().uuidString)" + (ext.isEmpty ? "" : ".\(ext)")
         try await API.shared.upload(bucket: "chat-media", path: path, data: data, mime: mime)
         var row = tgt(id, ["sender": myId, "kind": kind, "media_path": path, "file_name": fileName])
         if let r = reply { row["reply_to"] = r }
+        row = withTiming(id, row, sendAt: sendAt)
         try await API.shared.insert("messages", row)
         await refresh()
     }
 
-    func sendAlbum(_ items: [OutItem], caption: String, to id: String, reply: Int? = nil) async throws {
+    func sendAlbum(_ items: [OutItem], caption: String, to id: String, reply: Int? = nil, sendAt: Date? = nil) async throws {
         var atts: [[String: Any]] = []
         for it in items {
             let ext = (it.name as NSString).pathExtension
@@ -599,6 +673,7 @@ final class Store: ObservableObject {
         var row = tgt(id, ["sender": myId, "kind": "album", "attachments": atts])
         if !caption.isEmpty { row["body"] = caption }
         if let r = reply { row["reply_to"] = r }
+        row = withTiming(id, row, sendAt: sendAt)
         try await API.shared.insert("messages", row)
         await refresh()
     }

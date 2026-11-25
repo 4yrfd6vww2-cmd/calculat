@@ -47,13 +47,18 @@ struct ChatsView: View {
     @State private var showCode = false
     @State private var showSearch = false
     @State private var openKey: String?
+    @State private var activeFolder: String? = nil
+    @State private var showFolder = false
+    @State private var folderText = ""
+    @State private var folderKey = ""
 
     private var friends: [Row] {
         var list: [Row] = store.friendIds.compactMap { store.profiles[$0] }.map { Row(key: $0.id, title: store.dname($0), profile: $0, chat: nil) }
         list += store.chats.map { Row(key: "c:" + $0.id, title: $0.title, profile: nil, chat: $0) }
+        if let f = activeFolder { list = list.filter { store.folderOf($0.key) == f } }
         return list.sorted { a, b in
-            let la = store.thread(with: a.key).last?.createdAt ?? .distantPast
-            let lb = store.thread(with: b.key).last?.createdAt ?? .distantPast
+            let la = lastVisible(a.key)?.createdAt ?? .distantPast
+            let lb = lastVisible(b.key)?.createdAt ?? .distantPast
             let pa = store.isPinned(a.key)
             let pb = store.isPinned(b.key)
             if pa != pb { return pa }
@@ -62,8 +67,40 @@ struct ChatsView: View {
         }
     }
 
+    @ViewBuilder private var folderChips: some View {
+        let fs = store.allFolders()
+        if !fs.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    folderChip(tr("Все", "All", "Alle"), selected: activeFolder == nil) { activeFolder = nil }
+                    ForEach(fs, id: \.self) { f in
+                        folderChip(f, selected: activeFolder == f) { activeFolder = f }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private func folderChip(_ title: String, selected: Bool, onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(selected ? .white : Theme.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(selected ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card))
+                .clipShape(Capsule())
+        }
+    }
+
     private func titleLine(_ r: Row) -> String {
         return r.title
+    }
+
+    /// Последнее сообщение, уже видимое в превью (без ещё не наступивших отложенных).
+    private func lastVisible(_ key: String) -> Message? {
+        store.thread(with: key).last { ($0.sendAt ?? .distantPast) <= Date() }
     }
 
     private func rowMenuActions(_ k: String) -> [MenuAction] {
@@ -73,8 +110,28 @@ struct ChatsView: View {
             },
             MenuAction(icon: "bell.slash", title: store.isMuted(k) ? tr("Включить уведомления", "Unmute", "Ton an") : tr("Выключить уведомления", "Mute", "Stummschalten")) {
                 Task { await store.setPref(k, "muted", !store.isMuted(k)) }
-            }
+            },
+            MenuAction(icon: "folder", title: tr("Папка", "Folder", "Ordner")) { openRowFolderMenu(k) }
         ]
+    }
+
+    private func openRowFolderMenu(_ k: String) {
+        var items: [MenuAction] = []
+        let cur = store.folderOf(k)
+        for f in store.allFolders() {
+            items.append(MenuAction(icon: f == cur ? "checkmark" : "folder", title: f) {
+                Task { await store.setFolder(k, f) }
+            })
+        }
+        items.append(MenuAction(icon: "plus", title: tr("Новая папка…", "New folder…", "Neuer Ordner…")) {
+            folderKey = k; folderText = ""; showFolder = true
+        })
+        if cur != nil {
+            items.append(MenuAction(icon: "xmark", title: tr("Без папки", "No folder", "Kein Ordner"), destructive: true) {
+                Task { await store.setFolder(k, nil) }
+            })
+        }
+        MenuPresenter.shared.show(actions: items)
     }
 
     private func previewIcon(_ m: Message?) -> String? {
@@ -157,6 +214,8 @@ struct ChatsView: View {
                         .foregroundColor(Theme.accent)
                         .padding(.horizontal, 4)
 
+                        folderChips
+
                         ForEach(friends) { p in
                             NavigationLink(destination: ChatView(key: p.key)) {
                                 GlassCard {
@@ -184,10 +243,10 @@ struct ChatsView: View {
                                                 }
                                             }
                                             HStack(spacing: 4) {
-                                                if let icon = previewIcon(store.thread(with: p.key).last) {
+                                                if let icon = previewIcon(lastVisible(p.key)) {
                                                     Image(systemName: icon).font(.system(size: 10)).foregroundColor(Theme.textSecondary)
                                                 }
-                                                Text(preview(store.thread(with: p.key).last))
+                                                Text(preview(lastVisible(p.key)))
                                                     .font(.system(size: 11))
                                                     .foregroundColor(Theme.textSecondary)
                                                     .lineLimit(1)
@@ -233,6 +292,16 @@ struct ChatsView: View {
             .sheet(isPresented: $showFind) { FindChannelSheet { k in showFind = false; openKey = k } }
             .sheet(isPresented: $showCode) { JoinCodeSheet { k in showCode = false; openKey = k } }
             .sheet(isPresented: $showSearch) { SearchSheet(only: nil) { k, id in showSearch = false; store.jumpTo = id; openKey = k } }
+            .overlay(
+                PromptDialogOverlay(
+                    isPresented: $showFolder,
+                    title: tr("Новая папка", "New folder", "Neuer Ordner"),
+                    placeholder: tr("Название папки", "Folder name", "Ordnername"),
+                    text: $folderText,
+                    confirmTitle: tr("Сохранить", "Save", "Speichern"),
+                    onConfirm: { Task { await store.setFolder(folderKey, folderText) } }
+                )
+            )
             .onChange(of: inbox.pending) { v in
                 if v != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { aiActive = true }
@@ -341,11 +410,17 @@ struct Bubble: View {
                 content
                 if !rx.isEmpty { rxView }
                 HStack(spacing: 3) {
-                    Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
-                        .font(.system(size: 10))
-                        .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
-                    if mine && m.chatId == nil { readTicks }
+                    if mine, let sa = m.sendAt, sa > Date() {
+                        Image(systemName: "clock").font(.system(size: 9))
+                        Text(tr("будет отправлено ", "will send ", "wird gesendet ") + timeFormatter.string(from: sa))
+                            .font(.system(size: 10))
+                    } else {
+                        Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
+                            .font(.system(size: 10))
+                        if mine && m.chatId == nil { readTicks }
+                    }
                 }
+                .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -517,6 +592,10 @@ struct ChatView: View {
     @State private var showForward = false
     @State private var showDelete = false
     @State private var fullscreenPath: String?
+    @State private var showSchedule = false
+    @State private var scheduleDate = Date().addingTimeInterval(3600)
+    @State private var showFolder = false
+    @State private var folderText = ""
     @Environment(\.dismiss) private var dismiss
     var onForwardToAI: ((String) -> Void)? = nil
 
@@ -648,6 +727,17 @@ struct ChatView: View {
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $showForward) { forwardSheet }
+        .sheet(isPresented: $showSchedule) { scheduleSheet }
+        .overlay(
+            PromptDialogOverlay(
+                isPresented: $showFolder,
+                title: tr("Новая папка", "New folder", "Neuer Ordner"),
+                placeholder: tr("Название папки", "Folder name", "Ordnername"),
+                text: $folderText,
+                confirmTitle: tr("Сохранить", "Save", "Speichern"),
+                onConfirm: { Task { await store.setFolder(key, folderText) } }
+            )
+        )
         .overlay(
             PromptDialogOverlay(
                 isPresented: $showName,
@@ -753,10 +843,49 @@ struct ChatView: View {
             items.append(MenuAction(icon: "pin", title: store.isPinned(key) ? tr("Открепить чат", "Unpin chat", "Chat lösen") : tr("Закрепить чат", "Pin chat", "Chat anheften")) {
                 Task { await store.setPref(key, "pinned", !store.isPinned(key)) }
             })
+            items.append(MenuAction(icon: "folder", title: tr("Папка", "Folder", "Ordner")) { openFolderMenu() })
+            if chat == nil || isAdm {
+                items.append(MenuAction(icon: "timer", title: tr("Исчезающие сообщения", "Disappearing messages", "Verschwindende Nachrichten")) { openDisappearMenu() })
+            }
             MenuPresenter.shared.show(actions: items)
         } label: {
             Image(systemName: "ellipsis.circle")
         }
+    }
+
+    private func openFolderMenu() {
+        var items: [MenuAction] = []
+        let cur = store.folderOf(key)
+        for f in store.allFolders() {
+            items.append(MenuAction(icon: f == cur ? "checkmark" : "folder", title: f) {
+                Task { await store.setFolder(key, f) }
+            })
+        }
+        items.append(MenuAction(icon: "plus", title: tr("Новая папка…", "New folder…", "Neuer Ordner…")) {
+            folderText = ""; showFolder = true
+        })
+        if cur != nil {
+            items.append(MenuAction(icon: "xmark", title: tr("Без папки", "No folder", "Kein Ordner"), destructive: true) {
+                Task { await store.setFolder(key, nil) }
+            })
+        }
+        MenuPresenter.shared.show(actions: items)
+    }
+
+    private func openDisappearMenu() {
+        let cur = store.disappearFor(key)
+        let options: [(String, Int)] = [
+            (tr("Выключено", "Off", "Aus"), 0),
+            (tr("1 час", "1 hour", "1 Stunde"), 3600),
+            (tr("1 день", "1 day", "1 Tag"), 86400),
+            (tr("1 неделя", "1 week", "1 Woche"), 604800)
+        ]
+        let items: [MenuAction] = options.map { (title, sec) in
+            MenuAction(icon: sec == cur ? "checkmark" : "timer", title: title) {
+                Task { await store.setDisappear(key, sec > 0 ? sec : nil) }
+            }
+        }
+        MenuPresenter.shared.show(actions: items)
     }
 
     @ViewBuilder private var pinBar: some View {
@@ -905,6 +1034,11 @@ struct ChatView: View {
                             Image(systemName: "mic.circle.fill").font(.system(size: 26)).foregroundColor(Theme.accent)
                         }
                     } else {
+                        if canSchedule {
+                            Button { scheduleDate = Date().addingTimeInterval(3600); showSchedule = true } label: {
+                                Image(systemName: "clock").font(.system(size: 20)).foregroundColor(Theme.accent)
+                            }
+                        }
                         Button { sendText() } label: {
                             Image(systemName: editing != nil ? "checkmark.circle.fill" : "arrow.up.circle.fill").font(.system(size: 26)).foregroundColor(Theme.accent)
                         }
@@ -969,7 +1103,7 @@ struct ChatView: View {
         pending.append(PendingItem(kind: "file", name: url.lastPathComponent, fileURL: url))
     }
 
-    private func sendPending(caption: String) {
+    private func sendPending(caption: String, at: Date? = nil) {
         let list = pending
         text = ""
         busy = true
@@ -979,7 +1113,7 @@ struct ChatView: View {
             do {
                 var out: [OutItem] = []
                 for p in list { out.append(try await p.makeOutItem()) }
-                try await store.sendAlbum(out, caption: caption, to: key, reply: replyTo?.id)
+                try await store.sendAlbum(out, caption: caption, to: key, reply: replyTo?.id, sendAt: at)
                 replyTo = nil
                 pending.removeAll { x in list.contains { $0.id == x.id } }
             } catch {
@@ -994,10 +1128,10 @@ struct ChatView: View {
         error = friendlyError((e as? APIError)?.message ?? e.localizedDescription)
     }
 
-    private func sendText() {
+    private func sendText(at: Date? = nil) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if editing == nil && !pending.isEmpty && !busy {
-            sendPending(caption: t)
+            sendPending(caption: t, at: at)
             return
         }
         guard !t.isEmpty else { return }
@@ -1018,7 +1152,46 @@ struct ChatView: View {
         let rid = replyTo?.id
         replyTo = nil
         Task {
-            do { try await store.sendText(t, to: key, reply: rid) } catch { report(error); text = t }
+            do { try await store.sendText(t, to: key, reply: rid, sendAt: at) } catch { report(error); text = t }
+        }
+    }
+
+    private var canSchedule: Bool {
+        editing == nil && (!pending.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private var scheduleSheet: some View {
+        NavigationView {
+            VStack(spacing: 18) {
+                DatePicker(
+                    tr("Когда отправить", "When to send", "Wann senden"),
+                    selection: $scheduleDate, in: Date()...,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .datePickerStyle(.graphical)
+                .accentColor(Theme.accent)
+                Button {
+                    showSchedule = false
+                    sendText(at: scheduleDate)
+                } label: {
+                    Text(tr("Запланировать", "Schedule", "Planen"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Theme.accentGradient)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                Spacer()
+            }
+            .padding(18)
+            .navigationTitle(tr("Отложенная отправка", "Scheduled send", "Geplanter Versand"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(tr("Отмена", "Cancel", "Abbrechen")) { showSchedule = false }
+                }
+            }
         }
     }
 

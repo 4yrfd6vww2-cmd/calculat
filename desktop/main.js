@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 
-const VERSION = process.platform === 'darwin' ? '0.10.7 mac build' : '0.6.7 pc build';
+const VERSION = process.platform === 'darwin' ? '0.10.8 mac build' : '0.6.8 pc build';
 const VERSION_URL = 'https://4yrfd6vww2-cmd.github.io/calculat/version.json';
 const DOWNLOAD_PREFIX = 'https://github.com/4yrfd6vww2-cmd/calculat/releases/download/';
 let mainWin = null;
