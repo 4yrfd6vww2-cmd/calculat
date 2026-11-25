@@ -1,24 +1,24 @@
 {
   "win": {
-    "version": "0.6.10",
-    "x64": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-26/Neirox-Windows.exe",
-    "ia32": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-26/Neirox-Windows-32.exe"
+    "version": "0.6.11",
+    "x64": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-27/Neirox-Windows.exe",
+    "ia32": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-27/Neirox-Windows-32.exe"
   },
   "linux": {
-    "version": "0.6.10",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-26/Neirox-Linux.AppImage"
+    "version": "0.6.11",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-27/Neirox-Linux.AppImage"
   },
   "mac": {
-    "version": "0.10.10",
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-26/Neirox-Mac.dmg"
+    "version": "0.10.11",
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/desktop-27/Neirox-Mac.dmg"
   },
   "android": {
-    "version": "0.10.10",
-    "code": 21,
-    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/android-32/Neirox.apk"
+    "version": "0.10.11",
+    "code": 22,
+    "url": "https://github.com/4yrfd6vww2-cmd/calculat/releases/download/android-33/Neirox.apk"
   },
   "ios": {
-    "version": "0.10.10",
+    "version": "0.10.11",
     "url": "https://4yrfd6vww2-cmd.github.io/calculat/"
   },
   "legacy_xp": {
