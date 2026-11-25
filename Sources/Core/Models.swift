@@ -48,6 +48,7 @@ struct Message: Codable, Identifiable, Hashable {
     var replyTo: Int?
     var sendAt: Date?
     var expiresAt: Date?
+    var pollOptions: [String]?
 }
 
 struct Chat: Codable, Identifiable, Hashable {
@@ -149,4 +150,16 @@ struct BlockedRow: Codable { let blockedId: String }
 struct PrivateProfile: Codable {
     let userId: String
     let recoveryEmail: String
+}
+
+struct ChatBan: Codable, Hashable {
+    let chatId: String
+    let userId: String
+    var bannedBy: String?
+}
+
+struct PollVote: Codable, Hashable {
+    let messageId: Int
+    let userId: String
+    var optionIdx: Int
 }

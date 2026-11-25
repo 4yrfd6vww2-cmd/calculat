@@ -25,6 +25,8 @@ final class Store: ObservableObject {
     @Published var board: [BoardRow] = []
     @Published var noxNotice: String?
     @Published var blocked: Set<String> = []
+    @Published var bans: [ChatBan] = []
+    @Published var pollVotes: [PollVote] = []
     private var checkedAt = Date.distantPast
     private var stkLoaded = false
     @Published var recoveryEmail: String?
@@ -65,6 +67,8 @@ final class Store: ObservableObject {
         colors = []
         levels = [:]
         board = []
+        bans = []
+        pollVotes = []
         checkedAt = .distantPast
         stickers = []
         stkLoaded = false
@@ -142,6 +146,13 @@ final class Store: ObservableObject {
             if let rr: [Reaction] = try? await API.shared.select("message_reactions", [
                 URLQueryItem(name: "select", value: "*"), URLQueryItem(name: "limit", value: "3000")]) {
                 reactions = rr
+            }
+            if let bb: [ChatBan] = try? await API.shared.select("chat_bans", [URLQueryItem(name: "select", value: "*")]) {
+                bans = bb
+            }
+            if let pv: [PollVote] = try? await API.shared.select("poll_votes", [
+                URLQueryItem(name: "select", value: "*"), URLQueryItem(name: "limit", value: "5000")]) {
+                pollVotes = pv
             }
 
             var ids = Set<String>()
@@ -601,6 +612,47 @@ final class Store: ObservableObject {
     func setRole(_ cid: String, _ uid: String, _ role: String) async {
         try? await API.shared.update("chat_members", [
             URLQueryItem(name: "chat_id", value: "eq.\(cid)"), URLQueryItem(name: "user_id", value: "eq.\(uid)")], ["role": role])
+        await refresh()
+    }
+
+    // MARK: Бан участников
+
+    func bansFor(_ cid: String) -> [ChatBan] { bans.filter { $0.chatId == cid } }
+    func isBanned(_ cid: String, _ uid: String) -> Bool { bans.contains { $0.chatId == cid && $0.userId == uid } }
+
+    func banMember(_ cid: String, _ uid: String) async {
+        try? await API.shared.delete("chat_members", [
+            URLQueryItem(name: "chat_id", value: "eq.\(cid)"), URLQueryItem(name: "user_id", value: "eq.\(uid)")])
+        try? await API.shared.insert("chat_bans", ["chat_id": cid, "user_id": uid, "banned_by": myId])
+        await refresh()
+    }
+
+    func unbanMember(_ cid: String, _ uid: String) async {
+        try? await API.shared.delete("chat_bans", [
+            URLQueryItem(name: "chat_id", value: "eq.\(cid)"), URLQueryItem(name: "user_id", value: "eq.\(uid)")])
+        await refresh()
+    }
+
+    // MARK: Опросы
+
+    func votesFor(_ mid: Int) -> [PollVote] { pollVotes.filter { $0.messageId == mid } }
+    func myVote(_ mid: Int) -> Int? { votesFor(mid).first { $0.userId == myId }?.optionIdx }
+
+    func vote(_ mid: Int, _ idx: Int) async {
+        if myVote(mid) != nil {
+            try? await API.shared.update("poll_votes", [
+                URLQueryItem(name: "message_id", value: "eq.\(mid)"), URLQueryItem(name: "user_id", value: "eq.\(myId)")], ["option_idx": idx])
+        } else {
+            try? await API.shared.insert("poll_votes", ["message_id": mid, "user_id": myId, "option_idx": idx])
+        }
+        await refresh()
+    }
+
+    func sendPoll(_ question: String, _ options: [String], to id: String, reply: Int? = nil) async throws {
+        var row = tgt(id, ["sender": myId, "kind": "poll", "body": question, "poll_options": options])
+        if let r = reply { row["reply_to"] = r }
+        row = withTiming(id, row, sendAt: nil)
+        try await API.shared.insert("messages", row)
         await refresh()
     }
 

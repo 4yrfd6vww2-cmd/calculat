@@ -215,7 +215,24 @@ struct ChatInfoSheet: View {
                                         .buttonStyle(.borderless)
                                         Button { Task { try? await store.kickMember(c.id, m.userId) } } label: { Image(systemName: "xmark") }
                                             .buttonStyle(.borderless)
+                                        Button { Task { await store.banMember(c.id, m.userId) } } label: { Image(systemName: "nosign") }
+                                            .buttonStyle(.borderless)
+                                            .foregroundColor(.red)
                                     }
+                                }
+                            }
+                        }
+                    }
+                    if isOwner && !store.bansFor(c.id).isEmpty {
+                        Section(tr("Заблокированные", "Banned", "Gesperrt")) {
+                            ForEach(store.bansFor(c.id), id: \.userId) { b in
+                                HStack {
+                                    Text(store.dnameId(b.userId))
+                                    Spacer()
+                                    Button(tr("Разблокировать", "Unban", "Entsperren")) {
+                                        Task { await store.unbanMember(c.id, b.userId) }
+                                    }
+                                    .buttonStyle(.borderless)
                                 }
                             }
                         }

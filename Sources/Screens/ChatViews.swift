@@ -145,6 +145,7 @@ struct ChatsView: View {
             if !a.isEmpty && a.allSatisfy({ $0.type == "image" }) { return "photo.fill" }
             if !a.isEmpty && a.allSatisfy({ $0.type == "video" }) { return "video.fill" }
             return "paperclip"
+        case "poll": return "chart.bar.fill"
         default: return nil
         }
     }
@@ -164,6 +165,7 @@ struct ChatsView: View {
             else { base = tr("Вложения", "Attachments", "Anhänge") + " (\(a.count))" }
             if let b = m.body, !b.isEmpty { base += ": " + b }
             return prefix + base
+        case "poll": return prefix + tr("Опрос: ", "Poll: ", "Umfrage: ") + (m.body ?? "")
         default: return prefix + (m.body ?? "")
         }
     }
@@ -533,6 +535,8 @@ struct Bubble: View {
             .foregroundColor(mine ? .white : Theme.text)
         } else if m.kind == "album" {
             AlbumView(m: m, mine: mine, selecting: selecting, onToggle: onToggle, onImage: onImage, onVideo: onVideo)
+        } else if m.kind == "poll" {
+            PollView(m: m, mine: mine)
         } else if isBigEmoji(m.body) {
             Text(m.body ?? "").font(.system(size: 38))
         } else {
@@ -545,6 +549,55 @@ struct Bubble: View {
                 }
             }
         }
+    }
+}
+
+struct PollView: View {
+    @ObservedObject private var store = Store.shared
+    let m: Message
+    let mine: Bool
+
+    private var options: [String] { m.pollOptions ?? [] }
+    private var votes: [PollVote] { store.votesFor(m.id) }
+    private var myVoteIdx: Int? { store.myVote(m.id) }
+    private var total: Int { votes.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "chart.bar.fill").font(.system(size: 13))
+                Text(m.body ?? "").font(.system(size: 14, weight: .semibold))
+            }
+            ForEach(options.indices, id: \.self) { i in
+                let count = votes.filter { $0.optionIdx == i }.count
+                let pct = total > 0 ? Int((Double(count) / Double(total) * 100).rounded()) : 0
+                Button {
+                    Task { await store.vote(m.id, i) }
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            if myVoteIdx == i { Image(systemName: "checkmark.circle.fill").font(.system(size: 12)) }
+                            Text(options[i]).font(.system(size: 13))
+                            Spacer()
+                            Text("\(pct)%").font(.system(size: 12)).opacity(0.75)
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.black.opacity(0.15)).frame(height: 5)
+                                Capsule().fill(mine ? Color.white : Theme.accent)
+                                    .frame(width: geo.size.width * CGFloat(pct) / 100, height: 5)
+                            }
+                        }
+                        .frame(height: 5)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            Text(total == 1 ? tr("1 голос", "1 vote", "1 Stimme") : tr("\(total) голосов", "\(total) votes", "\(total) Stimmen"))
+                .font(.system(size: 11)).opacity(0.7)
+        }
+        .foregroundColor(mine ? .white : Theme.text)
+        .frame(minWidth: 190, alignment: .leading)
     }
 }
 
@@ -596,6 +649,9 @@ struct ChatView: View {
     @State private var scheduleDate = Date().addingTimeInterval(3600)
     @State private var showFolder = false
     @State private var folderText = ""
+    @State private var showPoll = false
+    @State private var pollQuestion = ""
+    @State private var pollOptions: [String] = ["", ""]
     @Environment(\.dismiss) private var dismiss
     var onForwardToAI: ((String) -> Void)? = nil
 
@@ -728,6 +784,7 @@ struct ChatView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showForward) { forwardSheet }
         .sheet(isPresented: $showSchedule) { scheduleSheet }
+        .sheet(isPresented: $showPoll) { pollSheet }
         .overlay(
             PromptDialogOverlay(
                 isPresented: $showFolder,
@@ -846,6 +903,11 @@ struct ChatView: View {
             items.append(MenuAction(icon: "folder", title: tr("Папка", "Folder", "Ordner")) { openFolderMenu() })
             if chat == nil || isAdm {
                 items.append(MenuAction(icon: "timer", title: tr("Исчезающие сообщения", "Disappearing messages", "Verschwindende Nachrichten")) { openDisappearMenu() })
+            }
+            if store.canPost(key) {
+                items.append(MenuAction(icon: "chart.bar", title: tr("Опрос", "Poll", "Umfrage")) {
+                    pollQuestion = ""; pollOptions = ["", ""]; showPoll = true
+                })
             }
             MenuPresenter.shared.show(actions: items)
         } label: {
@@ -1193,6 +1255,49 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    private var pollSheet: some View {
+        NavigationView {
+            List {
+                Section(tr("Вопрос", "Question", "Frage")) {
+                    TextField(tr("Вопрос", "Question", "Frage"), text: $pollQuestion)
+                }
+                Section(tr("Варианты", "Options", "Optionen")) {
+                    ForEach(pollOptions.indices, id: \.self) { i in
+                        HStack {
+                            TextField(tr("Вариант \(i + 1)", "Option \(i + 1)", "Option \(i + 1)"), text: $pollOptions[i])
+                            if pollOptions.count > 2 {
+                                Button { pollOptions.remove(at: i) } label: {
+                                    Image(systemName: "minus.circle.fill").foregroundColor(.red)
+                                }
+                            }
+                        }
+                    }
+                    if pollOptions.count < 10 {
+                        Button(tr("Добавить вариант", "Add option", "Option hinzufügen")) { pollOptions.append("") }
+                    }
+                }
+            }
+            .navigationTitle(tr("Опрос", "Poll", "Umfrage"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(tr("Отмена", "Cancel", "Abbrechen")) { showPoll = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(tr("Отправить", "Send", "Senden")) { sendPoll() }
+                        .disabled(pollQuestion.trimmingCharacters(in: .whitespaces).isEmpty ||
+                                  pollOptions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count < 2)
+                }
+            }
+        }
+    }
+
+    private func sendPoll() {
+        let q = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let opts = pollOptions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !q.isEmpty, opts.count >= 2 else { return }
+        showPoll = false
+        Task { try? await store.sendPoll(q, opts, to: key) }
     }
 
     private func copyText(of m: Message) -> String? {
