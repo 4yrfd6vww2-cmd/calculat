@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -391,6 +392,9 @@ private fun NoxPage() {
     val ctx = LocalContext.current
     var pickId by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf("") }
+    var giftTo by remember { mutableStateOf<String?>(null) }
+    var giftPicking by remember { mutableStateOf(false) }
+    var giftAmount by remember { mutableStateOf("10") }
     androidx.compose.runtime.LaunchedEffect(Unit) { try { Store.noxOpen() } catch (e: Exception) { error = friendlyError(e.message ?: "") } }
     fun act(block: suspend () -> Unit) {
         error = ""
@@ -400,6 +404,10 @@ private fun NoxPage() {
                 error = when {
                     m.contains("not_enough") -> tr("Не хватает nox", "Not enough nox", "Nicht genug nox")
                     m.contains("max_level") -> tr("Максимальный уровень", "Maximum level reached", "Maximales Level erreicht")
+                    m.contains("not_friend") -> tr("Можно дарить только друзьям", "You can only gift friends", "Du kannst nur Freunden schenken")
+                    m.contains("not_done") -> tr("Задание ещё не выполнено", "Quest not completed yet", "Aufgabe noch nicht erledigt")
+                    m.contains("already_claimed") -> tr("Уже забрано сегодня", "Already claimed today", "Heute schon abgeholt")
+                    m.contains("bad_amount") || m.contains("bad_target") -> tr("Проверьте сумму и получателя", "Check the amount and recipient", "Betrag und Empfänger prüfen")
                     else -> friendlyError(m)
                 }
             }
@@ -413,6 +421,31 @@ private fun NoxPage() {
     NxCard(tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + w.earned + "\n" +
         tr("Серия входов: ", "Login streak: ", "Login-Serie: ") + w.streak + " / 3 · " + tr("за 3 дня подряд +5 nox", "+5 nox for 3 days in a row", "+5 nox für 3 Tage in Folge"), Txt)
     if (error.isNotEmpty()) NxError(error)
+
+    Text(tr("Ежедневные задания", "Daily quests", "Tägliche Aufgaben"), color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    Store.quests.forEach { q ->
+        val title = when (q.key) {
+            "messages_10" -> tr("Отправить 10 сообщений", "Send 10 messages", "10 Nachrichten senden")
+            "react_1" -> tr("Поставить реакцию", "Leave a reaction", "Eine Reaktion hinterlassen")
+            "vote_1" -> tr("Проголосовать в опросе", "Vote in a poll", "In einer Umfrage abstimmen")
+            else -> q.key
+        }
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardBg).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Txt, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${q.progress}/${q.goal} · +${q.reward} nox", color = TextSecondary, fontSize = 11.sp)
+            }
+            when {
+                q.claimed -> Icon(Icons.Filled.Check, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
+                q.done -> NxSmallButton(tr("Забрать", "Claim", "Abholen"), filled = true) { act { Store.claimQuest(q.key) } }
+                else -> Text("…", color = TextSecondary, fontSize = 13.sp)
+            }
+        }
+    }
+
+    Text(tr("Подарить nox другу", "Gift nox to a friend", "Nox an einen Freund schenken"), color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    Text(tr("Выберите друга и сумму — nox спишутся с вашего баланса.", "Pick a friend and an amount — nox will be deducted from your balance.", "Wähle einen Freund und einen Betrag — nox wird von deinem Guthaben abgezogen."), color = TextSecondary, fontSize = 11.sp)
+    NxSmallButton(tr("Подарить", "Gift", "Schenken"), filled = true) { giftTo = null; giftPicking = true }
 
     Text(tr("Свои цвета темы", "Custom theme colors", "Eigene Themenfarben"), color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     Text(tr("10 nox за один цвет. Покупки хранятся на сервере.", "10 nox per color. Purchases are stored on the server.", "10 nox pro Farbe. Käufe werden auf dem Server gespeichert."), color = TextSecondary, fontSize = 11.sp)
@@ -483,6 +516,57 @@ private fun NoxPage() {
                 }) { Text(tr("Сохранить", "Save", "Speichern")) }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { pickId = null }) { Text(tr("Позже", "Later", "Später")) } }
+        )
+    }
+
+    if (giftPicking) {
+        val to = giftTo
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { giftPicking = false },
+            title = { Text(tr("Подарить nox", "Gift nox", "Nox schenken")) },
+            text = {
+                if (to == null) {
+                    Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                        if (Store.friendIds.isEmpty()) {
+                            Text(tr("Пока нет друзей", "No friends yet", "Noch keine Freunde"), color = TextSecondary, fontSize = 13.sp)
+                        }
+                        Store.friendIds.forEach { fid ->
+                            val p = Store.profiles[fid]
+                            Row(
+                                Modifier.fillMaxWidth().clickable { giftTo = fid }.padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Avatar(p ?: Profile(fid, "", null, null), 32.dp)
+                                Text(Store.dname(p), color = Txt, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp))
+                            }
+                        }
+                    }
+                } else {
+                    Column {
+                        Text(Store.dname(to), color = Txt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        androidx.compose.material3.OutlinedTextField(
+                            value = giftAmount, onValueChange = { giftAmount = it.filter { c -> c.isDigit() } },
+                            label = { Text(tr("Сумма", "Amount", "Betrag")) },
+                            singleLine = true,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (to != null) {
+                    androidx.compose.material3.TextButton(onClick = {
+                        val amt = giftAmount.toIntOrNull()
+                        giftPicking = false
+                        if (amt != null && amt > 0) act { Store.giftNox(to, amt) }
+                    }) { Text(tr("Отправить", "Send", "Senden")) }
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    if (to != null) giftTo = null else giftPicking = false
+                }) { Text(if (to != null) tr("Назад", "Back", "Zurück") else tr("Отмена", "Cancel", "Abbrechen")) }
+            }
         )
     }
 }

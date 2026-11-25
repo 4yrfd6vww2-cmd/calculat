@@ -52,6 +52,7 @@ object Store {
     var colors by mutableStateOf<List<ThemeColor>>(emptyList())
     var levels by mutableStateOf<Map<String, Int>>(emptyMap())
     var board by mutableStateOf<List<BoardRow>>(emptyList())
+    var quests by mutableStateOf<List<Quest>>(emptyList())
     private var checkedAt = 0L
 
     var stickers by mutableStateOf<List<Sticker>>(emptyList())
@@ -110,6 +111,7 @@ object Store {
         dmPrefs = emptyMap()
         alias = emptyMap()
         wallet = null
+        quests = emptyList()
         colors = emptyList()
         levels = emptyMap()
         board = emptyList()
@@ -387,7 +389,19 @@ object Store {
             val o = b.getJSONObject(it)
             BoardRow(o.getString("user_id"), o.optString("nick", ""), if (o.isNull("avatar_url")) null else o.optString("avatar_url"), o.optInt("earned"), o.optInt("level"))
         }
+        val q = org.json.JSONArray(Api.request("POST", "/rest/v1/rpc/nox_quests", JSONObject()))
+        quests = (0 until q.length()).map { parseQuest(q.getJSONObject(it)) }
         loadColors()
+    }
+
+    suspend fun claimQuest(key: String) {
+        wallet = parseWallet(JSONObject(Api.request("POST", "/rest/v1/rpc/nox_quest_claim", JSONObject().put("p_key", key))))
+        noxOpen()
+    }
+
+    suspend fun giftNox(to: String, amount: Int) {
+        wallet = parseWallet(JSONObject(Api.request("POST", "/rest/v1/rpc/nox_gift", JSONObject().put("p_to", to).put("p_amount", amount))))
+        noxOpen()
     }
 
     suspend fun buyColor(): Long {

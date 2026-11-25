@@ -55,7 +55,8 @@ const IC = {
   code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
   clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-  poll: '<line x1="4" y1="20" x2="4" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="20" y1="20" x2="20" y2="14"/>'
+  poll: '<line x1="4" y1="20" x2="4" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="20" y1="20" x2="20" y2="14"/>',
+  gift: '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>'
 };
 function icons(html) {
   return html.replace(/\{i:([a-z]+)\}/g, (all, n) => IC[n]
@@ -144,6 +145,10 @@ function friendly(e) {
   if (s.includes('email_taken')) return t('Эта почта уже привязана к другому аккаунту', 'This email is already used', 'Diese E-Mail wird bereits verwendet');
   if (s.includes('not_enough')) return t('Не хватает nox', 'Not enough nox', 'Nicht genug nox');
   if (s.includes('max_level')) return t('Максимальный уровень', 'Maximum level reached', 'Maximales Level erreicht');
+  if (s.includes('not_friend')) return t('Можно дарить только друзьям', 'You can only gift friends', 'Du kannst nur Freunden schenken');
+  if (s.includes('not_done')) return t('Задание ещё не выполнено', 'Quest not completed yet', 'Aufgabe noch nicht erledigt');
+  if (s.includes('already_claimed')) return t('Уже забрано сегодня', 'Already claimed today', 'Heute schon abgeholt');
+  if (s.includes('bad_amount') || s.includes('bad_target')) return t('Проверьте сумму и получателя', 'Check the amount and recipient', 'Betrag und Empfänger prüfen');
   if (s.includes('bad_nick')) return t('Ник: 3–20 символов, только a–z, цифры и _', 'Nick: 3–20 chars, a–z, digits and _', 'Nick: 3–20 Zeichen, a–z, Ziffern und _');
   if (s.includes('bad_password')) return t('Пароль: минимум 6 символов', 'Password: at least 6 characters', 'Passwort: mindestens 6 Zeichen');
   if (s.includes('bad_code')) return t('Неверный или просроченный код', 'Wrong or expired code', 'Code falsch oder abgelaufen');
@@ -235,7 +240,7 @@ async function aiImage(prompt) {
 }
 
 /* ---------- данные ---------- */
-const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, dmPrefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set(), bans: {}, pollVotes: {} };
+const D = { me: null, friendships: [], profiles: {}, messages: [], hidden: new Set(), email: null, loaded: false, chats: {}, members: {}, reactions: {}, prefs: {}, dmPrefs: {}, alias: {}, wallet: null, colors: [], levels: {}, board: [], quests: [], checkedAt: 0, stickers: [], stkLoaded: false, blocked: new Set(), bans: {}, pollVotes: {} };
 let knownIds = new Set();
 let firstLoadDone = false;
 let timer = null;
@@ -526,7 +531,7 @@ function compress(file) {
 }
 
 /* ---------- UI-состояние ---------- */
-const U = { tab: 'chats', chat: null, selected: new Set(), editing: null, error: '', busy: false, query: '', results: [], aiImageMode: false, authScreen: 'login', authErr: '', authBusy: false, folderFilter: null, pollKey: null };
+const U = { tab: 'chats', chat: null, selected: new Set(), editing: null, error: '', busy: false, query: '', results: [], aiImageMode: false, authScreen: 'login', authErr: '', authBusy: false, folderFilter: null, pollKey: null, giftTo: null };
 const A = { msgs: [], images: {}, busy: false, err: '' };
 try { A.msgs = JSON.parse(lsGet('neirox.ai.history', '[]')); } catch (e) { A.msgs = []; }
 const P = { tracks: [], cur: -1, playing: false };
@@ -671,6 +676,7 @@ function preview(m, noPre) {
     return pre + x + (m.body ? ': ' + m.body : '');
   }
   if (m.kind === 'poll') return pre + t('Опрос: ', 'Poll: ', 'Umfrage: ') + (m.body || '');
+  if (m.kind === 'nox_gift') return pre + t('Подарок: ', 'Gift: ', 'Geschenk: ') + (m.body || '0') + ' nox';
   return pre + (m.body || '');
 }
 /* ---------- nox ---------- */
@@ -690,7 +696,58 @@ async function noxSync(ids) {
   }
 }
 async function noxOpen() {
-  try { D.wallet = await rpc('nox_me'); D.board = await rpc('nox_leaderboard'); D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' }); } catch (e) { toast(friendly(e)); }
+  try {
+    D.wallet = await rpc('nox_me');
+    D.board = await rpc('nox_leaderboard');
+    D.quests = await rpc('nox_quests');
+    D.colors = await sel('theme_colors', { select: '*', order: 'id.asc' });
+  } catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+async function noxClaimQuest(key) {
+  try { D.wallet = await rpc('nox_quest_claim', { p_key: key }); D.quests = await rpc('nox_quests'); D.board = await rpc('nox_leaderboard'); }
+  catch (e) { toast(friendly(e)); }
+  renderAll();
+}
+function noxQuestTitle(key) {
+  if (key === 'messages_10') return t('Отправить 10 сообщений', 'Send 10 messages', '10 Nachrichten senden');
+  if (key === 'react_1') return t('Поставить реакцию', 'Leave a reaction', 'Eine Reaktion hinterlassen');
+  if (key === 'vote_1') return t('Проголосовать в опросе', 'Vote in a poll', 'In einer Umfrage abstimmen');
+  return key;
+}
+function noxGiftOpen() {
+  U.giftTo = null;
+  openDialog(t('Подарить nox', 'Gift nox', 'Nox schenken'), noxGiftHtml(),
+    [['cancel', t('Отмена', 'Cancel', 'Abbrechen'), 'ghost']]);
+}
+function noxGiftHtml() {
+  if (!U.giftTo) {
+    const ids = friendIds();
+    if (!ids.length) return '<div class="muted">' + t('Пока нет друзей', 'No friends yet', 'Noch keine Freunde') + '</div>';
+    return '<div style="max-height:320px;overflow:auto">' + ids.map(id => {
+      const p = D.profiles[id];
+      return '<div class="row" style="gap:10px;padding:8px 0;cursor:pointer" data-act="nox-gift-pick" data-id="' + id + '">' +
+        avatarHtml(p, 32) + '<div class="grow">' + esc(dname(p)) + '</div></div>';
+    }).join('') + '</div>';
+  }
+  const p = D.profiles[U.giftTo];
+  return '<div style="text-align:center">' +
+    avatarHtml(p, 50) + '<div style="margin:8px 0;font-weight:700">' + esc(dname(p)) + '</div>' +
+    '<input id="d-gift-amount" type="number" min="1" value="10" style="width:100%;text-align:center;font-size:20px;font-weight:700">' +
+    '</div>';
+}
+function noxGiftPick(id) {
+  U.giftTo = id;
+  openDialog(t('Подарить nox', 'Gift nox', 'Nox schenken'), noxGiftHtml(),
+    [['nox-gift-back', t('Назад', 'Back', 'Zurück'), 'ghost'], ['nox-gift-go', t('Отправить', 'Send', 'Senden'), '']]);
+}
+async function noxGiftGo() {
+  const n = Number(val('d-gift-amount'));
+  const to = U.giftTo;
+  closeDialog();
+  if (!to || !n || n < 1) return;
+  try { D.wallet = await rpc('nox_gift', { p_to: to, p_amount: Math.floor(n) }); D.board = await rpc('nox_leaderboard'); }
+  catch (e) { toast(friendly(e)); }
   renderAll();
 }
 function levelBadge(id) { const l = D.levels[id]; return l == null ? '' : '★ ' + lvlStr(l); }
@@ -723,6 +780,16 @@ function noxHtml() {
     '<div style="font-size:27px;font-weight:800;margin:6px 0">' + w.balance + ' nox</div>' +
     '<div class="muted" style="font-size:11px">' + t('Всего заработано: ', 'Total earned: ', 'Insgesamt verdient: ') + w.earned + '</div>' +
     '<div class="muted" style="font-size:11px;margin-top:4px">' + t('Серия входов: ', 'Login streak: ', 'Login-Serie: ') + w.streak + ' / 3 · ' + t('за 3 дня подряд +5 nox', '+5 nox for 3 days in a row', '+5 nox für 3 Tage in Folge') + '</div></div>';
+  h += '<div class="card"><div class="title">' + t('Ежедневные задания', 'Daily quests', 'Tägliche Aufgaben') + '</div>' +
+    (D.quests || []).map(q => '<div class="row" style="gap:10px;padding:6px 0">' +
+      '<div class="grow" style="flex:1;min-width:0"><div>' + esc(noxQuestTitle(q.key)) + '</div>' +
+      '<div class="muted" style="font-size:11px">' + q.progress + '/' + q.goal + ' · +' + q.reward + ' nox</div></div>' +
+      (q.claimed ? '<div style="color:var(--accent)">{i:check}</div>' :
+        q.done ? '<button class="btn sm" data-act="nox-quest-claim" data-k="' + q.key + '">' + t('Забрать', 'Claim', 'Abholen') + '</button>' :
+        '<div class="muted">…</div>') + '</div>').join('') + '</div>';
+  h += '<div class="card"><div class="title">' + t('Подарить nox другу', 'Gift nox to a friend', 'Nox an einen Freund schenken') + '</div>' +
+    '<div class="muted" style="font-size:11px;margin:4px 0 8px">' + t('Выберите друга и сумму — nox спишутся с вашего баланса.', 'Pick a friend and an amount — nox will be deducted from your balance.', 'Wähle einen Freund und einen Betrag — nox wird von deinem Guthaben abgezogen.') + '</div>' +
+    '<button class="btn sm" data-act="nox-gift-open">' + t('Подарить', 'Gift', 'Schenken') + '</button></div>';
   h += '<div class="card"><div class="title">' + t('Свои цвета темы', 'Custom theme colors', 'Eigene Themenfarben') + '</div>' +
     '<div class="muted" style="font-size:11px;margin:4px 0 8px">' + t('Цена: 10 nox за один цвет. Покупки хранятся на сервере.', 'Price: 10 nox per color. Purchases are stored on the server.', 'Preis: 10 nox pro Farbe. Käufe werden auf dem Server gespeichert.') + '</div><div class="swatches">' +
     D.colors.map(c => c.color ? '<button class="sw ' + (S.accent.toLowerCase() === c.color ? 'on' : '') + '" style="background:' + c.color + '" data-act="accent" data-v="' + c.color + '"></button>' : '<button class="btn sm ghost" data-act="nox-pick" data-id="' + c.id + '">' + t('Выбрать цвет', 'Pick color', 'Farbe wählen') + '</button>').join('') +
@@ -1075,6 +1142,7 @@ function msgContentBase(m) {
   }
   if (m.kind === 'text' && isBigEmoji(m.body)) return '<div class="bigemo">' + esc(m.body) + '</div>';
   if (m.kind === 'poll') return pollHtml(m);
+  if (m.kind === 'nox_gift') return '<div class="noxgift">{i:gift} <b>+' + esc(m.body || '0') + ' nox</b></div>';
   return linkify(m.body || '');
 }
 function pollHtml(m) {
@@ -1698,6 +1766,11 @@ document.addEventListener('click', async e => {
     case 'nox-pick': noxPick(Number(id)); break;
     case 'nox-pick-go': noxPickGo(); break;
     case 'nox-lvl': noxBuyLevel(Number(el.dataset.n)); break;
+    case 'nox-quest-claim': noxClaimQuest(el.dataset.k); break;
+    case 'nox-gift-open': noxGiftOpen(); break;
+    case 'nox-gift-pick': noxGiftPick(id); break;
+    case 'nox-gift-back': noxGiftOpen(); break;
+    case 'nox-gift-go': noxGiftGo(); break;
     case 'set': S[el.dataset.k] = v; saveSettings(); renderAll(); break;
     case 'accent': S.accent = v; saveSettings(); renderAll(); break;
     case 'sound': S.sound = !S.sound; saveSettings(); renderAll(); break;

@@ -23,6 +23,7 @@ final class Store: ObservableObject {
     @Published var colors: [ThemeColor] = []
     @Published var levels: [String: Int] = [:]
     @Published var board: [BoardRow] = []
+    @Published var quests: [Quest] = []
     @Published var noxNotice: String?
     @Published var blocked: Set<String> = []
     @Published var bans: [ChatBan] = []
@@ -67,6 +68,7 @@ final class Store: ObservableObject {
         colors = []
         levels = [:]
         board = []
+        quests = []
         bans = []
         pollVotes = []
         checkedAt = .distantPast
@@ -428,7 +430,20 @@ final class Store: ObservableObject {
     func noxOpen() async {
         if let w: Wallet = try? await rpc("nox_me") { wallet = w }
         if let b: [BoardRow] = try? await rpc("nox_leaderboard") { board = b }
+        if let q: [Quest] = try? await rpc("nox_quests") { quests = q }
         await loadColors()
+    }
+
+    func claimQuest(_ key: String) async throws {
+        let w: Wallet = try await rpc("nox_quest_claim", ["p_key": key])
+        wallet = w
+        await noxOpen()
+    }
+
+    func giftNox(to id: String, amount: Int) async throws {
+        let w: Wallet = try await rpc("nox_gift", ["p_to": id, "p_amount": amount])
+        wallet = w
+        await noxOpen()
     }
 
     func buyColor() async throws -> Int {

@@ -84,6 +84,16 @@ struct Wallet: Codable, Hashable {
     var awarded: Bool?
 }
 
+struct Quest: Codable, Hashable, Identifiable {
+    var key: String
+    var goal: Int
+    var progress: Int
+    var reward: Int
+    var done: Bool
+    var claimed: Bool
+    var id: String { key }
+}
+
 struct ThemeColor: Codable, Identifiable, Hashable {
     let id: Int
     var color: String?

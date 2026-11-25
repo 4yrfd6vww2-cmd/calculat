@@ -445,6 +445,9 @@ struct NoxView: View {
     @State private var error = ""
     @State private var pickId: Int?
     @State private var picked = Color(hex: 0x9B6BFF)
+    @State private var showGift = false
+    @State private var giftTo: String?
+    @State private var giftAmount = "10"
 
     private func act(_ block: @escaping () async throws -> Void) {
         error = ""
@@ -453,6 +456,10 @@ struct NoxView: View {
                 let m = (error as? APIError)?.message ?? error.localizedDescription
                 if m.contains("not_enough") { self.error = tr("Не хватает nox", "Not enough nox", "Nicht genug nox") }
                 else if m.contains("max_level") { self.error = tr("Максимальный уровень", "Maximum level reached", "Maximales Level erreicht") }
+                else if m.contains("not_friend") { self.error = tr("Можно дарить только друзьям", "You can only gift friends", "Du kannst nur Freunden schenken") }
+                else if m.contains("not_done") { self.error = tr("Задание ещё не выполнено", "Quest not completed yet", "Aufgabe noch nicht erledigt") }
+                else if m.contains("already_claimed") { self.error = tr("Уже забрано сегодня", "Already claimed today", "Heute schon abgeholt") }
+                else if m.contains("bad_amount") || m.contains("bad_target") { self.error = tr("Проверьте сумму и получателя", "Check the amount and recipient", "Betrag und Empfänger prüfen") }
                 else { self.error = friendlyError(m) }
             }
         }
@@ -486,6 +493,53 @@ struct NoxView: View {
                 }
                 note(tr("Всего заработано: ", "Total earned: ", "Insgesamt verdient: ") + String(w.earned))
                 note(tr("Серия входов: ", "Login streak: ", "Login-Serie: ") + String(w.streak) + " / 3 · " + tr("за 3 дня подряд +5 nox", "+5 nox for 3 days in a row", "+5 nox für 3 Tage in Folge"))
+            }
+        }
+    }
+
+    private func questTitle(_ key: String) -> String {
+        switch key {
+        case "messages_10": return tr("Отправить 10 сообщений", "Send 10 messages", "10 Nachrichten senden")
+        case "react_1": return tr("Поставить реакцию", "Leave a reaction", "Eine Reaktion hinterlassen")
+        case "vote_1": return tr("Проголосовать в опросе", "Vote in a poll", "In einer Umfrage abstimmen")
+        default: return key
+        }
+    }
+
+    private func questRow(_ q: Quest) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(questTitle(q.key)).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.text)
+                Text("\(q.progress)/\(q.goal) · +\(q.reward) nox").font(.system(size: 11)).foregroundColor(Theme.textSecondary)
+            }
+            Spacer()
+            if q.claimed {
+                Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.accent)
+            } else if q.done {
+                smallButton(tr("Забрать", "Claim", "Abholen")) { act { try await store.claimQuest(q.key) } }
+            } else {
+                Text("…").foregroundColor(Theme.textSecondary).font(.system(size: 13))
+            }
+        }
+        .padding(10)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var questsSection: some View {
+        VStack(spacing: 8) {
+            head(tr("Ежедневные задания", "Daily quests", "Tägliche Aufgaben"))
+            ForEach(store.quests) { q in questRow(q) }
+        }
+    }
+
+    private var giftSection: some View {
+        VStack(spacing: 8) {
+            head(tr("Подарить nox другу", "Gift nox to a friend", "Nox an einen Freund schenken"))
+            note(tr("Выберите друга и сумму — nox спишутся с вашего баланса.", "Pick a friend and an amount — nox will be deducted from your balance.", "Wähle einen Freund und einen Betrag — nox wird von deinem Guthaben abgezogen."))
+            HStack {
+                smallButton(tr("Подарить", "Gift", "Schenken")) { giftTo = nil; showGift = true }
+                Spacer()
             }
         }
     }
@@ -563,6 +617,8 @@ struct NoxView: View {
                 VStack(spacing: 18) {
                     walletCard
                     if !error.isEmpty { ErrorText(text: error) }
+                    questsSection
+                    giftSection
                     colorsSection
                     levelSection
                     boardSection
@@ -596,6 +652,48 @@ struct NoxView: View {
                             }
                         }
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $showGift) {
+            NavigationStack {
+                VStack(spacing: 16) {
+                    if let to = giftTo {
+                        let p = store.profiles[to]
+                        Avatar(nick: p?.nick ?? "", url: p?.avatarUrl, size: 50)
+                        Text(store.dname(p)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                        TextField(tr("Сумма", "Amount", "Betrag"), text: $giftAmount)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .font(.system(size: 22, weight: .bold))
+                        smallButton(tr("Отправить", "Send", "Senden")) {
+                            guard let amt = Int(giftAmount), amt > 0 else { return }
+                            showGift = false
+                            act { try await store.giftNox(to: to, amount: amt) }
+                        }
+                        Spacer()
+                    } else if store.friendIds.isEmpty {
+                        Spacer()
+                        Text(tr("Пока нет друзей", "No friends yet", "Noch keine Freunde")).foregroundColor(Theme.textSecondary)
+                        Spacer()
+                    } else {
+                        List(store.friendIds, id: \.self) { fid in
+                            let p = store.profiles[fid]
+                            Button { giftTo = fid } label: {
+                                HStack(spacing: 10) {
+                                    Avatar(nick: p?.nick ?? "", url: p?.avatarUrl, size: 32)
+                                    Text(store.dname(p)).foregroundColor(Theme.text)
+                                }
+                            }
+                        }
+                        .listStyle(.plain)
+                    }
+                }
+                .padding(20)
+                .navigationTitle(tr("Подарить nox", "Gift nox", "Nox schenken"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(tr("Отмена", "Cancel", "Abbrechen")) { showGift = false } }
                 }
             }
         }

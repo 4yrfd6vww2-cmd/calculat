@@ -58,6 +58,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
@@ -256,6 +257,7 @@ fun ChatsTab(onOpen: (String) -> Unit, onAI: () -> Unit) {
                                         "mic" -> Icons.Filled.Mic
                                         "tag" -> Icons.Filled.LocalOffer
                                         "poll" -> Icons.Filled.BarChart
+                                        "gift" -> Icons.Filled.CardGiftcard
                                         else -> Icons.Filled.AttachFile
                                     },
                                     contentDescription = null, tint = TextSecondary, modifier = Modifier.size(10.dp).padding(end = 3.dp)
@@ -1322,6 +1324,8 @@ fun MessageBubble(
                 )
             } else if (m.kind == "poll") {
                 PollView(m, textColor)
+            } else if (m.kind == "nox_gift") {
+                NoxGiftView(m, textColor)
             } else {
                 if (m.kind == "text" && isBigEmoji(m.body)) Text(m.body ?: "", fontSize = 38.sp)
                 else {

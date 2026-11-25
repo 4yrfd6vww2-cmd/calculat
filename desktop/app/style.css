@@ -288,6 +288,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .pollopt.mine{outline:1px solid var(--accent)}
 .pollbar{position:absolute;left:0;top:0;bottom:0;background:rgba(127,127,127,.22);transition:width .2s}
 .pollrow{position:relative;display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-size:13px}
+.noxgift{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+.noxgift svg{width:18px;height:18px}
 .pic.stk{max-width:160px;max-height:160px;background:none}
 .stk-wrap{padding:8px 10px;max-height:260px;overflow:auto}
 .stk-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}

@@ -146,6 +146,7 @@ struct ChatsView: View {
             if !a.isEmpty && a.allSatisfy({ $0.type == "video" }) { return "video.fill" }
             return "paperclip"
         case "poll": return "chart.bar.fill"
+        case "nox_gift": return "gift.fill"
         default: return nil
         }
     }
@@ -166,6 +167,7 @@ struct ChatsView: View {
             if let b = m.body, !b.isEmpty { base += ": " + b }
             return prefix + base
         case "poll": return prefix + tr("Опрос: ", "Poll: ", "Umfrage: ") + (m.body ?? "")
+        case "nox_gift": return prefix + tr("Подарок: ", "Gift: ", "Geschenk: ") + (m.body ?? "0") + " nox"
         default: return prefix + (m.body ?? "")
         }
     }
@@ -537,6 +539,8 @@ struct Bubble: View {
             AlbumView(m: m, mine: mine, selecting: selecting, onToggle: onToggle, onImage: onImage, onVideo: onVideo)
         } else if m.kind == "poll" {
             PollView(m: m, mine: mine)
+        } else if m.kind == "nox_gift" {
+            NoxGiftView(m: m, mine: mine)
         } else if isBigEmoji(m.body) {
             Text(m.body ?? "").font(.system(size: 38))
         } else {
@@ -549,6 +553,19 @@ struct Bubble: View {
                 }
             }
         }
+    }
+}
+
+struct NoxGiftView: View {
+    let m: Message
+    let mine: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "gift.fill").font(.system(size: 18, weight: .bold))
+            Text("+" + (m.body ?? "0") + " nox").font(.system(size: 15, weight: .heavy))
+        }
+        .foregroundColor(mine ? .white : Theme.text)
     }
 }
 

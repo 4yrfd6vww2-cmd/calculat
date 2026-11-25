@@ -47,7 +47,14 @@ data class ThemeColor(val id: Long, val color: String?)
 
 data class BoardRow(val userId: String, val nick: String, val avatarUrl: String?, val earned: Int, val level: Int)
 
+data class Quest(val key: String, val goal: Int, val progress: Int, val reward: Int, val done: Boolean, val claimed: Boolean)
+
 fun parseWallet(o: JSONObject) = Wallet(o.optInt("balance"), o.optInt("earned"), o.optInt("streak"), o.optInt("level"))
+
+fun parseQuest(o: JSONObject) = Quest(
+    o.getString("key"), o.optInt("goal"), o.optInt("progress"), o.optInt("reward"),
+    o.optBoolean("done"), o.optBoolean("claimed")
+)
 
 fun levelStr(n: Int): String = String.format(java.util.Locale.US, "%.2f", n / 100.0)
 
@@ -126,6 +133,7 @@ fun previewIconOf(m: Message?): String? {
         "image" -> if ((m.fileName ?: "").startsWith("sticker.")) "tag" else "photo"
         "file" -> "attach"
         "poll" -> "poll"
+        "nox_gift" -> "gift"
         "album" -> {
             val a = m.attachments
             when {
@@ -146,6 +154,7 @@ fun previewOf(m: Message?): String {
         "image" -> if ((m.fileName ?: "").startsWith("sticker.")) tr("Стикер", "Sticker", "Sticker") else tr("Фото", "Photo", "Foto")
         "file" -> m.fileName ?: tr("Файл", "File", "Datei")
         "poll" -> tr("Опрос: ", "Poll: ", "Umfrage: ") + (m.body ?: "")
+        "nox_gift" -> tr("Подарок: ", "Gift: ", "Geschenk: ") + (m.body ?: "0") + " nox"
         "album" -> {
             val a = m.attachments
             val base = when {

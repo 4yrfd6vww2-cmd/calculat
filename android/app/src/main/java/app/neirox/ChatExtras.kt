@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Videocam
@@ -365,6 +366,14 @@ fun AlbumContent(
     }
     if (!m.body.isNullOrEmpty()) {
         Text(linkified(m.body, if (textColor == Color.White) Color.White else Accent), color = textColor, fontSize = 14.sp)
+    }
+}
+
+@Composable
+fun NoxGiftView(m: Message, textColor: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.CardGiftcard, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp).padding(end = 6.dp))
+        Text("+" + (m.body ?: "0") + " nox", color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Black)
     }
 }
 
