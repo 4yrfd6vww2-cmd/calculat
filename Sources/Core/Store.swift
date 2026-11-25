@@ -213,6 +213,27 @@ final class Store: ObservableObject {
         await refresh()
     }
 
+    func sendRequestByNick(_ nick: String) async throws {
+        let clean = nick.lowercased()
+        if clean == me?.nick {
+            throw APIError(message: tr("Нельзя добавить себя", "Can't add yourself", "Kann dich nicht selbst hinzufügen"))
+        }
+        let r: [Profile] = try await API.shared.select("profiles", [
+            URLQueryItem(name: "nick", value: "eq.\(clean)"),
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "limit", value: "1")])
+        guard let p = r.first else {
+            throw APIError(message: tr("Пользователь не найден", "User not found", "Benutzer nicht gefunden"))
+        }
+        if let f = friendship(with: p.id) {
+            if f.status == "accepted" {
+                throw APIError(message: tr("Уже в друзьях", "Already friends", "Bereits befreundet"))
+            }
+            throw APIError(message: tr("Заявка уже отправлена", "Request already sent", "Anfrage bereits gesendet"))
+        }
+        try await sendRequest(to: p.id)
+    }
+
     func accept(_ f: Friendship) async throws {
         try await API.shared.update("friendships", [URLQueryItem(name: "id", value: "eq.\(f.id)")], ["status": "accepted"])
         await refresh()

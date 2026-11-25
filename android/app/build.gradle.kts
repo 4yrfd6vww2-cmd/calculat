@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.neirox"
         minSdk = if (old) 21 else 26
         targetSdk = 34
-        versionCode = if (old) 2 else 16
-        versionName = if (old) "0.0.2 android 5 build" else "0.10.5 android build"
+        versionCode = if (old) 2 else 17
+        versionName = if (old) "0.0.2 android 5 build" else "0.10.6 android build"
         buildConfigField("String", "UPDATE_KEY", if (old) "\"android_old\"" else "\"android\"")
     }
 

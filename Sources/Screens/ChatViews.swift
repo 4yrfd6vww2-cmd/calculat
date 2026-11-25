@@ -340,9 +340,12 @@ struct Bubble: View {
                 if m.replyTo != nil { quoteView }
                 content
                 if !rx.isEmpty { rxView }
-                Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
-                    .font(.system(size: 10))
-                    .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
+                HStack(spacing: 3) {
+                    Text((m.editedAt != nil ? tr("изм. ", "edited ", "bearb. ") : "") + timeFormatter.string(from: m.createdAt))
+                        .font(.system(size: 10))
+                        .foregroundColor(mine ? Color.white.opacity(0.7) : Theme.textSecondary)
+                    if mine && m.chatId == nil { readTicks }
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -414,6 +417,16 @@ struct Bubble: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    private var readTicks: some View {
+        let read = m.readAt != nil
+        return HStack(spacing: -4) {
+            Image(systemName: "checkmark")
+            if read { Image(systemName: "checkmark") }
+        }
+        .font(.system(size: 9, weight: .bold))
+        .foregroundColor(.white.opacity(read ? 1.0 : 0.55))
+    }
+
     private var rxGroups: [(String, Int)] {
         var d: [String: Int] = [:]
         for r in rx { d[r.emoji, default: 0] += 1 }
@@ -448,9 +461,14 @@ struct Bubble: View {
         } else if isBigEmoji(m.body) {
             Text(m.body ?? "").font(.system(size: 38))
         } else {
-            Text(linkified(m.body ?? "", mine: mine))
-                .foregroundColor(mine ? .white : Theme.text)
-                .tint(mine ? .white : Theme.accent)
+            VStack(alignment: mine ? .trailing : .leading, spacing: 6) {
+                Text(linkified(m.body ?? "", mine: mine))
+                    .foregroundColor(mine ? .white : Theme.text)
+                    .tint(mine ? .white : Theme.accent)
+                if let u = firstHTTPURL(in: m.body ?? "") {
+                    LinkPreviewView(url: u, mine: mine)
+                }
+            }
         }
     }
 }

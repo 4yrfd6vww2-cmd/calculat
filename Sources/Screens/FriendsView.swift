@@ -7,6 +7,7 @@ struct FriendsView: View {
     @State private var results: [Profile] = []
     @State private var searchTask: Task<Void, Never>?
     @State private var error = ""
+    @State private var showQR = false
 
     private func sectionTitle(_ t: String) -> some View {
         Text(t.uppercased())
@@ -131,6 +132,12 @@ struct FriendsView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .neonScreen(tr("Друзья", "Friends", "Freunde"))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showQR = true } label: { Image(systemName: "qrcode") }
+                }
+            }
+            .sheet(isPresented: $showQR) { AddFriendQRScreen() }
             .onChange(of: query) { q in
                 searchTask?.cancel()
                 searchTask = Task {
