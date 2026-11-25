@@ -334,7 +334,8 @@ struct SearchSheet: View {
         let n = q.trimmingCharacters(in: .whitespaces).lowercased()
         guard n.count >= 2 else { return [] }
         let list = store.messages.filter { m in
-            (only == nil || keyOf(m) == only) && (m.body ?? "").lowercased().contains(n)
+            (only == nil || keyOf(m) == only) &&
+            ((m.body ?? "").lowercased().contains(n) || (m.fileName ?? "").lowercased().contains(n))
         }
         return Array(list.sorted { $0.createdAt > $1.createdAt }.prefix(50))
     }
@@ -354,7 +355,7 @@ struct SearchSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(titleOf(keyOf(m)) + " · " + timeFormatter.string(from: m.createdAt))
                                 .font(.system(size: 12)).foregroundColor(Theme.accent)
-                            Text(m.body ?? "").font(.system(size: 12)).lineLimit(2).foregroundColor(.primary)
+                            Text((m.body?.isEmpty == false ? m.body! : m.fileName) ?? "").font(.system(size: 12)).lineLimit(2).foregroundColor(.primary)
                         }
                     }
                 }

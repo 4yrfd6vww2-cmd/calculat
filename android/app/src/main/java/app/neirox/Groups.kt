@@ -343,7 +343,7 @@ fun SearchDialog(only: String?, onClose: () -> Unit, onPick: (String, Long) -> U
     fun keyOf(m: Message) = if (m.chatId != null) "c:" + m.chatId else if (m.sender == Store.myId) (m.receiver ?: "") else m.sender
     val found = if (needle.length < 2) emptyList() else Store.messages.filter { m ->
         (only == null || keyOf(m) == only) &&
-            (m.body ?: "").lowercase().contains(needle)
+            ((m.body ?: "").lowercase().contains(needle) || (m.fileName ?: "").lowercase().contains(needle))
     }.sortedByDescending { it.createdAt }.take(50)
     AlertDialog(
         onDismissRequest = onClose,
@@ -356,7 +356,7 @@ fun SearchDialog(only: String?, onClose: () -> Unit, onPick: (String, Long) -> U
                     val title = Store.chatByKey(k)?.title ?: Store.dname(k)
                     Column(Modifier.fillMaxWidth().clickable { onPick(k, m.id) }.padding(vertical = 8.dp)) {
                         Text(title + " · " + timeOf(m.createdAt), color = Accent, fontSize = 12.sp)
-                        Text(m.body ?: "", color = Txt, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(m.body?.ifEmpty { null } ?: m.fileName ?: "", color = Txt, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
                 if (found.isEmpty() && needle.length >= 2) Text(tr("Ничего не найдено", "Nothing found", "Nichts gefunden"), color = TextSecondary, modifier = Modifier.padding(top = 10.dp))
